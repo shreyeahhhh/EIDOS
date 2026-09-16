@@ -84,23 +84,66 @@ TERMINATE
 
 Adding a primitive is an architectural change requiring human approval and a `decisions.md` entry.
 
-> ⚠️ **The value set of `PlanStepKind` is Open. Two problems were found with this list while writing
-> the V0.1 contract specification.**
->
-> **D-049 — `AGENT` appears to be a ninth kind.** All eight primitives above are control-flow
-> constructs. §13's **own example** contains `{ "type": "agent", "capability": "research" }`, and
-> `agent` is **not** in the enumerated list. Invariant 11 requires plans to request capabilities, so
-> some kind must carry `capability` — and the handoff shows that kind only in an example.
->
-> **D-050 — `SEQUENTIAL` and `PARALLEL` may be redundant under D-004.** §13's example is the nested
-> tree form. Under an ID-addressed DAG, "these run in parallel" is the **absence of an edge** and
-> "A then B" is the **presence of one** — ordering *is* the edge structure. As explicit step kinds
-> these two encode what the graph already carries, and a `PARALLEL` step whose children have edges
-> between them is self-inconsistent with nothing to say which wins. This is a consequence of D-004
-> that was not visible when D-004 was taken.
->
-> **Neither D-004 nor D-047 has been modified.** Both remain Accepted as written. No placeholder
-> kind may be invented to make code compile.
+### Step categories — `decisions.md` D-049
+
+**Resolved, decided by the human owner.** §13's eight-item list contains only control-flow
+constructs, while §13's **own example** carries work in a step of `"type": "agent"` holding a
+`"capability"` — which is not in the list. §13's wording is the tell: the LLM "**composes** these
+approved primitives", and what is composed is never named. §50 confirms it from the other direction:
+V0.3 maps six primitives into runtime nodes, then says "Use mock agents initially", so agents are
+invoked by something outside the mapping list.
+
+EIDOS therefore has **two step categories**:
+
+| Category | Carries `capability` | Purpose |
+|---|---|---|
+| **Work step** | **required** | Performs work through a requested capability (invariant 11) |
+| **Control-flow step** | **absent** | Shapes execution |
+
+A control step carrying a capability, and a work step without one, are both **unrepresentable**
+rather than merely invalid. This matters because `capability` is not optional metadata — it is what
+invariant 11 and §14's capability-validation stage act on.
+
+### Ordering is expressed by edges — `decisions.md` D-050
+
+**Resolved, decided by the human owner.** `SEQUENTIAL` and `PARALLEL` are **not canonical
+`PlanStepKind` values**. **Ordering and parallelism are expressed through dependency edges in the
+ID-addressed DAG**: `A → B` is sequential, and two steps with no path between them are parallel.
+
+They **may** exist later as optional authoring-surface syntax, but such syntax **must normalize to
+the same canonical DAG** and **must not introduce separate execution semantics**.
+
+This follows from D-004 rather than overriding §13. D-004 already states that nested or tree-shaped
+surface syntax is optional sugar normalized before validation — and §13's example *is* that tree
+syntax, in which a `parallel` node with a `steps` array is a grouping construct that becomes
+meaningless once steps have IDs and edges. Keeping both as step kinds would put two representations
+of one fact in the model plus a precedence rule, the pattern D-013 refused for constraints and §9/§10
+refuse for state.
+
+Nothing is lost: §16's Plan A and Plan B differ exactly in parallelism, and the edges fully
+distinguish them — a chain versus a fan-in.
+
+**Neither D-004 nor D-047 has been modified.** Both are Accepted as written; D-049 and D-050 are
+recorded as refinements of them.
+
+### The canonical kind set
+
+```text
+work step (capability-bearing)
+ROUTE
+VERIFY              <- pending D-055
+RETRY
+REPLAN
+HUMAN_APPROVAL      <- pending D-055
+TERMINATE
+```
+
+> ⚠️ **D-055 is Open.** `VERIFY` and `HUMAN_APPROVAL` may themselves be work steps rather than
+> control-flow steps: §7's registry has a Verification Agent and §6 lists `verification` among
+> required capabilities, while §7 lists **"Human reviewer"** among the providers a capability may be
+> bound to. If both are work steps, the control set reduces to `ROUTE`, `RETRY`, `REPLAN`,
+> `TERMINATE`. Both remain control-flow kinds meanwhile — the conservative position — and **no
+> reclassification may be made silently while writing the contract.**
 
 V0.3 maps `SEQUENTIAL`, `PARALLEL`, `ROUTE`, `VERIFY`, `RETRY` and `REPLAN` into runtime nodes
 (§50). `HUMAN_APPROVAL` and `TERMINATE` are not listed in the V0.3 mapping.
@@ -171,6 +214,11 @@ max_execution_time
 
 **A plan exceeding those limits must be rejected.**
 
+**D-050 sharpens two of these.** Now that ordering is carried solely by edges, the shape limits have
+unambiguous graph definitions: `max_depth` is the **longest path** through the DAG, and
+`max_parallel_branches` is the **maximum antichain width**. **D-046** must set its values against
+those definitions rather than against a tree's nesting depth.
+
 §32 repeats the execution-side hard limits: max retries, max replans, max execution time, max agent
 calls, max tool calls. No infinite loops.
 
@@ -240,8 +288,7 @@ verification; and an ordered variant that front-loads architecture before target
 
 | Id | Question | Blocks |
 |---|---|---|
-| D-049 | Is `AGENT` a ninth `PlanStepKind`? Which kind carries `capability`? | **V0.1 `PlanStep`** |
-| D-050 | Are `SEQUENTIAL` / `PARALLEL` redundant under D-004's DAG, and what wins on conflict? | **V0.1 `PlanStep`** |
+| D-055 | Are `VERIFY` and `HUMAN_APPROVAL` work steps rather than control-flow steps? | not V0.1; rework risk if answered after `PlanStep` exists |
 | D-012 | Predicate language for ROUTE / RETRY / REPLAN / TERMINATE | V0.2, V0.3 |
 | D-046 | Numerical bound values | V0.2 |
 | D-043 | Declared plan limits vs actual execution counters | V0.2, V0.3 |

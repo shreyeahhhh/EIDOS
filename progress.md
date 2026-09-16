@@ -21,7 +21,7 @@ No measurement of any kind has been taken, so no metric appears anywhere in this
 
 - [x] `CLAUDE.md` — permanent rules, 18 architecture invariants
 - [x] `progress.md` — this file
-- [x] `decisions.md` — 12 Accepted, 40 Open, 3 Deferred (counts current as of the latest decision below)
+- [x] `decisions.md` — 14 Accepted, 39 Open, 3 Deferred (counts current as of the latest decision below)
 - [x] `README.md`, `pyproject.toml`, `.gitignore`
 - [x] `docs/01`–`docs/12` — the twelve documents required by handoff §81
 - [x] `src/eidos/` and `src/eidos/contracts/` — docstring only, no code
@@ -86,17 +86,22 @@ A further four affect one field or one flag each: **D-030** (assessed vs tolerat
 (`evidence_requirements` threshold or description), **D-042** (exact contract budget field list),
 **D-045** (no contract supplied).
 
-**Four further items were found while writing the V0.1 contract specification, and these do block the
-contracts they touch:**
+**Two items found while writing the V0.1 contract specification still block the fields they type:**
 
-- **D-049** — `AGENT` appears to be a ninth `PlanStepKind`: §13's example uses it and the enumerated
-  list does not contain it. Determines which kind carries `capability`.
-- **D-050** — `SEQUENTIAL` and `PARALLEL` may be redundant under D-004's DAG, where ordering *is* the
-  edge structure. A consequence of D-004 not visible when D-004 was taken. **Neither D-004 nor D-047
-  has been modified.**
 - **D-051** — the `RiskLevel` value set. §5/§6/§30 give only "medium"; §40 gives a five-point
   action-risk scale that may be a different vocabulary.
 - **D-052** — `MissionStatus` values beyond the four states §32 and §33 name.
+
+**D-049 and D-050 are resolved** (2026-09-16, human owner), which unblocks `PlanStep`:
+
+- **D-049** — EIDOS has a **capability-bearing work-step category distinct from control-flow steps**.
+  `capability` is required on work steps and absent from control steps. **D-055** left Open: whether
+  `VERIFY` and `HUMAN_APPROVAL` are themselves work steps.
+- **D-050** — `SEQUENTIAL` and `PARALLEL` are **not canonical `PlanStepKind` values**; ordering and
+  parallelism are expressed through dependency edges. They may return later as authoring-surface
+  syntax that normalizes to the same DAG with no separate execution semantics.
+
+Both are recorded as **refinements** of D-004 and D-047. **Neither of those has been modified.**
 
 Plus two minor representation questions: **D-053** (identifier representation) and **D-054**
 (timestamps as explicit inputs vs clock defaults).
@@ -188,9 +193,8 @@ Highest-impact first.
 | **D-007** capability vocabulary and matching | V0.2, V0.4 | §6 and §7 use incompatible capability names. |
 | **D-006** MVP agent set: 3 or 5 capabilities | V0.4 | §49 says three; §16/§43 use five. |
 | **D-016** the quality function | V0.1, V1.0 | `quality_threshold` has no measurement procedure. |
-| **D-049** `AGENT` as a ninth `PlanStepKind` | **V0.1 `PlanStep`** | §13's example uses `agent`; the enumerated primitive list does not contain it. |
-| **D-050** `SEQUENTIAL`/`PARALLEL` under a DAG | **V0.1 `PlanStep`** | Ordering is the edge structure; these kinds may be redundant or contradictory. Touches D-004 and D-047. |
 | **D-051** `RiskLevel` value set | **V0.1, two field types** | §5/§6/§30 give only "medium"; §40's five-point action-risk scale may be a different vocabulary. |
+| **D-055** `VERIFY`/`HUMAN_APPROVAL` as work steps | not V0.1 | Both remain control-flow kinds meanwhile. Answering after `PlanStep` exists turns an additive change into a rework. |
 | **D-052** `MissionStatus` value set | **V0.1, one field's type** | Only four states are handoff-named; planning/execution states are not. |
 | **D-014** `autonomy_level` scale | V0.1, one field's type | Predates the blocking round; §6's example uses `1`, §29 defines 0–4, the link is never stated. |
 | **D-016** quality function | V0.1, one field's type | Predates the blocking round; determines whether the quality threshold is a plain value or structured. |
@@ -212,5 +216,6 @@ Full detail for each is in [decisions.md](decisions.md).
 | Date | Milestone | Outcome |
 |---|---|---|
 | 2026-09-16 | Bootstrap | Read handoff §1–§84. Created project rules, the twelve §81 documents, the decision record with 22 open items, two docstring-only packages, four test layers, and the initial git checkpoint. No runtime behaviour implemented. Two architectural decisions taken by the human owner and recorded: D-004 (Plan DSL canonical form is an ID-addressed DAG) and D-005 (V0.1 in-memory only). D-029 was found while writing `docs/09`: §24's retrieval loop is the only loop in the handoff with no stated bound. |
+| 2026-09-16 | PlanStep kind taxonomy | Analysed D-049 and D-050; both **resolved** by the human owner. **D-049 = option B**: a capability-bearing work-step category distinct from control-flow steps, `capability` required on the former and absent from the latter. Option C was eliminated on the handoff's own terms — with no capability-bearing kind, §14's capability-validation stage is vacuous and invariant 11 unenforceable. **D-050 = option D**: `SEQUENTIAL`/`PARALLEL` are not canonical kinds; ordering is the edge structure, and they may return only as authoring-surface sugar normalizing to the same DAG. This is the reading under which D-004 and §13 are both true as written. **D-055** logged Open: whether `VERIFY` and `HUMAN_APPROVAL` are themselves work steps. D-004 and D-047 unmodified. `PlanStep` is now unblocked. **No source code written.** |
 | 2026-09-16 | V0.1 contract spec review | Drafted the V0.1 contract specification for review. Four findings surfaced and were logged as Open rather than resolved: **D-049** (`AGENT` is in §13's example but not its primitive list), **D-050** (`SEQUENTIAL`/`PARALLEL` may be redundant under D-004's DAG — a consequence of D-004 not visible when it was taken), **D-051** (the `RiskLevel` value set), **D-052** (`MissionStatus` values not named by the handoff). Two minor representation questions also logged: D-053, D-054. D-004 and D-047 left unmodified. A standing rule was recorded: no placeholder enum or inferred value may be invented to make code compile. **No source code written.** |
 | 2026-09-16 | Pre-V0.1 decisions | Architectural review of the five decisions blocking V0.1, one at a time, each analysed against the handoff before being decided by the human owner. **All five resolved:** D-013 (disjoint TaskGenome/ReliabilityContract), D-019 (`tenant_id` required, no security meaning), D-011 (layered event model; `event_id` idempotency key, EIDOS-assigned mission sequence), D-010a (MissionState is a materialized view over the event log), D-009 (bounds split into system safety limits and mission budgets; reject never clamp; no V0.1 values). Sixteen sub-questions were split out and deliberately left Open rather than resolved by implication: D-030 through D-046 minus D-010a/b numbering. D-034 records that `plan_id` and `event_id` entered invariant 18 by derivation rather than decision — CLAUDE.md unamended pending the owner's call. `docs/04`, `docs/05`, `docs/06`, `docs/10`, `docs/12` synced. No code written. |

@@ -440,6 +440,102 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
     transition check written against an undefined lifecycle would encode D-036 silently.
   - Per **D-033**, `AgentTask` is nested and does **not** carry `tenant_id`.
 
+### D-049 — EIDOS has a capability-bearing work-step category distinct from control-flow steps
+
+- **Status:** Accepted · **Date:** 2026-09-16 · **Decided by:** human owner
+- **Source:** handoff §13 (example vs enumerated list), §14, §50; invariant 11
+- **Refines:** D-047. **D-047 is not modified** — this decision completes the kind taxonomy that
+  D-047's scope statement assumed was already complete.
+- **Context:** §13 enumerates eight primitives, every one of which is a control-flow construct.
+  §13's **own example** contains a step of `"type": "agent"` carrying a `"capability"`, and `agent`
+  is **not** in that list. §13's wording — "the LLM **composes** these approved primitives" — implies
+  something is composed, and the handoff never names it. §50's V0.3 maps six primitives into runtime
+  nodes and then says "Use mock agents initially", so agents are invoked at V0.3 by something that
+  is not in the mapping list either.
+
+  Three interpretations were analysed: (A) `AGENT` is a ninth entry in one flat kind enum; (B) two
+  categories, capability-bearing work steps and control-flow steps; (C) the eight are complete and
+  `agent` in the example is shorthand or an error.
+
+- **Decision: option B.** EIDOS has a **capability-bearing work-step category distinct from
+  control-flow steps**. `capability` is **required** for work steps and **absent** from control-flow
+  steps.
+
+- **Rationale:** C was eliminated on the handoff's own terms rather than on preference: under C
+  nothing carries a capability, which makes §14's capability-validation stage vacuous and invariant
+  11 unenforceable — two independent handoff requirements would have nothing to operate on. A
+  capability-bearing kind must therefore exist.
+
+  B was preferred to A because `capability` is not optional metadata; it is the thing invariant 11
+  and §14's validation stage act on. Under A, `capability` would be required for exactly one enum
+  value and meaningless for the others — a constraint the type system cannot express and the
+  validator would have to enforce by convention. B makes it structural. Moving from A to B later
+  would be a contract change rather than a refinement, so the choice was made now.
+
+- **Consequences:**
+  - The `PlanStep` contract is unblocked on this axis.
+  - Work and control steps are distinguishable by construction, so "a control step carrying a
+    capability" and "a work step without one" are both unrepresentable rather than merely invalid.
+  - Capability validation (§14 stage 4) has a well-defined target, and **D-007**'s vocabulary
+    attaches to the work category only.
+  - **D-055** records the unresolved question of whether `VERIFY` and `HUMAN_APPROVAL` are
+    themselves work steps. Left Open by the owner; both remain control-flow kinds meanwhile, which
+    is the conservative position.
+
+### D-050 — `SEQUENTIAL` and `PARALLEL` are not canonical `PlanStepKind` values
+
+- **Status:** Accepted · **Date:** 2026-09-16 · **Decided by:** human owner
+- **Source:** handoff §13, §14, §50 vs **D-004**
+- **Refines:** D-004 and D-047. **Neither is modified.** This decision records a consequence of
+  D-004 that was not visible when D-004 was taken.
+- **Context:** §13 lists both as primitives and its example is the nested tree form — a `parallel`
+  node with a `steps` array. D-004 made the canonical representation an ID-addressed DAG in which
+  ordering **is** the edge structure: `A → B` is sequential, and two nodes with no path between them
+  are parallel. As step kinds, `SEQUENTIAL` and `PARALLEL` re-encode what the edges already state and
+  can contradict them — a `PARALLEL` step whose children have edges between them is
+  self-inconsistent, with nothing to say which representation wins.
+
+  Four interpretations were analysed: (A) drop both as kinds; (B) keep as grouping with edges
+  authoritative on conflict; (C) keep as inert annotation; (D) they belong to the deferred
+  authoring-surface sugar layer, not the canonical form.
+
+- **Decision: option D.**
+  - `SEQUENTIAL` and `PARALLEL` are **not canonical `PlanStepKind` values**.
+  - **Ordering and parallelism are expressed through dependency edges in the ID-addressed DAG.**
+  - They **may** exist later as optional authoring-surface syntax, but such syntax **must normalize
+    to the same canonical DAG** and **must not introduce separate execution semantics**.
+
+- **Rationale:** D-004 already states that nested or tree-shaped surface syntax is optional sugar
+  normalized into the DAG before validation. §13's example **is** that tree syntax, and
+  `SEQUENTIAL`/`PARALLEL` are precisely its grouping constructs — a `parallel` node with a `steps`
+  array is meaningless once steps have IDs and edges. D is therefore the only reading under which
+  **D-004 and §13 are both true as written**, rather than one overriding the other.
+
+  B was rejected as structurally the same pattern this repository has already rejected twice: two
+  representations of one fact plus a precedence rule, which **D-013** refused for constraints and
+  §9/§10 refuse for state. C was rejected because an inert field in a contract reliably acquires
+  meaning later, at which point the conflict returns with no decision behind it.
+
+  Nothing is lost. §17 treats parallelization as a strategy factor and §16's Plan A and Plan B differ
+  in exactly that, but the edges fully distinguish them — Plan A is a chain, Plan B a fan-in.
+
+- **Consequences:**
+  - The canonical `PlanStepKind` set shrinks by two. Combined with D-049 it is: the work-step
+    category, plus `ROUTE`, `VERIFY`, `RETRY`, `REPLAN`, `HUMAN_APPROVAL`, `TERMINATE` — the last two
+    pending **D-055**.
+  - §14's limits remain computable and are now unambiguous: `max_depth` is the **longest path** and
+    `max_parallel_branches` is the **maximum antichain width** of the DAG. This sharpens **D-046**,
+    which must set values against those definitions.
+  - §50's V0.3 instruction to "map SEQUENTIAL, PARALLEL … into runtime nodes" is satisfied by mapping
+    the graph's structure onto LangGraph's sequential and concurrent execution. LangGraph has no
+    "parallel node" — it has edges and concurrent branches.
+  - The deferred authoring surface inherits a binding constraint: **normalize to the same canonical
+    DAG, introduce no separate execution semantics.** Any future sugar layer needs normalization
+    tests proving exactly that.
+  - One thing edges do **not** express: "must run concurrently" as opposed to "may". Independent
+    nodes may be serialized by the runtime under `max_parallel_branches`. This was raised and the
+    owner accepted "may" as sufficient.
+
 ---
 
 ## Open — require the human owner
@@ -447,9 +543,8 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
 These are ambiguities, contradictions and gaps found in the handoff during the bootstrap read. None
 has been resolved. Work that depends on one of them is blocked until the owner decides.
 
-Count: 40. Highest-impact first is **D-015** (how verification confidence is computed), then
-**D-049** and **D-050** (the `PlanStepKind` value set), then **D-007** (capability vocabulary) and
-**D-012** (predicate language) for V0.2.
+Count: 39. Highest-impact first is **D-015** (how verification confidence is computed), then
+**D-007** (capability vocabulary) and **D-012** (predicate language) for V0.2.
 
 **Standing rule for all Open items:** no placeholder enum, type, sentinel or inferred value may be
 invented to make code compile. An Open item blocks the field it touches; it does not license a
@@ -463,14 +558,13 @@ through D-046 from D-009. Three further V0.1 scoping decisions followed: **D-033
 **D-048**.
 
 Open items still touching V0.1: **D-014**, **D-016**, **D-030**, **D-031**, **D-042**, **D-045** —
-each affecting one field, one flag or one type — plus **D-049**, **D-050**, **D-051** and **D-052**,
-which were found while writing the V0.1 contract specification and **do block** the contracts they
-touch. D-014 and D-016 predate the blocking-decision round and were not part of it. **D-053** and
-**D-054** are minor and affect representation rather than structure.
+each affecting one field, one flag or one type — plus **D-051** (the `RiskLevel` value set) and
+**D-052** (the `MissionStatus` value set), which **do block** the fields they type. D-014 and D-016
+predate the blocking-decision round and were not part of it. **D-053** and **D-054** are minor and
+affect representation rather than structure. **D-055** does not block V0.1.
 
-D-049 and D-050 are the consequential ones: together they determine the `PlanStepKind` value set, and
-D-050 arises from a consequence of **D-004** that was not visible when D-004 was taken. Neither
-D-004 nor D-047 has been modified.
+**D-049 and D-050 are resolved**, which unblocks `PlanStep` and fixes the canonical `PlanStepKind`
+set. Both are recorded as **refinements** of D-004 and D-047; neither of those has been modified.
 
 The Open count rising as decisions are made is expected and healthy: each resolution replaces one
 vague question with several precise ones, and a precise Open item is cheap to answer while a vague
@@ -862,43 +956,28 @@ one is not.
 - **Needs:** Owner decision. Note the three options are not equivalent: system-ceilings-as-defaults
   is permissive, a synthesised default contract is explicit, and rejection is strictest.
 
-### D-049 — Is `AGENT` a ninth `PlanStepKind`?
+### D-055 — Are `VERIFY` and `HUMAN_APPROVAL` work steps rather than control-flow steps?
 
-- **Status:** Open · **Source:** handoff §13 (example vs enumerated list) · **Found while writing the V0.1 contract specification**
-- **Finding:** §13 enumerates eight allowed primitives — `SEQUENTIAL`, `PARALLEL`, `ROUTE`, `VERIFY`,
-  `RETRY`, `REPLAN`, `HUMAN_APPROVAL`, `TERMINATE`. §13's **own example** contains
-  `{ "type": "agent", "capability": "research" }`, and **`agent` is not in that list**.
+- **Status:** Open · **Source:** handoff §13 vs §6, §7, §16, §43 · **Split out of D-049, left Open by the owner**
+- **Finding:** D-049 establishes two categories: capability-bearing **work** steps and
+  **control-flow** steps. Two of §13's eight named primitives sit ambiguously across that line.
 
-  All eight enumerated primitives are control-flow constructs. The step that actually performs work
-  and carries a `capability` is the unlisted one. Invariant 11 requires plans to request
-  capabilities, so some step kind must hold a capability — and the handoff shows that kind only in
-  an example.
-- **Why it matters:** it determines the `PlanStepKind` value set and which kind carries `capability`.
-  **D-047 approved "the eight PlanStep kinds"** on the understanding that §13's list was complete.
-  If `AGENT` is a ninth kind, D-047's scope statement needs revisiting — it is not wrong, but it is
-  incomplete.
-- **Effect while Open:** blocks the `PlanStep` contract. **No placeholder kind is to be invented to
-  make code compile.**
-- **Needs:** Owner to decide whether `AGENT` is a ninth kind, whether capability-bearing steps are
-  expressed some other way, or whether §13's list was simply not exhaustive.
+  - **`VERIFY`** — §7's registry lists a Verification Agent with `evidence_validation` and
+    `contradiction_detection`; §16's candidate strategies and §43's flagship demo both draw
+    Verification as an agent node; §6's `required_capabilities` example includes `verification`.
+    VERIFY may therefore be a **work step with `capability: verification`**, not a control primitive.
+  - **`HUMAN_APPROVAL`** — §7 lists **"Human reviewer"** among the providers a capability may be
+    bound to. HUMAN_APPROVAL may therefore be a **work step whose provider is a human** rather than
+    a model.
 
-### D-050 — Are `SEQUENTIAL` and `PARALLEL` redundant under an ID-addressed DAG?
-
-- **Status:** Open · **Source:** handoff §13 vs **D-004** · **Found while writing the V0.1 contract specification**
-- **Finding:** §13's example is the **nested tree** form. D-004 replaced that with an ID-addressed
-  DAG as the canonical representation. In a DAG, "these two steps run in parallel" is expressed by
-  **the absence of a dependency edge** between them, and "A then B" by the presence of one. Ordering
-  *is* the edge structure.
-
-  `SEQUENTIAL` and `PARALLEL` as explicit **step kinds** therefore encode information the graph
-  already carries — and can contradict it. A `PARALLEL` step whose children have edges between them
-  is self-inconsistent, and nothing in the current model says which wins.
-- **Why it matters:** this is a consequence of D-004 that was **not visible when D-004 was taken**.
-  It touches two Accepted decisions, D-004 and D-047. Neither is being modified.
-- **Effect while Open:** blocks the `PlanStepKind` value set alongside D-049.
-- **Needs:** Owner to choose among: drop both as step kinds and let edges carry ordering; keep them
-  as grouping or annotation with an explicit rule that edges are authoritative on conflict; or keep
-  D-047's eight as approved and accept the redundancy with a documented precedence rule.
+- **Why it matters:** it determines the size of the control-flow kind set. If both are work steps,
+  the canonical control set reduces to `ROUTE`, `RETRY`, `REPLAN`, `TERMINATE`. Deciding it **after**
+  `PlanStep` is written turns an additive change into a rework, which is why it is recorded now.
+- **Effect while Open:** does **not** block V0.1. Under D-049 both remain control-flow kinds, which
+  is the conservative position — moving a kind from control to work later is additive for the work
+  category. **No reclassification may be made silently while writing the contract.**
+- **Needs:** Owner to decide whether either or both are work steps, and if HUMAN_APPROVAL is a work
+  step, what capability it requests.
 
 ### D-051 — The `RiskLevel` value set
 
