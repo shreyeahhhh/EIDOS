@@ -46,6 +46,20 @@ AgentTask
 This record mirrors the remote task. It confers no authority: the remote agent does not own any part
 of MissionState.
 
+**V0.1 shape — `decisions.md` D-048, decided by the human owner.** `AgentTask` **is** included in
+V0.1 because §50 explicitly lists it among the Core Contracts, kept minimal and future-compatible:
+`agent_id`, `status`, and four optional fields — `a2a_task_id`, `a2a_context_id`, `latest_artifact`,
+`last_event`.
+
+**No A2A behaviour is implemented in V0.1.** The A2A fields being optional is what makes the model
+honest in a world without A2A, and what lets V0.6 populate them without a contract change.
+
+⚠️ `status` semantics remain Open under **D-036**. Until the state set and legal transitions are
+defined, `status` is deliberately unconstrained and **nothing may branch on its value** — a
+transition check written against an undefined lifecycle would encode D-036 silently.
+
+Per **D-033**, `AgentTask` is a nested model and does **not** carry `tenant_id`.
+
 ## 3. The non-negotiable rules
 
 From §9, §10 and §59, expressed as invariants 1, 2 and 8:

@@ -83,6 +83,363 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
 - **Consequences:** Contracts can be designed without a storage schema constraining them. Tests stay
   fast and hermetic. Persistence beyond V0.1 remains unresolved — see D-017.
 
+### D-013 — TaskGenome and ReliabilityContract are disjoint; neither duplicates the other
+
+- **Status:** Accepted · **Date:** 2026-09-16 · **Decided by:** human owner
+- **Source:** handoff §5, §6, §30, §53; with §21 and §22 as the deciding consideration
+- **Context:** Four concerns are named in both models. §6 lists `quality_threshold`,
+  `latency_budget`, `resource_budget` and `evidence_requirements` in the Task Genome; §30 lists
+  minimum quality, maximum latency, maximum tokens, maximum risk, minimum independent evidence and
+  approval requirements in the Reliability Contract. The handoff never states which is
+  authoritative, whether one derives from the other, or what happens when they disagree. The two
+  sections are additionally irreconcilable in tone: §6 is mandatory ("should contain"), §30 is
+  optional ("can have"). A mandatory structure cannot be a projection of an optional one.
+
+  Four interpretations were analysed: (A) genome authoritative, contract a projection of it;
+  (B) contract authoritative, genome copies its values; (C) two independent inputs with the contract
+  overriding on conflict; (D) disjoint decomposition with no field in both.
+
+- **Decision: interpretation D.**
+  - **TaskGenome** describes the task and its intrinsic requirements.
+  - **ReliabilityContract** defines execution acceptance constraints.
+  - **Constraint thresholds are not duplicated across the two models.**
+  - **TaskGenome references the ReliabilityContract rather than copying its threshold values.**
+
+- **Rationale:** The decisive argument is §21 and §22, not tidiness. §21 stores "task_genome
+  characteristics" as strategy-memory material and §22 ranks strategies for "a future similar task",
+  which makes the genome load-bearing as a **task-similarity key**. Constraints are not part of task
+  similarity: a migration assessment with a 10-minute budget and the same assessment with a
+  60-minute budget are the same task with different acceptance criteria. Under A or B they would be
+  different genomes and would stop matching each other in strategy memory — degrading the project's
+  central learning mechanism **invisibly**, with no error and no failing test.
+
+  C was rejected on the handoff's own reasoning: it institutionalises two sources of truth for one
+  value and pushes a precedence rule onto every reader. That is structurally the failure mode §9 and
+  §10 spend their length eliminating for MissionState; reproducing it one layer up for constraints
+  would be internally inconsistent. It also permits internally inconsistent missions that still
+  validate.
+
+  D's cost is departure from §6's literal field list. Two things soften it: §6 hedges with
+  "conceptually equivalent" rather than prescribing a schema, and under composition the values
+  remain reachable *through* the genome, so the genome still functions as "a contract, not metadata"
+  in the sense §6 intends. §53's API concept already separates `goal` from a nested `constraints`
+  object, which is consistent with D.
+
+- **Consequences:**
+  - No precedence rule is needed anywhere, because no value has two homes. No drift, no
+    synchronisation obligation, no conflict-resolution branch in planner, validator, policy,
+    verifier, telemetry or UI.
+  - Invariant 13 gains a single unambiguous referent: "could not satisfy the reliability contract"
+    names exactly one object.
+  - The genome remains a clean similarity key for V1.0/V1.1 strategy memory.
+  - Composes directly with **D-009**: what applies when §30's optional contract is absent is a
+    D-009 question (bounds origin), not a D-013 question, and remains Open.
+  - **D-016** attaches to whichever model hosts the quality threshold — now the ReliabilityContract.
+  - Two sub-ambiguities are **deliberately left Open** by the human owner and are recorded as D-030
+    and D-031. Until they are answered, one field of each model remains undetermined. D-013 resolves
+    the structural question only.
+
+### D-019 — `tenant_id` is present and required on V0.1 root models
+
+- **Status:** Accepted · **Date:** 2026-09-16 · **Decided by:** human owner
+- **Source:** handoff §54; with §21, §33 and §73 as the deciding consideration
+- **Context:** §54 says data models "should **conceptually include** identifiers **such as**"
+  `tenant_id`, `mission_id`, `execution_id`, `agent_id`, `timestamp`, while warning that the MVP
+  must not become an authentication project. "Conceptually include" reads two ways: the field
+  exists now carrying a placeholder, or the design is merely *shaped* to accept it later. Three
+  options were analysed: (A) present, required, fixed default; (B) omitted until the multi-tenancy
+  milestone; (C) present but nullable.
+
+- **Decision: option A.**
+  - `tenant_id` is **present and required** on V0.1 root models.
+  - It carries a **single fixed default value**.
+  - It has **no security meaning in V0.1** and **must not** be treated as an authentication,
+    authorization, or isolation mechanism.
+
+- **Rationale:** The cost asymmetry decides it. Option A's cost is cosmetic — a constant-valued
+  field — and is paid once, in V0.1. Option B's cost is structural, paid later, and **partly
+  unrecoverable**: the event log (§73), telemetry records (§33) and strategy memory (§21) are
+  permanent artifacts that accumulate across the life of the project. Records written before the
+  field exists can never be correctly attributed afterwards, and backfilling a guessed tenant onto
+  real historical data would collide with §67's rule that every numerical claim comes from an actual
+  experiment. Since accumulated history is the input to the project's central thesis, degrading it
+  is not a cost worth paying to save one field.
+
+  Option C was rejected independently of A-vs-B: nullable identity forces a `None` branch on every
+  reader and creates two states — "no tenant" and "default tenant" — that mean the same thing while
+  comparing unequal, at exactly the boundary where correctness will eventually matter most.
+
+- **Consequences:**
+  - The no-security caveat is **binding** and must be restated wherever the field is documented.
+    The realistic failure mode of this decision is a future reader mistaking a defaulted
+    `tenant_id` for an access-control boundary. That is mitigated by documentation, not by code.
+  - Invariant 18 holds as written; no invariant amendment is required. (Option B would have needed
+    one.)
+  - Persistence (**D-017**) gains a required column rather than a retrofitted one.
+  - Three sub-questions are **deliberately left Open** by the human owner: **D-032** (the literal
+    default value), **D-033** (root-only vs propagation to nested models), **D-034** (whether
+    `plan_id` and `event_id` belong in invariant 18's list at all).
+
+### D-011 — Event identity and ordering: layered model; V0.1 scope is `event_id` plus an EIDOS-assigned mission sequence
+
+- **Status:** Accepted · **Date:** 2026-09-16 · **Decided by:** human owner
+- **Source:** handoff §10, §8, §33, §73; with invariant 2 as the deciding consideration on authority
+- **Context:** §10 requires every external event to carry "some form of" `event_id`, `a2a_task_id`,
+  `sequence/version`, `timestamp`, and mandates idempotent processing with deterministic accept or
+  reject for late and out-of-order events. It does **not** define the ordering domain (per-mission
+  counter, per-`a2a_task_id` counter, per-producer counter, or version vector), does **not** define
+  the idempotency key (`event_id` alone vs `(a2a_task_id, sequence)`), does **not** say who assigns
+  the ordering value, and addresses only *external* events although eleven of §33's thirteen event
+  types are internal.
+
+  Four options were analysed: (A) single per-mission counter with `event_id` idempotency;
+  (B) per-`a2a_task_id` counter with composite idempotency; (C) version vector / per-producer
+  causality; (D) a layered decomposition separating the three roles §10 conflates.
+
+- **Decision: option D for the overall event model**, with V0.1 scoped deliberately narrower.
+
+  The overall model separates three distinct roles rather than overloading one field:
+  1. **Identity** — `event_id`, the idempotency key, meaningful for all event types.
+  2. **Mission order** — a monotonic per-mission sequence assigned by EIDOS.
+  3. **Remote-lifecycle order** — a producer-assigned per-`a2a_task_id` sequence used only to
+     validate a remote event against that task's lifecycle. **Deferred; see D-035.**
+
+  **For V0.1 specifically:**
+  - `event_id` **is** the idempotency key.
+  - EIDOS assigns a **monotonic per-mission sequence** when an event is **accepted into the EIDOS
+    event stream**.
+  - That mission sequence **is** the ordering used for deterministic replay.
+  - **A2A-specific producer ordering is not introduced in V0.1.**
+
+- **Rationale:** D is a decomposition of §10 rather than a selection among its readings. §10's
+  `sequence/version` is doing three jobs simultaneously — identity, mission ordering, and remote
+  lifecycle ordering — and most of the ambiguity dissolves once they are separated. A serves replay
+  but cannot express lateness for a specific remote task; B serves remote lifecycle but has no
+  meaning for the eleven internal event types and leaves the idempotency key undefined for every
+  event V0.1 will actually emit; C imports distributed-systems machinery disproportionate to a V0.6
+  target of exactly one A2A boundary (§50) and to §52's warning against premature distribution.
+
+  **Ordering authority sits with EIDOS**, not the producer. This follows from invariant 2 — a remote
+  agent is precisely the component that must not control EIDOS state — rather than from §10, which
+  is silent on assignment. Assigning at acceptance also makes the sequence a property of the EIDOS
+  event stream rather than of any external system's reliability.
+
+- **Consequences:**
+  - The `MissionEvent` shape is determined for V0.1, which was the blocking question.
+  - Replay (§73, invariant 15) has a total order per mission and is deterministic.
+  - Duplicate suppression is well-defined for all thirteen §33 event types, including the eleven
+    internal ones §10 does not describe.
+  - Deliberately **not** resolved, and recorded as Open at the owner's instruction: **D-035**
+    (A2A producer-assigned per-task sequence), **D-036** (the `AgentTask` lifecycle state machine
+    that "validate against lifecycle" presupposes), **D-037** (one common event shape vs separate
+    internal/external shapes), **D-038** (bounding and persisting the processed-`event_id` set).
+  - D-036 is the sharpest of those: §10 mandates deterministic accept/reject against a lifecycle,
+    and §8 gives `AgentTask.status` without enumerating states or legal transitions. Until D-036 is
+    answered, the V0.6 protocol tests for late and out-of-order events cannot be written.
+
+### D-010a — MissionState is a materialized view over the event log
+
+- **Status:** Accepted · **Date:** 2026-09-16 · **Decided by:** human owner
+- **Source:** handoff §9, §10, §11, §15, §32, §33, §73
+- **Context:** The stated gap was that §9 fixes MissionState's *ownership* without ever enumerating
+  its shape. The gap underneath it is a **boundary question**: §9 asserts MissionState is the *only*
+  authoritative global state, §11 assigns LangGraph management of *execution state*, and §9's own
+  diagram shows the reducer writing into "LangGraph checkpoint/state". Two state stores demonstrably
+  exist and one is asserted uniquely authoritative. That is coherent only if LangGraph's state is
+  subordinate — but the handoff never says where the line falls, so "which fields" had no principled
+  answer, only an arbitrary one.
+
+  Three boundaries were analysed: (A) maximal MissionState including per-node execution status, with
+  LangGraph holding a projection; (B) minimal MissionState holding mission-level facts, with
+  per-node progress in LangGraph checkpoints; (C) a "hold only what cannot be recomputed" rule.
+
+- **Decision: Boundary B.**
+
+  MissionState is a **materialized view over the event log** and contains exactly the information
+  the runtime must answer **synchronously**:
+
+  - mission identity
+  - TaskGenome
+  - mission status and reason
+  - plan versions and lineage
+  - active plan
+  - remote `AgentTask` records
+  - budget consumption counters
+
+  **Detailed per-node runtime execution state does not enter the authoritative MissionState merely
+  because LangGraph has such state.**
+
+- **Rationale:** The objection that appears fatal to B — "then replay is incomplete" — dissolves on
+  a careful reading of §73: replay consumes the **event log**, not MissionState. Completeness is a
+  property the event log must have; MissionState need only be the fold over it. Per-node progress
+  can be fully reconstructible from events without being a MissionState field.
+
+  A was rejected because it would quietly make LangGraph's execution model part of the authoritative
+  contract. §11, §12 and §15 spend their length keeping the runtime replaceable and the plan
+  declarative; encoding node-level runtime status into the one authoritative state object would undo
+  that, and would make every node transition a global state write.
+
+  C collapses on inspection: MissionState *is* `fold(events)`, so under a strict "only what cannot be
+  recomputed" rule it would hold nothing.
+
+  The field set above is **derived rather than chosen**. Each entry corresponds to a question the
+  runtime must answer before it can act: may this mission continue (§32 budgets); which plan version
+  is active and what is the lineage of failed ones (§15); what is the state of each remote task
+  (§8, §10); is human review required (§32); what is this mission and what would count as acceptable
+  (§6, §30).
+
+- **Consequences:**
+  - The last V0.1 blocker on the `MissionState` contract is removed.
+  - The completeness burden shifts onto the **event log**, not onto MissionState. This is a real
+    obligation on every subsequent milestone: an event that is not recorded is not replayable.
+  - **This substantially pre-answers D-017.** If MissionState is a materialized view, the event log
+    is the durable artifact and any snapshot is an optimisation. **D-017 is not being resolved
+    here** — it is flagged so the consequence is visible rather than arriving later as a fait
+    accompli.
+  - Four questions deliberately left Open by the owner: **D-039** (reducer signature, at V0.5),
+    **D-010b** (checkpoint semantics, at V0.5), **D-040** (the exact MissionState/LangGraph boundary,
+    at V0.3), **D-041** (evidence and final mission-result fields, at V0.4 and V0.8).
+  - The reducer signature turned out **not** to be a V0.1 blocker. V0.1 needs the contract; the
+    reducer is V0.5 work. The V0.1 decision is correspondingly smaller than first proposed.
+
+### D-009 — Bounds split by category: system safety limits vs mission execution budgets
+
+- **Status:** Accepted · **Date:** 2026-09-16 · **Decided by:** human owner
+- **Source:** handoff §5, §14, §30, §32; with §12's purpose for bounded synthesis as the deciding
+  consideration
+- **Context:** §14 lists eight plan limits and says a plan exceeding them "must be rejected"; §32
+  repeats five of them as execution-time hard limits; §30's contract carries maximum latency and
+  maximum tokens; §5 has the *user* state maximum latency and a resource/token budget. The handoff
+  never says which source is authoritative, and gives no values outside two examples.
+
+  Four options were analysed: (A) all bounds are static system configuration; (B) all bounds come
+  from the ReliabilityContract; (C) split by category with a system ceiling; (D) contract-only with
+  defaults and no ceiling.
+
+- **Decision: option C.**
+  1. **Runtime shape/complexity limits are system-level safety limits.** Examples include
+     `max_nodes`, `max_depth`, `max_parallel_branches`.
+  2. **Mission-specific execution budgets are carried by the ReliabilityContract.** Examples include
+     `max_retries`, `max_replans`, `max_agent_calls`, `max_tool_calls`, `max_execution_time`,
+     `max_tokens`.
+  3. **A mission may tighten a system limit but may never exceed the system safety ceiling.**
+  4. **Do not silently clamp an invalid contract.** If a requested contract value exceeds the system
+     ceiling, **reject it with an explicit validation reason**.
+  5. **Do not establish numerical defaults in V0.1.** Bound values remain Open until the V0.2
+     validation work, where they can be defined and later tuned from actual measurements.
+
+- **Rationale:** A contradicts §5 and §30, which demonstrably let the user state maximum latency and
+  a token budget; under A those inputs would be decorative. B inverts the purpose of bounded
+  synthesis: §12 and §14 bound plan shape to protect **the runtime** from an LLM's output, not to
+  express user preference, and a user-chosen graph-depth limit is close to meaningless. Splitting by
+  category puts each limit where its purpose lies — shape limits protect the runtime, budgets
+  express mission intent.
+
+  Rider 4 follows from invariant 5. §14 requires a plan exceeding its limits to be **rejected**;
+  silently clamping an over-large contract would apply the opposite rule one layer up, and would hide
+  from the user that they did not get what they asked for.
+
+  Rider 5 follows from §67 and CLAUDE.md §7. Only two numbers in this area are handoff-sourced —
+  `max_execution_time` ≈ 600s (§6) and `max_tokens` = 10,000 (§30) — and both appear as *examples*.
+  Any other value would be invention presented as engineering.
+
+- **Consequences:**
+  - The last V0.1 blocker is closed. The `ReliabilityContract` contract can be defined.
+  - Two objects exist rather than one, and `effective = min(system, contract)` becomes a rule every
+    reader of a limit must know. That cost is accepted deliberately.
+  - Resource validation and graph-complexity validation (two of §14's eight stages) have a defined
+    source of authority, though not yet values.
+  - MissionState's budget counters (**D-010a**) must correspond to whatever budget set **D-042**
+    settles.
+  - Six questions deliberately left Open: **D-042** (exact contract budget field list), **D-043**
+    (declared plan limits vs actual execution counters), **D-044** (whether `max_tokens` formally
+    joins §14's and §32's lists), **D-045** (behaviour when no contract is supplied), **D-046**
+    (numerical values), and **D-029** (the Agentic RAG reformulation bound).
+
+### D-033 — `tenant_id` is root-only; nested models do not duplicate it
+
+- **Status:** Accepted · **Date:** 2026-09-16 · **Decided by:** human owner
+- **Source:** handoff §54 (silent on this point); follows D-019
+- **Context:** D-019 established that `tenant_id` is required on "root models" without defining the
+  root set. Root-only avoids redundancy, since nested models are reachable through a root that
+  already carries the value. Propagation would make records self-describing when extracted from
+  their root, which matters for telemetry rows and for anything later stored in a vector collection
+  (§25's `executions` / `strategies`).
+
+- **Decision:** **root-only.** `tenant_id` is **required** on:
+  `TaskGenome`, `ReliabilityContract`, `Plan`, `MissionState`, `MissionEvent`.
+  It is **not** duplicated on nested `PlanStep` or `AgentTask`.
+
+- **Consequences:**
+  - The root set is now fixed, which also settles which models are roots for every later identity
+    question.
+  - Accepted risk, recorded so it is not rediscovered later: if strategy-memory or telemetry records
+    are eventually stored **detached** from their mission root (§21, §25), the tenant will have to be
+    carried by the storage layer or re-attached at write time. That is a V1.0 concern, not a V0.1
+    one, but it is a real cost of this choice rather than a free simplification.
+
+### D-047 — V0.1 Plan DSL scope: structure without conditional semantics
+
+- **Status:** Accepted · **Date:** 2026-09-16 · **Decided by:** human owner
+- **Source:** handoff §13, §50; follows D-004; scopes but does **not** resolve D-012
+- **Context:** Four of §13's eight primitives — `ROUTE`, `RETRY`, `REPLAN`, `TERMINATE` — are
+  conditional, and no predicate or expression language is specified for any of them (D-012). Either
+  V0.1 carries an opaque placeholder for conditional payloads, or it defines plan structure only and
+  defers conditions entirely.
+
+- **Decision:** V0.1 defines:
+  - the **eight PlanStep kinds**,
+  - **explicit step IDs**,
+  - **capability**,
+  - **dependency edges**,
+  - **DAG structure**.
+
+  V0.1 does **not** define a predicate or condition language for `ROUTE`, `RETRY`, `REPLAN` or
+  `TERMINATE`. Conditional payloads and predicate semantics are deferred to V0.2 under **D-012**.
+
+- **Rationale:** An opaque placeholder field would be an untyped value crossing a module boundary,
+  which CLAUDE.md §8 forbids, and would invite something to start depending on its shape before the
+  shape is decided. Defining structure without semantics keeps V0.1 fully typed and leaves D-012 a
+  clean decision rather than a migration.
+
+- **Consequences:**
+  - The `PlanStep` contract is complete and typed for V0.1 with no placeholder fields.
+  - **D-012 remains Open** and is unaffected. This decision scopes V0.1; it does not choose a
+    predicate language.
+  - V0.2 will add conditional payloads to `PlanStep`, which is an additive contract change rather
+    than a reinterpretation of an existing field.
+  - A V0.1 plan containing a conditional kind is structurally valid but semantically incomplete.
+    Nothing in V0.1 executes plans, so this is inert — but it must not silently become executable at
+    V0.3 without D-012.
+
+### D-048 — `AgentTask` is included in V0.1, minimal and future-compatible
+
+- **Status:** Accepted · **Date:** 2026-09-16 · **Decided by:** human owner
+- **Source:** handoff §8, §50; interacts with D-036
+- **Context:** §50 explicitly lists `AgentTask` among the V0.1 Core Contracts, but V0.1 has no A2A,
+  so every `a2a_*` field is inert and `status` has no enumerated lifecycle (D-036). Including it
+  risks a hollow model; deferring it to V0.6 would depart from §50's explicit list.
+
+- **Decision:** **include it in V0.1, because §50 explicitly includes it.** Minimal and
+  future-compatible:
+  - `agent_id`
+  - `a2a_task_id` — optional
+  - `a2a_context_id` — optional
+  - `status`
+  - `latest_artifact` — optional
+  - `last_event` — optional
+
+  **No A2A behaviour is implemented in V0.1.** `status` semantics remain Open under **D-036**.
+
+- **Consequences:**
+  - The V0.1 contract set matches §50's list exactly, with no omission to explain.
+  - The A2A fields being optional is what makes the model honest in a world without A2A, and what
+    lets V0.6 populate them without a contract change.
+  - `status` cannot be a closed enumeration until D-036 defines the state set and legal transitions.
+    Until then it is deliberately unconstrained, and **nothing may branch on its value** — a
+    transition check written against an undefined lifecycle would encode D-036 silently.
+  - Per **D-033**, `AgentTask` is nested and does **not** carry `tenant_id`.
+
 ---
 
 ## Open — require the human owner
@@ -90,8 +447,23 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
 These are ambiguities, contradictions and gaps found in the handoff during the bootstrap read. None
 has been resolved. Work that depends on one of them is blocked until the owner decides.
 
-Count: 22. Highest-impact first is **D-015** (how verification confidence is computed), then
-**D-010**, **D-013**, **D-011** and **D-009**.
+Count: 34. Highest-impact first is **D-015** (how verification confidence is computed), then
+**D-007** (capability vocabulary) and **D-012** (predicate language) for V0.2.
+
+**All five decisions blocking V0.1 were resolved on 2026-09-16** and moved to Accepted: **D-013**,
+**D-019**, **D-011**, **D-010a**, **D-009**. Each exposed sub-questions that the owner deliberately
+kept Open rather than resolving by implication — D-030 and D-031 from D-013; D-032 through D-034
+from D-019; D-035 through D-038 from D-011; D-010b and D-039 through D-041 from D-010a; D-042
+through D-046 from D-009. Three further V0.1 scoping decisions followed: **D-033**, **D-047**,
+**D-048**.
+
+Six Open items still touch V0.1 **partially**, each affecting one field, one flag or one type rather
+than blocking the milestone: **D-014**, **D-016**, **D-030**, **D-031**, **D-042**, **D-045**.
+D-014 and D-016 predate the blocking-decision round and were not part of it.
+
+The Open count rising as decisions are made is expected and healthy: each resolution replaces one
+vague question with several precise ones, and a precise Open item is cheap to answer while a vague
+one is not.
 
 ### D-001 — Documentation numbering is internally inconsistent in the handoff
 
@@ -135,35 +507,52 @@ Count: 22. Highest-impact first is **D-015** (how verification confidence is com
   caches so adding them later is frictionless.
 - **Needs:** Owner to decide whether to adopt, and which.
 
-### D-009 — Execution bound values and where bounds originate
+### D-010b — Checkpoint semantics
 
-- **Status:** Open · **Source:** handoff §14, §30, §32
-- **Finding:** Every budget dimension is named — `max_nodes`, `max_depth`,
-  `max_parallel_branches`, `max_retries`, `max_replans`, `max_agent_calls`, `max_tool_calls`,
-  `max_execution_time` — but **no default values are given**, and the handoff does not say whether
-  bounds come from static policy configuration, from the per-mission ReliabilityContract, from the
-  Task Genome, or from a combination.
-- **Needs:** Source of authority for each bound, and starting values. Blocks resource validation and
-  complexity-limit validation (§14).
+- **Status:** Open · **Source:** handoff §9, §11 · **Split out of D-010; deliberately not resolved**
+- **Finding:** §11 lists checkpoints among LangGraph's responsibilities and §9's diagram terminates
+  at "LangGraph checkpoint/state", but checkpoint **granularity**, **trigger** and **contents** are
+  never specified. D-010a settles the MissionState field set; it does not settle what a checkpoint
+  is.
+- **Effect while Open:** none on V0.1. Blocks V0.5.
+- **Needs:** What a checkpoint contains, when one is taken, and whether resuming from a checkpoint
+  replays events forward from it or restores a snapshot directly. Entangled with **D-017**.
 
-### D-010 — MissionState field set, reducer signature, checkpoint semantics
+### D-039 — The reducer signature
 
-- **Status:** Open · **Source:** handoff §9, §10, §11, §33
-- **Finding:** §9/§10 fix *ownership* (MissionState is sole authority; only the reducer writes it)
-  and §33 names the event types, but the state shape is never enumerated, the reducer signature is
-  never given, and checkpoint granularity/trigger is never specified.
-- **Needs:** The field set, the reducer contract, and what a checkpoint contains. Blocks V0.1
-  MissionState and V0.5 entirely.
+- **Status:** Open · **Source:** handoff §9, §10 · **Split out of D-010a, left Open by the owner**
+- **Finding:** §10 requires duplicates to be ignored and late or out-of-order events to be accepted
+  or rejected **deterministically**. A signature of `(state, event) -> state` makes a rejection
+  indistinguishable from a no-op, leaving §33's telemetry nothing to count and making the
+  determinism requirement untestable. A signature returning state **plus an outcome** makes it
+  observable. Raising on duplicate or late events was considered and is a poor fit: §10 treats both
+  as expected traffic rather than errors, and exceptions would be awkward to drive from a replay
+  loop.
+- **Effect while Open:** none on V0.1 — the reducer is V0.5 work; V0.1 needs only the contract.
+- **Needs:** Decide at V0.5, alongside the reducer itself.
 
-### D-011 — Event ordering key and idempotency key
+### D-040 — The exact MissionState / LangGraph execution-state boundary
 
-- **Status:** Open · **Source:** handoff §10
-- **Finding:** §10 requires every external event to carry "sequence/version" and mandates idempotent
-  processing, but does not define the ordering domain: a per-mission monotonic counter, a per-
-  AgentTask counter, a per-producer counter, or a version vector. Nor does it define what
-  constitutes the idempotency key (`event_id` alone, or `(a2a_task_id, sequence)`).
-- **Needs:** Precise definition. Two different choices give two different duplicate/late-event
-  semantics. Blocks the reducer and all protocol tests for duplicate, late and out-of-order events.
+- **Status:** Open · **Source:** handoff §9 vs §11 · **Split out of D-010a, left Open by the owner**
+- **Finding:** §9 asserts MissionState is the *only* authoritative global state; §11 assigns
+  LangGraph management of *execution state*; §9's own diagram shows the reducer writing into
+  "LangGraph checkpoint/state". Two state stores demonstrably exist. D-010a sets the **principle** —
+  detailed per-node runtime execution state does not enter authoritative MissionState merely because
+  LangGraph holds such state — but the specific split is inherited work at V0.3 when a runtime
+  exists.
+- **Effect while Open:** none on V0.1. Material at V0.3.
+- **Needs:** The concrete division once the runtime is being built, consistent with D-010a's
+  principle and invariant 1.
+
+### D-041 — Evidence and final mission-result fields in MissionState
+
+- **Status:** Open · **Source:** handoff §30, §31, §74 · **Split out of D-010a, left Open by the owner**
+- **Finding:** D-010a's field set deliberately excludes evidence and the final mission result.
+  Evidence arrives with Agentic RAG at V0.8 and evidence lineage (§74, invariant 16); the mission
+  result and its contract-satisfaction verdict (§30, invariant 13) arrive with verification at V0.4.
+  Excluded by scope discipline, not by oversight.
+- **Effect while Open:** none on V0.1.
+- **Needs:** Decide at V0.4 (result) and V0.8 (evidence), each as its own milestone question.
 
 ### D-012 — Predicate language for conditional primitives
 
@@ -174,16 +563,10 @@ Count: 22. Highest-impact first is **D-015** (how verification confidence is com
   expression language is invented.
 - **Needs:** How a condition is expressed, what it may read from MissionState, and how it is
   validated. Blocks the compiler and the ROUTE primitive.
-
-### D-013 — TaskGenome and ReliabilityContract overlap
-
-- **Status:** Open · **Source:** handoff §6 vs §30
-- **Finding:** `quality_threshold`, `latency_budget`, `resource_budget` and `autonomy_level` appear
-  in the Task Genome (§6). Minimum quality, maximum latency, maximum tokens, maximum risk, minimum
-  independent evidence and approval requirements appear in the Reliability Contract (§30). These
-  overlap substantially and the relationship is never stated.
-- **Needs:** Is the ReliabilityContract derived from the TaskGenome, a separate user input, or an
-  authoritative override? Which wins on conflict? Blocks both V0.1 contracts.
+- **V0.1 scope settled by D-047, which does not resolve this item.** V0.1 defines plan *structure*
+  only — kinds, step IDs, capability, edges, DAG — and carries **no conditional payload at all**,
+  rather than an opaque placeholder. D-012 therefore remains a clean V0.2 decision rather than a
+  migration away from a guessed shape.
 
 ### D-014 — `autonomy_level` scale, and its collision with "autonomy budget"
 
@@ -238,15 +621,6 @@ Count: 22. Highest-impact first is **D-015** (how verification confidence is com
 - **Needs:** The owning module and its interface. Invariant 9 forbids vendor names in contracts,
   planning, validation, compiler, runtime and state — so the boundary must be defined before any
   code calls a model.
-
-### D-019 — Whether `tenant_id` appears in V0.1 models
-
-- **Status:** Open · **Source:** handoff §54
-- **Finding:** §54 says data models "should conceptually include" `tenant_id`, `mission_id`,
-  `execution_id`, `agent_id`, `timestamp`, while also warning the MVP must not become an
-  authentication project. Whether V0.1 contracts carry `tenant_id` as a real field now is not
-  stated. Invariant 18 reads as yes, but that reading has not been confirmed.
-- **Needs:** Confirmation. Cheap to include now, expensive to retrofit later.
 
 ### D-020 — "Strategy" and "Plan" are used interchangeably
 
@@ -315,6 +689,179 @@ Count: 22. Highest-impact first is **D-015** (how verification confidence is com
 - **Needs:** Either a `max_rag_rounds` bound added to the budget set, or an explicit statement that
   the loop terminates only on the evidence judge plus the overall `max_execution_time`. Blocks V0.8,
   and should be settled when D-009 is settled.
+
+### D-030 — `risk_level` (§6) vs "Maximum risk" (§30)
+
+- **Status:** Open · **Source:** handoff §6 vs §30 · **Split out of D-013, left Open by the owner**
+- **Finding:** §6 places `risk_level` in the Task Genome; §30 places "Maximum risk: Medium" in the
+  Reliability Contract. These may be two different quantities — the **assessed** risk of the task
+  versus the **tolerated** risk the user accepts — in which case they are a comparison pair
+  (`assessed <= tolerated`) and both survive under D-013's disjoint decomposition, one in each
+  model. Or they may be the same quantity named twice, in which case one of them disappears.
+- **Why it was not folded into D-013:** D-013 settles the structural rule that no threshold has two
+  homes. It does not settle whether these two named values *are* the same threshold. Answering that
+  by implication would be a silent resolution, which CLAUDE.md §7 forbids.
+- **Effect while Open:** one field of TaskGenome and one field of ReliabilityContract remain
+  undetermined. Partially blocks V0.1 — the models can otherwise be specified.
+- **Needs:** Owner to state whether assessed risk and tolerated risk are distinct quantities.
+
+### D-031 — `evidence_requirements` (§6) vs "Minimum independent evidence" (§30)
+
+- **Status:** Open · **Source:** handoff §6 vs §30 · **Split out of D-013, left Open by the owner**
+- **Finding:** §30's "Minimum independent evidence: 3" is plainly a numeric acceptance threshold and
+  belongs in the ReliabilityContract under D-013. §6's `evidence_requirements` is ambiguous: it
+  could be the same numeric threshold — in which case it is a duplicate and moves to the contract —
+  or a descriptive intrinsic requirement of the task, for example "must cite the architecture
+  documentation", in which case it is task identity and stays in the genome. The handoff does not
+  disambiguate, and §5's user-facing mission lists "Evidence requirements" without further detail.
+- **Why it was not folded into D-013:** same reasoning as D-030.
+- **Effect while Open:** whether `evidence_requirements` appears in TaskGenome at all is
+  undetermined. Partially blocks V0.1 — one field only.
+- **Needs:** Owner to state whether §6's `evidence_requirements` is a threshold or a description.
+  If it is both, that is a third answer and the field splits across the two models.
+
+### D-032 — The literal default value of `tenant_id`
+
+- **Status:** Open · **Source:** handoff §54 (silent) · **Split out of D-019, left Open by the owner**
+- **Finding:** D-019 establishes that `tenant_id` is required and carries a single fixed default.
+  §54 provides no value, and the choice is not neutral: a value that reads as a sentinel behaves
+  differently under a future migration than one that reads as a real tenant, and a value that looks
+  like an identifier invites being parsed as one.
+- **Effect while Open:** does not block the model definitions — only the constant.
+- **Needs:** Owner to choose the value, and to state whether it is a reserved sentinel that real
+  tenants may never take.
+
+### D-034 — Do `plan_id` and `event_id` belong in invariant 18's identifier list?
+
+- **Status:** Open · **Source:** CLAUDE.md invariant 18 vs handoff §54 · **Raised by Claude Code; split out of D-019, left Open by the owner**
+- **Finding:** §54 names five identifiers: `tenant_id`, `mission_id`, `execution_id`, `agent_id`,
+  `timestamp`. Invariant 18 as drafted at bootstrap asserts **seven**, adding `plan_id` and
+  `event_id`. Both additions are handoff-sourced — `plan_id` from §33's telemetry list, `event_id`
+  from §10's event requirements — but **neither comes from §54**, and §54's "such as" makes its list
+  open rather than exhaustive, which is what made the addition seem unremarkable at the time.
+- **Why it is recorded:** the two identifiers entered an invariant by derivation rather than by
+  decision. Invariants are the one thing in this repository that must not accrete silently.
+- **Effect while Open:** none on V0.1 field definitions. CLAUDE.md is **not** being amended pending
+  this decision.
+- **Needs:** Owner to either ratify the seven-identifier list or reduce invariant 18 to §54's five
+  and let `plan_id`/`event_id` be required by their own sections instead.
+
+### D-035 — Do A2A events carry a producer-assigned per-`a2a_task_id` sequence?
+
+- **Status:** Open · **Source:** handoff §10 · **Split out of D-011, left Open by the owner**
+- **Finding:** D-011 adopts the layered model in principle but scopes V0.1 to identity plus an
+  EIDOS-assigned mission sequence. Whether remote events additionally carry a producer-assigned
+  per-task sequence — layer 3 of the model — is deferred. A producer-assigned value is only
+  trustworthy for detecting ordering within that producer's own stream, which is the sole use it
+  would have.
+- **Effect while Open:** none on V0.1. Blocks V0.6 lateness detection for remote tasks.
+- **Needs:** Owner decision at V0.6, informed by **D-023** (the A2A wire format determines what
+  ordering guarantees are actually available to carry).
+
+### D-036 — The `AgentTask` lifecycle state machine
+
+- **Status:** Open · **Source:** handoff §10 vs §8 · **Split out of D-011, left Open by the owner**
+- **Finding:** §10 mandates that late and out-of-order events be "validated against lifecycle" and
+  accepted or rejected **deterministically**. §8 gives `AgentTask` a `status` field but **never
+  enumerates the states or the legal transitions**. Without that state machine, "validate against
+  lifecycle" has no defined content and "deterministically" cannot be satisfied.
+- **Effect while Open:** none on V0.1, which has no remote tasks. **Blocks V0.6 protocol tests for
+  late event, out-of-order event, agent restart and partial artifact** (§50, §63) — those tests
+  cannot be written against an unspecified lifecycle without encoding the decision silently.
+- **Needs:** The state set and the legal transition table, including which states are terminal and
+  what an event arriving for a terminal task does.
+
+### D-037 — One common event shape, or separate internal and external shapes?
+
+- **Status:** Open · **Source:** handoff §10 vs §33 · **Split out of D-011, left Open by the owner**
+- **Finding:** §10 specifies the field set for "every **external** event", including `a2a_task_id`.
+  But eleven of §33's thirteen event types are **internal** — `MISSION_CREATED`, `PLAN_GENERATED`,
+  `PLAN_REJECTED`, `PLAN_COMPILED`, `MCP_TOOL_CALLED`, `RAG_SEARCH`, `EVIDENCE_REJECTED`,
+  `VERIFICATION_FAILED`, `REPLAN_TRIGGERED`, `MISSION_COMPLETED`, `MISSION_FAILED` — and
+  `a2a_task_id` is meaningless on them. Either internal and external events have different shapes,
+  or they share one shape on which `a2a_task_id` is optional.
+- **Effect while Open:** V0.1 emits only internal events, so it can proceed. The question becomes
+  material at V0.6.
+- **Needs:** Owner decision. Note that a shared shape with optional fields is easier now and vaguer
+  later; separate shapes are stricter but require a discriminated hierarchy from the start.
+
+### D-038 — Bounding and persisting the processed-`event_id` set
+
+- **Status:** Open · **Source:** implied by D-011; not addressed in the handoff · **Raised by Claude Code, left Open by the owner**
+- **Finding:** D-011 makes `event_id` the idempotency key, which requires the reducer to know which
+  event ids have already been applied. That set **grows without bound** over a mission's life.
+  In-memory at V0.1 this is harmless. It becomes a real question at V0.5, when checkpointing means
+  the set must survive a restart, and at **D-017**, when persistence means it must be stored and
+  queried.
+- **Effect while Open:** none on V0.1. Blocks nothing yet.
+- **Needs:** A bounding strategy (window, watermark, or full retention) and a decision on whether the
+  set is derived from the persisted event log or stored separately. Should be settled alongside
+  D-017.
+
+### D-042 — The exact list of ReliabilityContract budget fields
+
+- **Status:** Open · **Source:** handoff §14, §30, §32 · **Split out of D-009, left Open by the owner**
+- **Finding:** D-009 establishes that mission execution budgets live in the ReliabilityContract and
+  gives six *examples* — `max_retries`, `max_replans`, `max_agent_calls`, `max_tool_calls`,
+  `max_execution_time`, `max_tokens`. §14's own list is prefixed "such as", so it is open rather
+  than exhaustive, and §30's contract example carries only two of the six.
+- **Effect while Open:** partially blocks V0.1 — the `ReliabilityContract` model can be defined in
+  structure but its budget field list is not final.
+- **Needs:** The definitive field list, and which fields are required vs optional. Interacts with
+  **D-045**: an optional field and an absent contract are different situations.
+
+### D-043 — Declared plan limits vs actual execution counters
+
+- **Status:** Open · **Source:** handoff §14 vs §32 · **Raised by Claude Code; split out of D-009, left Open by the owner**
+- **Finding:** Five limit names appear in **both** §14 (validation-time, causing plan **rejection**)
+  and §32 (execution-time, causing mission **pause**). A shared name conceals two different
+  quantities: `max_agent_calls` at validation counts *declared steps in the plan*, while at
+  execution it counts *actual invocations including retries*. A plan with 4 agent steps under
+  `max_retries: 2` can consume up to 12 agent calls. Both checks are legitimate; they are not the
+  same number.
+- **Why it matters:** this is the item in the D-009 family most likely to produce a real defect.
+  Two limits sharing a name while counting different things passes review and fails in production.
+- **Effect while Open:** none on V0.1. Material at V0.2 (validation) and V0.3 (runtime counters).
+- **Needs:** Either two distinctly named limits, or one limit with a stated counting rule that both
+  enforcement points share.
+
+### D-044 — Does `max_tokens` formally belong to the §14 and §32 bound lists?
+
+- **Status:** Open · **Source:** handoff §30, §33, §63 vs §14, §32 · **Split out of D-009, left Open by the owner**
+- **Finding:** `max_tokens` appears in §30's Reliability Contract, tokens are measured per mission in
+  §33, and "token budget exceeded" is a required failure test in §63 — but the limit appears in
+  **neither** §14's plan-limit list **nor** §32's execution hard-limit list. §14's "such as" makes
+  both lists open, which is how the omission passes unnoticed.
+- **Effect while Open:** none on V0.1. Material at V0.2 and V1.2.
+- **Needs:** Confirmation that `max_tokens` is enforced at the same points as the other budgets, and
+  whether a token bound is checkable at validation time at all (it may be inherently dynamic).
+
+### D-045 — What applies when no ReliabilityContract is supplied
+
+- **Status:** Open · **Source:** handoff §30 · **Deferred here from D-013; left Open by the owner**
+- **Finding:** §30 says every mission **"can have"** a Reliability Contract — optional. D-009 places
+  the mission execution budgets inside it. If a mission supplies no contract, it is unstated whether
+  system ceilings apply as effective limits, whether a default contract is synthesised, or whether
+  the mission is rejected for lack of acceptance criteria.
+- **Why it matters:** invariant 13 requires EIDOS to report when it cannot satisfy the contract.
+  With no contract, it is undefined what "satisfied" means — and a mission with no acceptance
+  criteria arguably cannot fail, which would hollow out the reliability story.
+- **Effect while Open:** partially blocks V0.1 — determines whether `TaskGenome`'s reference to a
+  contract is required or optional.
+- **Needs:** Owner decision. Note the three options are not equivalent: system-ceilings-as-defaults
+  is permissive, a synthesised default contract is explicit, and rejection is strictest.
+
+### D-046 — Numerical bound values
+
+- **Status:** Open · **Source:** handoff §6, §30 (examples only) · **Deferred to V0.2 by D-009 rider 5**
+- **Finding:** No bound has a stated default anywhere in the handoff. Exactly two numbers exist in
+  this area and both appear as illustrative examples: `latency_budget_ms: 600000` (§6) and
+  `Maximum tokens: 10,000` (§30). Every other value would be invention.
+- **Effect while Open:** none on V0.1 by decision — D-009 rider 5 states that no numerical defaults
+  are established in V0.1.
+- **Needs:** Provisional values at V0.2 when validation exists, **explicitly marked arbitrary until
+  measured**, then tuned from telemetry at V0.9+. Per §67 and CLAUDE.md §7 a provisional bound must
+  never be presented as a tuned one.
 
 ---
 

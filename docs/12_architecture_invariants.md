@@ -33,6 +33,12 @@ LangGraph state, A2A state and agent internal state — each believing it is cor
 **Verified by:** V0.5 reducer unit tests; V0.6 protocol tests proving a remote agent's view does not
 override MissionState.
 
+**Refined:** `decisions.md` **D-010a** — MissionState is a **materialized view over the event log**,
+holding only what the runtime must answer synchronously. Detailed per-node runtime execution state
+stays out of it, so LangGraph's execution model never becomes part of the authoritative contract.
+The completeness burden therefore sits on the **event log**: an event that is not recorded is not
+replayable. **D-040** settles the exact split at V0.3.
+
 ## 2. Only the state reducer mutates MissionState
 
 **Source:** §9, §10
@@ -121,9 +127,18 @@ Human review required.
 **Verified by:** V0.2 rejection tests for over-budget plans; scenario tests for retry, replan, token
 and tool budget exhaustion (§63).
 
-**Note:** bound *values* and their source of authority are unresolved — `decisions.md` D-009. The
-invariant holds regardless; only the numbers are open. One loop currently has no stated bound at
-all: the Agentic RAG reformulation loop (§24). See D-029.
+**Resolved:** `decisions.md` **D-009** — bounds split by category. Shape/complexity limits
+(`max_nodes`, `max_depth`, `max_parallel_branches`) are **system-level safety limits** protecting the
+runtime from an LLM's output; execution budgets (`max_retries`, `max_replans`, `max_agent_calls`,
+`max_tool_calls`, `max_execution_time`, `max_tokens`) are carried by the **ReliabilityContract**. A
+mission may tighten a system limit, never exceed the ceiling, and an over-ceiling request is
+**rejected with an explicit reason, never silently clamped**.
+
+**Still open:** **D-046** — no numerical value is established in V0.1 by decision; values arrive at
+V0.2 and are tuned from measurement, and a provisional bound is never presented as a tuned one (§67).
+**D-043** — five limit names appear in both §14 and §32 while counting different things. **D-029** —
+the Agentic RAG reformulation loop (§24) still has no stated bound at all, and is the one loop in the
+handoff without one.
 
 ## 8. Events are idempotent
 
@@ -138,7 +153,15 @@ unless event processing is idempotent.
 **Verified by:** V0.5 reducer tests; V0.6 protocol tests for duplicate event, late event,
 out-of-order event, agent restart and partial artifact (§50, §63).
 
-**Note:** the ordering domain and idempotency key are unresolved — `decisions.md` D-011.
+**Resolved:** `decisions.md` **D-011** — three roles separated. `event_id` is the **idempotency
+key**; a **monotonic per-mission sequence assigned by EIDOS at acceptance** provides the total order
+replay depends on; a producer-assigned per-`a2a_task_id` sequence for remote-lifecycle ordering is
+deferred (D-035). Ordering authority sits with EIDOS, not the producer — which follows from
+invariant 2 rather than from §10, which is silent on assignment.
+
+**Still open:** D-036 (the `AgentTask` lifecycle state machine — **without it, "accept/reject
+deterministically" has no defined content**, and the V0.6 protocol tests cannot be written), D-037
+(shared vs separate event shapes), D-038 (bounding the processed-`event_id` set).
 
 ## 9. The runtime is model-independent
 
@@ -280,7 +303,18 @@ single-user forever.
 
 **Verified by:** V0.1 contract tests.
 
-**Note:** whether `tenant_id` is a real field at V0.1 is unresolved — `decisions.md` D-019.
+**Resolved:** `decisions.md` **D-019** — `tenant_id` is present and required on V0.1 root models,
+with a single fixed default. It **has no security meaning in V0.1** and must not be treated as an
+authentication, authorization or isolation mechanism.
+
+**Note — this invariant's list is under review.** §54 names **five** identifiers: `tenant_id`,
+`mission_id`, `execution_id`, `agent_id`, `timestamp`. The list above asserts **seven**, adding
+`plan_id` (from §33) and `event_id` (from §10). Both additions are handoff-sourced but neither comes
+from §54, and they entered this invariant by derivation at bootstrap rather than by decision. This
+is recorded as `decisions.md` **D-034** and awaits the owner. CLAUDE.md is not being amended pending
+that decision.
+
+**Also open:** D-032 (the literal default value), D-033 (root-only vs propagation to nested models).
 
 ---
 
@@ -304,11 +338,14 @@ These come from the handoff and are enforced through `CLAUDE.md` rather than thr
 | Id | Invariant affected | Question |
 |---|---|---|
 | D-015 | 12, 13 | How verification confidence is computed |
-| D-010 | 1, 2 | MissionState field set and reducer signature |
-| D-011 | 8 | Event ordering domain and idempotency key |
-| D-009 | 7 | Bound values and their source of authority |
+| D-040 | 1 | The exact MissionState / LangGraph execution-state split (V0.3) |
+| D-039 | 2 | Whether the reducer returns an outcome alongside state (V0.5) |
+| D-036 | 8 | The `AgentTask` lifecycle state machine required for deterministic accept/reject |
+| D-046 | 7 | Numerical bound values (V0.2; none established in V0.1 by decision) |
+| D-043 | 7 | Declared plan limits vs actual execution counters share names but count differently |
 | D-029 | 7 | The RAG reformulation loop has no stated bound |
 | D-007 | 11 | Capability vocabulary and matching semantics |
 | D-018 | 9 | Which module owns the model/agent interface |
 | D-014 | 14 | `autonomy_level` scale and naming collision with §40 |
-| D-019 | 18 | Is `tenant_id` a real field at V0.1 |
+| D-034 | 18 | Do `plan_id` and `event_id` belong in this invariant's list? §54 names only five |
+| D-033 | 18 | Does `tenant_id` propagate to nested models, or stay root-only? |

@@ -71,12 +71,37 @@ requirements. EIDOS converts this into the Task Genome.
 
 ## 4. Relationship to the Reliability Contract
 
-**Unresolved.** Four concerns appear in both the Task Genome (§6) and the Reliability Contract
-(§30): quality threshold, latency budget, resource/token budget, and autonomy/approval requirements.
-The handoff never states whether the contract is derived from the genome, is a separate user input,
-or overrides the genome.
+**Resolved — `decisions.md` D-013, decided by the human owner.**
 
-This blocks V0.1. See `decisions.md` **D-013**.
+The two models are **disjoint**:
+
+- **TaskGenome** describes the task and its intrinsic requirements.
+- **ReliabilityContract** defines execution acceptance constraints.
+- **Constraint thresholds are not duplicated across the two models.**
+- **TaskGenome references the ReliabilityContract rather than copying its threshold values.**
+
+Consequently the constraint fields §6 lists — `quality_threshold`, `latency_budget`,
+`resource_budget` — are not restated in the genome. They are reachable through the referenced
+contract. §6 describes its field list as "conceptually equivalent" rather than prescribing a schema,
+and §53's API concept already separates `goal` from a nested `constraints` object.
+
+The deciding consideration was §21 and §22: the genome is load-bearing as a **task-similarity key**
+for strategy memory. Constraints are not part of task similarity — the same assessment under a
+10-minute and a 60-minute budget is the same task with different acceptance criteria. Holding
+constraints in the genome would make those two look like different tasks and degrade strategy-memory
+recall invisibly. Full rationale and the interpretations rejected are in `decisions.md` D-013.
+
+Because no value has two homes, **no precedence rule exists or is needed.**
+
+> **Still open — two sub-ambiguities the owner deliberately left unresolved.** D-013 settles the
+> structural rule only; it does not settle whether these particular pairs are the same quantity:
+>
+> - **D-030** — `risk_level` (§6) vs "Maximum risk" (§30): assessed risk and tolerated risk may be a
+>   comparison pair, one field in each model, or the same value named twice.
+> - **D-031** — `evidence_requirements` (§6) vs "Minimum independent evidence" (§30): §6's field may
+>   be a numeric threshold (contract) or a descriptive task requirement (genome).
+>
+> Until these are answered, one field of this model remains undetermined in each case.
 
 ## 5. Autonomy level
 
@@ -110,10 +135,29 @@ See `decisions.md` **D-007**. Capability validation (§14) cannot be written unt
 
 §54 states that data models should conceptually include `tenant_id`, `mission_id`, `execution_id`,
 `agent_id` and `timestamp`, while warning that the MVP must not become an authentication project.
-Invariant 18 reads as "these exist from the start"; whether V0.1 carries `tenant_id` as a real field
-has not been confirmed.
 
-See `decisions.md` **D-019**.
+**Resolved — `decisions.md` D-019, decided by the human owner.**
+
+`tenant_id` is **present and required** on V0.1 root models and carries a **single fixed default
+value**.
+
+> ⚠️ **`tenant_id` has no security meaning in V0.1.** It must not be treated as an authentication,
+> authorization, or isolation mechanism. There is no auth behind it, no enforcement, and no
+> isolation. It is an identity slot reserved so that permanent artifacts — the event log (§73),
+> telemetry records (§33) and strategy memory (§21) — are attributable when multi-tenancy is
+> eventually built. Records written without it could never be correctly attributed afterwards, and
+> backfilling a guessed tenant onto real historical data would violate §67.
+
+**Root set — `decisions.md` D-033, decided by the human owner.** `tenant_id` is **root-only**. It is
+required on `TaskGenome`, `ReliabilityContract`, `Plan`, `MissionState` and `MissionEvent`, and is
+**not** duplicated on nested `PlanStep` or `AgentTask`.
+
+Accepted risk, recorded so it is not rediscovered later: if strategy-memory or telemetry records are
+eventually stored **detached** from their mission root (§21, §25), the tenant must be carried by the
+storage layer or re-attached at write time. A V1.0 concern, but a real cost of this choice.
+
+> **Still open:** **D-032** (the literal default value) and **D-034** (whether `plan_id` and
+> `event_id` legitimately belong in invariant 18's identifier list, given §54 names only five).
 
 ## 8. Implementation constraints
 
@@ -130,11 +174,13 @@ See `decisions.md` **D-019**.
 
 | Id | Question | Blocks |
 |---|---|---|
-| D-013 | TaskGenome vs ReliabilityContract — which is authoritative, and is one derived from the other? | V0.1 |
+| D-030 | Is `risk_level` (assessed) distinct from "Maximum risk" (tolerated), or the same value twice? | V0.1, one field |
+| D-031 | Is `evidence_requirements` a numeric threshold or a descriptive task requirement? | V0.1, one field |
 | D-007 | Capability vocabulary and matching semantics | V0.2 capability validation |
 | D-014 | Does `autonomy_level` use the §29 0–4 scale, and what is §40's concept called instead? | V0.1 |
 | D-016 | What measurement procedure sits behind `quality_threshold`? | V0.1 |
-| D-019 | Does `tenant_id` appear in V0.1? | V0.1 |
+| D-014 | Does `autonomy_level` use the §29 0–4 scale? | V0.1, one field's type |
+| D-045 | Is the ReliabilityContract reference required or optional? | V0.1, one flag |
 | — | Exact field names and units (e.g. `latency_budget` vs `latency_budget_ms`), and which of the ten fields are required vs optional. The handoff's list is explicitly "conceptual" and its example is partial. | V0.1 |
 
 ## Out of scope for this document

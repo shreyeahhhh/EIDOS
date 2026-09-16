@@ -54,9 +54,21 @@ High-risk actions:           Require human approval
 EIDOS must be able to report **"Mission could not satisfy the requested reliability contract"** and
 must not force a confident-looking answer merely because the model produced output.
 
-> **Open:** the contract overlaps the Task Genome on quality, latency, resource budget and
-> autonomy/approval, with no stated relationship or precedence. See `decisions.md` **D-013**.
-> This blocks V0.1.
+**Relationship to the Task Genome — resolved (`decisions.md` D-013, decided by the human owner).**
+
+The two models are disjoint. **TaskGenome** describes the task and its intrinsic requirements;
+**ReliabilityContract** defines execution acceptance constraints. Constraint thresholds are **not
+duplicated** across them, and the genome **references** the contract rather than copying its values.
+Because no value has two homes, no precedence rule exists or is needed. See `docs/04_task_genome.md`
+§4 and `decisions.md` D-013 for the rationale.
+
+> **Still open:** D-013 settles the structural rule only. Two pairs remain unresolved at the owner's
+> instruction — **D-030** (`risk_level` assessed vs "Maximum risk" tolerated) and **D-031**
+> (`evidence_requirements` as threshold vs description). Each leaves one field of this model
+> undetermined.
+>
+> Separately, what applies when §30's optional contract is **absent** is a **D-009** question
+> (bounds origin), not a D-013 question, and remains Open.
 
 ## 3. Verification
 
@@ -201,8 +213,37 @@ Human review required.
 This is invariant 7. Budget exhaustion pauses for human review; it never loops, never silently
 truncates, never retries forever.
 
-> **Open:** no bound has a value, and the source of authority for bounds is unstated. See
-> `decisions.md` **D-009**.
+**Source of authority — resolved (`decisions.md` D-009, decided by the human owner).**
+
+Bounds split by **category**, because each category exists for a different purpose:
+
+| Category | Examples | Owner | Why |
+|---|---|---|---|
+| **Runtime shape / complexity safety limits** | `max_nodes`, `max_depth`, `max_parallel_branches` | **System** | §12 and §14 bound plan shape to protect *the runtime* from an LLM's output, not to express user preference |
+| **Mission execution budgets** | `max_retries`, `max_replans`, `max_agent_calls`, `max_tool_calls`, `max_execution_time`, `max_tokens` | **ReliabilityContract** | §5 and §30 have the user state latency and token budgets directly |
+
+Two riders:
+
+- **A mission may tighten a system limit but may never exceed the system safety ceiling.**
+- **Never silently clamp.** A contract value exceeding the ceiling is **rejected with an explicit
+  validation reason** — invariant 5's reject-never-repair rule applied one layer up. Clamping would
+  hide from the user that they did not get what they asked for.
+
+**No numerical defaults are established in V0.1.** Values arrive at V0.2 with the validation work and
+are tuned from measurement thereafter. Only two numbers in this area are handoff-sourced —
+`latency_budget_ms: 600000` (§6) and `Maximum tokens: 10,000` (§30) — and both are *examples*.
+Per §67 a provisional bound must never be presented as a tuned one.
+
+> **Still open:** **D-042** (the exact contract budget field list), **D-043** (declared plan limits
+> vs actual execution counters), **D-044** (whether `max_tokens` formally joins the §14/§32 lists),
+> **D-045** (what applies when no contract is supplied), **D-046** (the values themselves), and
+> **D-029** (the Agentic RAG reformulation bound).
+>
+> **D-043 is the one most likely to cause a real defect.** Five limit names appear in both §14
+> (validation, rejecting a plan) and §32 (execution, pausing a mission), and the shared names count
+> different things: `max_agent_calls` at validation counts declared plan steps, at execution it
+> counts actual invocations including retries. A plan with 4 agent steps under `max_retries: 2` can
+> consume 12 agent calls.
 
 ## 7. Failure scenarios that must be tested
 
@@ -250,8 +291,13 @@ and must be testable without a UI.
 |---|---|---|
 | D-015 | How verification confidence is computed from measurable proxies — or whether verification is pass/fail with no scalar | V0.4, V1.2 |
 | D-016 | Which quality proxies, and how they combine into `quality_threshold` | V0.1, V1.0 |
-| D-013 | ReliabilityContract vs TaskGenome — precedence and derivation | V0.1 |
-| D-009 | Bound values and their source of authority | V0.2, V1.2 |
+| D-030 | Is assessed `risk_level` distinct from tolerated "Maximum risk"? | V0.1, one field |
+| D-031 | Is `evidence_requirements` a threshold or a description? | V0.1, one field |
+| D-042 | The exact list of ReliabilityContract budget fields | V0.1, field list |
+| D-045 | What applies when no ReliabilityContract is supplied | V0.1, one flag |
+| D-043 | Declared plan limits vs actual execution counters | V0.2, V0.3 |
+| D-044 | Does `max_tokens` formally belong to the §14/§32 bound lists? | V0.2, V1.2 |
+| D-046 | Numerical bound values | V0.2, tuned from V0.9 telemetry |
 | D-014 | `autonomy_level` scale, and naming for §40's separate budget concept | V0.1 |
 | — | What "fallback capability" selection means in §32, and whether it is expressible in the Plan DSL primitives | V1.2 |
 | — | How a paused mission resumes after human review, and whether resumption produces a new plan version | V1.2 |

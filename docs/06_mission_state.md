@@ -76,12 +76,32 @@ Out-of-order/late event -> validate against lifecycle -> accept/reject determini
 
 **No agent writes the global mission state.**
 
-> **Open — and load-bearing.** "sequence/version" does not define an ordering domain: a per-mission
-> monotonic counter, a per-AgentTask counter, a per-producer counter, or a version vector are all
-> consistent with the phrase, and each yields different duplicate/late-event semantics. The
-> idempotency key is likewise undefined — `event_id` alone, or `(a2a_task_id, sequence)`. See
-> `decisions.md` **D-011**. This blocks the reducer and every protocol test for duplicate, late and
-> out-of-order events.
+**Resolved — `decisions.md` D-011, decided by the human owner.**
+
+§10's `sequence/version` is doing three jobs at once. The adopted model separates them:
+
+1. **Identity** — `event_id`. **This is the idempotency key.** Meaningful for all event types.
+2. **Mission order** — a **monotonic per-mission sequence assigned by EIDOS** when an event is
+   **accepted into the EIDOS event stream**. This is the ordering used for deterministic replay.
+3. **Remote-lifecycle order** — a producer-assigned per-`a2a_task_id` sequence, used only to validate
+   a remote event against that task's lifecycle. **Deferred — not introduced in V0.1** (D-035).
+
+Ordering authority sits with **EIDOS**, not the producer. This follows from invariant 2: a remote
+agent is precisely the component that must not control EIDOS state. Assigning the sequence at
+acceptance makes it a property of the EIDOS event stream rather than of any external system's
+reliability.
+
+**V0.1 scope:** `event_id` as idempotency key, plus the EIDOS-assigned mission sequence. No
+A2A-specific producer ordering.
+
+> **Still open:** **D-035** (A2A producer sequence), **D-036** (the `AgentTask` lifecycle state
+> machine), **D-037** (one shared event shape vs separate internal/external shapes), **D-038**
+> (bounding and persisting the processed-`event_id` set). None blocks V0.1.
+>
+> **D-036 is the sharpest.** §10 mandates deterministic accept/reject against a lifecycle, and §8
+> gives `AgentTask.status` without enumerating states or legal transitions. The V0.6 protocol tests
+> for late event, out-of-order event, agent restart and partial artifact cannot be written until it
+> is answered.
 
 ## 4. Event types
 
@@ -108,19 +128,56 @@ correspond to milestones that do not exist yet (A2A at V0.6, MCP at V0.7, RAG at
 V0.1 `MissionEvent` contract must be able to carry them without the corresponding subsystems
 existing.
 
-## 5. The state shape — unspecified
+## 5. The state shape
 
-The handoff fixes **ownership** and **event names** but never enumerates:
+**Resolved — `decisions.md` D-010a, decided by the human owner.**
 
-- the fields of `MissionState`
-- the reducer signature
-- what a checkpoint contains, when one is taken, and at what granularity
-- how plan versions (§15) are held in state
-- how `AgentTask` records are keyed and held
+**MissionState is a materialized view over the event log.** It contains exactly the information the
+runtime must answer **synchronously**:
 
-See `decisions.md` **D-010**. This blocks both V0.1 `MissionState` and all of V0.5.
+- mission identity
+- TaskGenome
+- mission status and reason
+- plan versions and lineage
+- active plan
+- remote `AgentTask` records
+- budget consumption counters
 
-What *is* known from elsewhere in the handoff, and which any proposed field set must accommodate:
+**Detailed per-node runtime execution state does not enter the authoritative MissionState merely
+because LangGraph has such state.**
+
+### Why this boundary
+
+§9 asserts MissionState is the *only* authoritative global state; §11 assigns LangGraph management
+of *execution state*; §9's diagram shows the reducer writing into "LangGraph checkpoint/state". Two
+state stores exist and one is asserted uniquely authoritative — coherent only if LangGraph's is
+subordinate.
+
+The apparent objection to a minimal MissionState — that replay would be incomplete — **dissolves on
+§73**: replay consumes the **event log**, not MissionState. Completeness is a property the event log
+must have. Per-node progress is reconstructible from events without being a state field.
+
+The alternative, folding per-node execution status into MissionState, would make LangGraph's
+execution model part of the authoritative contract — undoing the work §11, §12 and §15 do to keep
+the runtime replaceable and the plan declarative.
+
+### The obligation this creates
+
+The completeness burden sits on the **event log**. **An event that is not recorded is not
+replayable.** This binds every later milestone, not just V0.5.
+
+It also substantially pre-answers **D-017**: if MissionState is a materialized view, the event log
+is the durable artifact and a snapshot is an optimisation. D-017 is *not* resolved — the consequence
+is recorded so it is visible rather than arriving later as a fait accompli.
+
+> **Still open:** **D-039** (reducer signature — V0.5), **D-010b** (checkpoint semantics — V0.5),
+> **D-040** (the exact MissionState/LangGraph split — V0.3), **D-041** (evidence and final
+> mission-result fields — V0.4 and V0.8). None blocks V0.1.
+
+### Constraints the field set satisfies
+
+Each field above answers a question the runtime must resolve before acting. These are derivations
+from the handoff, not choices:
 
 | Requirement | Source |
 |---|---|
@@ -164,10 +221,16 @@ see `decisions.md` **D-017**.
 
 | Id | Question | Blocks |
 |---|---|---|
-| D-010 | MissionState field set, reducer signature, checkpoint semantics | V0.1, V0.5 |
-| D-011 | Event ordering domain and idempotency key | V0.1, V0.5, V0.6 |
+| D-039 | The reducer signature — does it return an outcome alongside state? | V0.5 |
+| D-010b | Checkpoint contents, granularity and trigger | V0.5 |
+| D-040 | The exact MissionState / LangGraph execution-state split | V0.3 |
+| D-041 | Evidence and final mission-result fields | V0.4, V0.8 |
+| D-036 | The `AgentTask` lifecycle state machine "validate against lifecycle" presupposes | V0.6 |
+| D-037 | One shared event shape, or separate internal and external shapes? | V0.6 |
+| D-035 | Do A2A events carry a producer-assigned per-task sequence? | V0.6 |
+| D-038 | Bounding and persisting the processed-`event_id` set | V0.5+ |
 | D-017 | Is the event log or a state snapshot authoritative for persistence and replay? | V0.5+ |
-| D-019 | Does `tenant_id` appear in V0.1 models? | V0.1 |
+| D-033 | Does `tenant_id` propagate to nested models, or stay root-only? | V0.1 |
 | — | Whether §33's event list is closed or extensible, and how event payloads are typed | V0.1 |
 
 ## Out of scope for this document

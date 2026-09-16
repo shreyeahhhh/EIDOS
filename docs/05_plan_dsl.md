@@ -92,6 +92,17 @@ V0.3 maps `SEQUENTIAL`, `PARALLEL`, `ROUTE`, `VERIFY`, `RETRY` and `REPLAN` into
 > one, either the condition is opaque — breaking determinism and validation — or an expression
 > language gets invented. See `decisions.md` **D-012**. This blocks the compiler.
 
+**V0.1 scope — `decisions.md` D-047, decided by the human owner.** V0.1 defines the **eight step
+kinds**, **explicit step IDs**, **capability**, **dependency edges** and **DAG structure**. It
+defines **no predicate or condition language**, and carries **no conditional payload at all** — not
+even an opaque placeholder, which would be an untyped value crossing a module boundary (CLAUDE.md
+§8) and would invite dependencies on a shape nobody has chosen.
+
+Conditional payloads and predicate semantics arrive at V0.2 with D-012, as an **additive** contract
+change rather than a reinterpretation of an existing field. A V0.1 plan containing a conditional
+kind is structurally valid but semantically incomplete; nothing in V0.1 executes plans, so this is
+inert — but such a plan **must not silently become executable at V0.3** without D-012.
+
 ## 4. Validation pipeline
 
 Validation happens **before** execution. No plan executes unvalidated (invariant 5). The order is
@@ -145,10 +156,22 @@ max_execution_time
 §32 repeats the execution-side hard limits: max retries, max replans, max execution time, max agent
 calls, max tool calls. No infinite loops.
 
-> **Open:** the handoff names every dimension and gives **no values**, and does not say whether
-> bounds come from static policy configuration, the per-mission ReliabilityContract, the Task
-> Genome, or a combination. See `decisions.md` **D-009**. Resource validation and complexity-limit
-> validation cannot be implemented until this is answered.
+**Source of authority — resolved (`decisions.md` D-009).** Bounds split by category:
+
+- **`max_nodes`, `max_depth`, `max_parallel_branches`** are **system-level safety limits**. They
+  protect the runtime from an LLM's output (§12, §14) and are not user-settable.
+- **`max_retries`, `max_replans`, `max_agent_calls`, `max_tool_calls`, `max_execution_time`,
+  `max_tokens`** are **mission execution budgets**, carried by the ReliabilityContract.
+
+A mission may **tighten** a system limit but never exceed the system ceiling, and a contract value
+above the ceiling is **rejected with an explicit validation reason** — never silently clamped
+(invariant 5). Full rationale in `decisions.md` D-009 and `docs/10_reliability.md` §6.
+
+> **Still open — and blocking V0.2 resource and complexity validation:** **D-046** (the values
+> themselves; none is established in V0.1 by decision), **D-042** (the exact contract budget field
+> list), **D-043** (whether a limit counts declared plan steps or actual invocations — these are
+> different numbers and currently share a name), **D-044** (`max_tokens` in the §14/§32 lists),
+> **D-045** (no contract supplied).
 
 ## 6. Immutable versioned plans
 
@@ -200,7 +223,8 @@ verification; and an ordered variant that front-loads architecture before target
 | Id | Question | Blocks |
 |---|---|---|
 | D-012 | Predicate language for ROUTE / RETRY / REPLAN / TERMINATE | V0.2, V0.3 |
-| D-009 | Bound values and where bounds originate | V0.2 |
+| D-046 | Numerical bound values | V0.2 |
+| D-043 | Declared plan limits vs actual execution counters | V0.2, V0.3 |
 | D-007 | Capability vocabulary and matching semantics | V0.2 |
 | D-020 | Strategy vs Plan — one contract or two | V0.2, V1.0 |
 | — | Edge encoding (`depends_on` per step vs separate edge list) and step-id namespace — explicitly left open by D-004 | V0.1 |

@@ -21,7 +21,7 @@ No measurement of any kind has been taken, so no metric appears anywhere in this
 
 - [x] `CLAUDE.md` — permanent rules, 18 architecture invariants
 - [x] `progress.md` — this file
-- [x] `decisions.md` — 4 Accepted, 22 Open, 3 Deferred
+- [x] `decisions.md` — 12 Accepted, 34 Open, 3 Deferred (counts current as of the latest decision below)
 - [x] `README.md`, `pyproject.toml`, `.gitignore`
 - [x] `docs/01`–`docs/12` — the twelve documents required by handoff §81
 - [x] `src/eidos/` and `src/eidos/contracts/` — docstring only, no code
@@ -72,11 +72,52 @@ Planned modules under `src/eidos/contracts/`:
 Each needs unit tests in `tests/unit/` covering construction, field validation, rejection of invalid
 input, and the failure paths — not only the happy path (§61, CLAUDE.md §6).
 
-**V0.1 cannot begin cleanly until the blocking items below are answered.** The ones that must be
-resolved first are D-010 (MissionState fields and reducer contract), D-013 (TaskGenome vs
-ReliabilityContract overlap and authority), D-011 (event ordering and idempotency key) and D-019
-(`tenant_id` in V0.1 models). D-009 (bound values and their origin) is needed before the bounds land
-in any contract.
+**The five named blocking decisions are resolved** — D-013, D-019, D-011, D-010a, D-009. The
+structural questions about V0.1 are settled.
+
+**But V0.1 is not fully unblocked.** Two Open items predating this round still touch V0.1 and were
+not part of the five:
+
+- **D-014** — does `autonomy_level` use §29's 0–4 scale? Determines a `TaskGenome` field's type.
+- **D-016** — the quality function. Determines whether the contract's quality threshold is a plain
+  value or a structured type.
+
+A further four affect one field or one flag each: **D-030** (assessed vs tolerated risk), **D-031**
+(`evidence_requirements` threshold or description), **D-042** (exact contract budget field list),
+**D-045** (no contract supplied).
+
+None of these six blocks the *shape* of V0.1. Each leaves a specific, named hole in a specific model,
+which the contract specification enumerates rather than fills.
+
+**Three V0.1 scoping decisions also settled** (2026-09-16, human owner): **D-033** (`tenant_id`
+root-only), **D-047** (V0.1 Plan DSL defines structure but no predicate language — D-012 stays Open),
+**D-048** (`AgentTask` included per §50, minimal, A2A fields optional, `status` open under D-036).
+
+**Resolved so far** (2026-09-16, human owner):
+
+- **D-013** — TaskGenome and ReliabilityContract are disjoint, thresholds are not duplicated, and
+  the genome references the contract. Sub-ambiguities D-030 and D-031 left Open; each leaves one
+  field undetermined.
+- **D-019** — `tenant_id` is present and required on V0.1 root models with a single fixed default,
+  and carries **no security meaning**. Sub-questions D-032, D-033 and D-034 left Open.
+- **D-011** — layered event model. `event_id` is the idempotency key; EIDOS assigns a monotonic
+  per-mission sequence at acceptance, and that sequence orders deterministic replay. No A2A producer
+  ordering in V0.1. Sub-questions D-035 through D-038 left Open.
+- **D-010a** — MissionState is a **materialized view over the event log**, holding only what the
+  runtime must answer synchronously. Per-node runtime execution state stays out. The completeness
+  burden shifts to the event log: **an event that is not recorded is not replayable.** Sub-questions
+  D-010b, D-039, D-040, D-041 left Open.
+- **D-009** — bounds split by category. Shape/complexity limits are **system safety limits**;
+  execution budgets are carried by the **ReliabilityContract**. A mission may tighten but never
+  exceed the ceiling, and an over-ceiling request is **rejected, never clamped**. **No numerical
+  defaults in V0.1.** Sub-questions D-042 through D-046 left Open.
+- **D-033** — `tenant_id` is **root-only**: required on TaskGenome, ReliabilityContract, Plan,
+  MissionState, MissionEvent; not duplicated on nested PlanStep or AgentTask.
+- **D-047** — V0.1 Plan DSL defines the eight step kinds, step IDs, capability, dependency edges and
+  DAG structure, and **no predicate language and no conditional payload**. D-012 stays Open as a
+  clean V0.2 decision.
+- **D-048** — `AgentTask` is included in V0.1 per §50, minimal, with A2A fields optional. No A2A
+  behaviour. `status` unconstrained pending D-036, and **nothing may branch on it**.
 
 ---
 
@@ -118,15 +159,24 @@ Highest-impact first.
 | Item | Blocks | Why it matters |
 |---|---|---|
 | **D-015** verification confidence computation | V0.4 verification, V1.2 | §31 compares a scalar confidence against a threshold while §18 forbids trusting a model-asserted score. Implementing §31 naively builds the exact anti-pattern the handoff warns against. |
-| **D-010** MissionState fields, reducer signature, checkpoints | V0.1, V0.5 | The state shape is never enumerated in the handoff. |
-| **D-013** TaskGenome vs ReliabilityContract overlap | V0.1 | Four fields appear in both with no stated relationship. |
-| **D-011** event ordering and idempotency key | V0.1, V0.5, V0.6 | "sequence/version" is undefined; duplicate and late-event semantics depend on it. |
-| **D-009** bound values and their origin | V0.2 | Every budget dimension is named; none has a value or a source of authority. |
+| **D-040** MissionState / LangGraph split | V0.3 | Principle set by D-010a; the concrete division is inherited work when a runtime exists. |
+| **D-039** reducer signature | V0.5 | A determinism requirement that produces no observable output cannot be tested. |
+| **D-010b** checkpoint semantics | V0.5 | Contents, granularity and trigger unspecified. Entangled with D-017. |
+| **D-030** assessed vs tolerated risk | V0.1, one field | Split out of D-013 and left Open by the owner. |
+| **D-031** `evidence_requirements` threshold or description | V0.1, one field | Split out of D-013 and left Open by the owner. |
+| **D-036** `AgentTask` lifecycle state machine | V0.6 | §10 mandates deterministic accept/reject "against lifecycle"; §8 never enumerates states or transitions. V0.6 protocol tests cannot be written without it. |
+| **D-043** declared plan limits vs execution counters | V0.2, V0.3 | Five limit names appear in both §14 and §32 while counting different things. Most likely of the bound family to cause a real defect. |
+| **D-046** numerical bound values | V0.2 | None established in V0.1 by decision; tuned from V0.9 telemetry, never presented as tuned before then. |
+| **D-042** exact contract budget field list | V0.1, field list | §14's list is "such as"; §30's example carries two of six. |
+| **D-045** no ReliabilityContract supplied | V0.1, one flag | §30 makes the contract optional; with no contract, "satisfied" is undefined. |
 | **D-012** predicate language for ROUTE/RETRY/REPLAN/TERMINATE | V0.2, V0.3 | Deterministic routing needs a defined, validatable condition form. |
 | **D-007** capability vocabulary and matching | V0.2, V0.4 | §6 and §7 use incompatible capability names. |
 | **D-006** MVP agent set: 3 or 5 capabilities | V0.4 | §49 says three; §16/§43 use five. |
 | **D-016** the quality function | V0.1, V1.0 | `quality_threshold` has no measurement procedure. |
-| **D-019** `tenant_id` in V0.1 models | V0.1 | Cheap now, expensive to retrofit. |
+| **D-014** `autonomy_level` scale | V0.1, one field's type | Predates the blocking round; §6's example uses `1`, §29 defines 0–4, the link is never stated. |
+| **D-016** quality function | V0.1, one field's type | Predates the blocking round; determines whether the quality threshold is a plain value or structured. |
+| **D-034** `plan_id`/`event_id` in invariant 18 | none | Two identifiers entered an invariant by derivation, not decision. CLAUDE.md unamended pending the call. |
+| **D-032** literal default for `tenant_id` | V0.1, constant only | Split out of D-019 and left Open by the owner. |
 | **D-020** Strategy vs Plan | V0.2, V1.0 | Determines whether one contract or two is needed. |
 | **D-018** model-provider abstraction boundary | V0.4 | Invariant 9 forbids vendor names in core layers; the boundary's owner is unspecified. |
 | **D-029** RAG reformulation loop has no bound | V0.8 | Every other loop in the handoff is explicitly bounded; §24's retrieval loop is not. Invariant 7 says execution never loops. |
@@ -143,3 +193,4 @@ Full detail for each is in [decisions.md](decisions.md).
 | Date | Milestone | Outcome |
 |---|---|---|
 | 2026-09-16 | Bootstrap | Read handoff §1–§84. Created project rules, the twelve §81 documents, the decision record with 22 open items, two docstring-only packages, four test layers, and the initial git checkpoint. No runtime behaviour implemented. Two architectural decisions taken by the human owner and recorded: D-004 (Plan DSL canonical form is an ID-addressed DAG) and D-005 (V0.1 in-memory only). D-029 was found while writing `docs/09`: §24's retrieval loop is the only loop in the handoff with no stated bound. |
+| 2026-09-16 | Pre-V0.1 decisions | Architectural review of the five decisions blocking V0.1, one at a time, each analysed against the handoff before being decided by the human owner. **All five resolved:** D-013 (disjoint TaskGenome/ReliabilityContract), D-019 (`tenant_id` required, no security meaning), D-011 (layered event model; `event_id` idempotency key, EIDOS-assigned mission sequence), D-010a (MissionState is a materialized view over the event log), D-009 (bounds split into system safety limits and mission budgets; reject never clamp; no V0.1 values). Sixteen sub-questions were split out and deliberately left Open rather than resolved by implication: D-030 through D-046 minus D-010a/b numbering. D-034 records that `plan_id` and `event_id` entered invariant 18 by derivation rather than decision — CLAUDE.md unamended pending the owner's call. `docs/04`, `docs/05`, `docs/06`, `docs/10`, `docs/12` synced. No code written. |
