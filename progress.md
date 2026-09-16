@@ -21,7 +21,7 @@ No measurement of any kind has been taken, so no metric appears anywhere in this
 
 - [x] `CLAUDE.md` — permanent rules, 18 architecture invariants
 - [x] `progress.md` — this file
-- [x] `decisions.md` — 24 Accepted, 43 Open, 3 Deferred (counts current as of the latest decision below)
+- [x] `decisions.md` — 26 Accepted, 43 Open, 3 Deferred (counts current as of the latest decision below)
 - [x] `README.md`, `pyproject.toml`, `.gitignore`
 - [x] `docs/01`–`docs/12` — the twelve documents required by handoff §81
 - [x] `src/eidos/` and `src/eidos/contracts/` — docstring only, no code
@@ -86,10 +86,9 @@ Unlike the risk case, the handoff supplies a scale at the right abstraction with
 example, so declining it would discard evidence rather than avoid invention. **D-060**, **D-061**
 and **D-062** left Open.
 
-A further four affect one field each: **D-031** (`evidence_requirements` threshold or description),
-**D-065** (required vs optional per budget field), **D-067** (`MissionEvent.payload` typing),
-**D-068** (does `TaskGenome` carry `mission_id`?). **D-069** determines whether
-`ReliabilityContract` carries an approval-related field at all.
+Three field-level items remain: **D-065** (required vs optional per budget field), **D-067**
+(`MissionEvent.payload` typing), and **D-069** (whether `ReliabilityContract` carries an
+approval-related field at all).
 
 **The consolidated V0.1 contract specification is the approved design baseline** as of 2026-09-16.
 Three questions it surfaced but which had never been logged are now Open items: D-067, D-068, D-069.
@@ -114,7 +113,19 @@ with distinct per-kind types, readability handled at the display layer; all cont
 explicit required inputs, with no model reading the wall clock during construction. Both recorded in
 `docs/03_architecture.md` §11 as cross-cutting contract rules.
 
-**Exactly five field-level items remain for V0.1:** D-031, D-065, D-067, D-068, D-069.
+**D-031 resolved** (2026-09-16, human owner): V0.1's `ReliabilityContract` carries
+`min_independent_evidence`; `TaskGenome` does **not** carry `evidence_requirements`, and no
+replacement representation is defined. Nothing in V0.1 produces, consumes or checks evidence, and
+**D-041** set the precedent by excluding evidence from `MissionState`. The substantive question is
+retargeted as **D-070** to V0.4/V0.8.
+
+**D-068 resolved** (2026-09-16, human owner): `TaskGenome` is **mission-owned** and does **not**
+carry `mission_id` — containment by `MissionState` is the ownership relationship, and a
+back-reference would make a genome/state mismatch representable. **This removes `mission_id` from
+the approved consolidated V0.1 specification's `TaskGenome` field list.** **D-071** logged for
+detached/reusable genome representations.
+
+**Three field-level items remain for V0.1:** D-065, D-067, D-069.
 
 **D-052 resolved** (2026-09-16, human owner): `MissionStatus` contains exactly `created`,
 `completed`, `failed`, `paused`, with `status_reason` carrying the explanation. `PLANNING` and
@@ -217,8 +228,6 @@ Highest-impact first.
 | **D-040** MissionState / LangGraph split | V0.3 | Principle set by D-010a; the concrete division is inherited work when a runtime exists. |
 | **D-039** reducer signature | V0.5 | A determinism requirement that produces no observable output cannot be tested. |
 | **D-010b** checkpoint semantics | V0.5 | Contents, granularity and trigger unspecified. Entangled with D-017. |
-| **D-030** assessed vs tolerated risk | V0.1, one field | Split out of D-013 and left Open by the owner. |
-| **D-031** `evidence_requirements` threshold or description | V0.1, one field | Split out of D-013 and left Open by the owner. |
 | **D-036** `AgentTask` lifecycle state machine | V0.6 | §10 mandates deterministic accept/reject "against lifecycle"; §8 never enumerates states or transitions. V0.6 protocol tests cannot be written without it. |
 | **D-043** declared plan limits vs execution counters | V0.2, V0.3 | Five limit names appear in both §14 and §32 while counting different things. Most likely of the bound family to cause a real defect. |
 | **D-046** numerical bound values | V0.2 | None established in V0.1 by decision; tuned from V0.9 telemetry, never presented as tuned before then. |
@@ -227,13 +236,11 @@ Highest-impact first.
 | **D-012** predicate language for ROUTE/RETRY/REPLAN/TERMINATE | V0.2, V0.3 | Deterministic routing needs a defined, validatable condition form. |
 | **D-007** capability vocabulary and matching | V0.2, V0.4 | §6 and §7 use incompatible capability names. |
 | **D-006** MVP agent set: 3 or 5 capabilities | V0.4 | §49 says three; §16/§43 use five. |
-| **D-016** the quality function | V0.1, V1.0 | `quality_threshold` has no measurement procedure. |
 | **D-067** `MissionEvent.payload` typing | **V0.1, the payload field** | §33's thirteen types carry different payloads; "a dict" is unavailable under CLAUDE.md §8. |
-| **D-068** `TaskGenome.mission_id` | **V0.1, one field** | §6 reads mission-owned; §21/§22 read as a cross-mission similarity key. |
+| **D-071** detached/reusable genome representations | V1.0 | §21 stores derived characteristics, not the genome, so the detached case may never arise. |
 | **D-069** high-risk approval clause | **V0.1, field existence** | §30's only non-numeric clause. Three mechanisms already touch approval. |
 | **D-059** contract-unsatisfied as `failed` or a fifth state | V0.4 | Invariant 13 requires it distinguishable from a crash; the handoff gives it no event name and no status value. |
 | **D-055** `VERIFY`/`HUMAN_APPROVAL` as work steps | not V0.1 | Both remain control-flow kinds meanwhile. Answering after `PlanStep` exists turns an additive change into a rework. |
-| **D-052** `MissionStatus` value set | **V0.1, one field's type** | Only four states are handoff-named; planning/execution states are not. |
 | **D-063** quality-estimate type | before V0.4 | §19 and invariant 17 require uncertainty representation; the type belongs to whatever produces estimates. |
 | **D-064** `confidence` vs `quality` | V0.4; feeds D-042 | The handoff uses both words for what looks like one comparison. Two quantities would mean two contract thresholds. |
 | **D-060** is §29 level 3 ordinal or a gate | V1.2 | Levels 0/1/2/4 describe capability; level 3 describes a process. Invariant 14 makes the difference real. |
