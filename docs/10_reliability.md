@@ -345,8 +345,10 @@ list is prefixed "such as"; §32 names five as execution hard limits; §53's API
 *example*, so treating it as partial is justified — but the reading is recorded as a reading.
 
 §30's **non-budget** clauses are governed elsewhere and are not part of this group: `min_quality`
-(**D-016**), `max_risk_level` (**D-051**/**D-056**), `min_independent_evidence` (**D-031**), and
-`High-risk actions: require human approval`, which is a **rule rather than a number**.
+(**D-016**), `max_risk_level` (**D-051**/**D-056**), `min_independent_evidence` (**D-031** — carried
+by this contract in V0.1; the genome does **not** carry a parallel `evidence_requirements` field,
+and whether one is ultimately needed is **D-070**), and `High-risk actions: require human approval`,
+which is a **rule rather than a number** (**D-069**).
 
 Every one of the six needs a **system counterpart**, or D-009's `min(system, contract)` rule is
 undefined for it.

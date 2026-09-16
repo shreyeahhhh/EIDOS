@@ -136,7 +136,8 @@ existing.
 runtime must answer **synchronously**:
 
 - mission identity
-- TaskGenome
+- TaskGenome — contained **by value**; the genome carries no `mission_id`, because this containment
+  *is* the ownership relationship (**D-068**)
 - mission status and reason
 - plan versions and lineage
 - active plan
@@ -175,7 +176,7 @@ is recorded so it is visible rather than arriving later as a fait accompli.
 > **Still open:** **D-039** (reducer signature — V0.5), **D-010b** (checkpoint semantics — V0.5),
 > **D-040** (the exact MissionState/LangGraph split — V0.3), **D-041** (evidence and final
 > mission-result fields — V0.4 and V0.8). None blocks V0.1.
->
+
 **Representation — resolved.** **D-053**: identifiers are opaque **UUID-backed** values with distinct
 per-kind types (`TenantId`, `MissionId`, `ExecutionId`, `PlanId`, `EventId`, `AgentId`, …), with
 readability handled at the display layer. **D-054**: **all contract timestamps are explicit required

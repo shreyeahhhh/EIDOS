@@ -967,6 +967,94 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
   - Whatever supplies the time becomes an explicit dependency rather than an ambient one — relevant
     when the reducer is built at V0.5 (**D-039**).
 
+### D-031 — V0.1 carries `min_independent_evidence` only; `evidence_requirements` is not in the genome
+
+- **Status:** Accepted · **Date:** 2026-09-16 · **Decided by:** human owner
+- **Source:** handoff §5, §6, §17, §30; precedent from D-041
+- **Context:** `evidence_requirements` is **named three times and exemplified zero times** — §5 lists
+  "Evidence requirements" among the user's mission inputs, §6 lists it as a Task Genome field, §17
+  lists it among the dimensions strategy quality is weighed against. **§6's own example omits it**,
+  as does §5's example mission. Meanwhile §30's `Minimum independent evidence: 3` is the **only
+  concrete evidence-requirement content anywhere in the handoff**, and it is numeric and
+  contract-side.
+
+  Three readings were analysed: (A) the two are duplicates, so under D-013 the genome field does not
+  exist; (B) they are complementary, the genome holding a descriptive requirement and the contract a
+  threshold; (C) the genome field should not exist in V0.1 at all.
+
+- **Decision: option C**, scoped to V0.1:
+  - `ReliabilityContract` **includes** `min_independent_evidence`.
+  - `TaskGenome` **does not include** `evidence_requirements`.
+  - **No replacement representation is defined** for `evidence_requirements`.
+
+- **Rationale:** Nothing in V0.1 produces, consumes or checks evidence — verification is V0.4, RAG
+  and the evidence judge are V0.8. **D-041 already set this precedent**, excluding evidence fields
+  from `MissionState` for exactly this reason.
+
+  A is the **more likely eventual answer** — the §5/§30 structural parallel ("Required confidence" ↔
+  "Minimum quality", "Evidence requirements" ↔ "Minimum independent evidence") and the absence of any
+  non-numeric example both point that way. C was preferred because it reaches the same V0.1 outcome
+  **without making a positive claim about the field's nature from inference**. Adding the field later
+  is additive, so waiting costs nothing.
+
+  B was rejected on the standing rule: the handoff shows no descriptive evidence content anywhere, so
+  typing the field would mean inventing a representation.
+
+- **Consequences:**
+  - `TaskGenome` is now blocked only on **D-068**; `ReliabilityContract` only on **D-065** and
+    **D-069**.
+  - The substantive question is **not resolved**, only retargeted — recorded as **D-070** and
+    deferred to V0.4/V0.8.
+  - §30's clause bundles a qualitative property ("independent") with a quantity ("3"). That seam is
+    noted and left alone; it is part of what D-070 must eventually address.
+
+### D-068 — `TaskGenome` is mission-owned and does not carry `mission_id`
+
+- **Status:** Accepted · **Date:** 2026-09-16 · **Decided by:** human owner
+- **Source:** handoff §2, §5, §21, §22, §41, §46, §54, §73, §83; constrained by D-010a, D-013, D-045
+- **Context:** Two sub-questions were bundled and had to be separated. **(a)** Is the genome
+  mission-owned or an independently reusable descriptor? **(b)** If mission-owned, does it carry
+  `mission_id`?
+
+  On (a), everything describing genome *creation* is per-mission: §5's "EIDOS converts **this** into
+  a structured Task Genome", §41's replay timeline entry `00:02 task genome created`, §73's
+  `Mission created -> Task Genome generated -> ...`, and the loop in §2, §46 and §83. The only reuse
+  signal is strategy memory.
+
+  **The decisive detail is that §21 stores `task_class` *and* `task_genome characteristics` as two
+  separate entries.** If the genome itself were the similarity key, `task_class` would be redundant.
+  And the second entry is not `task_genome` but `task_genome **characteristics**` — strategy memory
+  stores **features derived from** the genome, not the genome object. §22 confirms it from the other
+  side by keying learning on `task type`, a coarse classifier.
+
+- **Decision:** `TaskGenome` is **mission-owned**, and **does not carry `mission_id`**. Ownership is
+  expressed through **containment** by the mission / `MissionState`.
+
+- **Rationale (owner's):** this avoids two sources for the same ownership relationship and removes an
+  unnecessary consistency check from V0.1.
+
+  Supporting analysis: under **D-010a**, `MissionState` already **contains** `task_genome`, so the
+  ownership relationship exists structurally without a back-reference. Adding `mission_id` would put
+  one value in two places, making "a genome for mission X inside a state for mission Y" a
+  **representable inconsistency** — the shape of duplication **D-013** rejected for constraints and
+  §9/§10 reject for state.
+
+  The reusable-descriptor reading was rejected on the handoff's own terms: §54's identifier list
+  contains no genome id, every creation reference is per-mission, §21's "characteristics" removes the
+  motive, and **D-045** makes the genome reference a mission-specific `ReliabilityContract` — a
+  reusable genome carrying a mission-specific contract would be incoherent.
+
+- **Consequences:**
+  - **This changes the approved consolidated V0.1 specification**, which listed `mission_id` on
+    `TaskGenome` with a warning marker. That entry was a proposal, not a decision, and is now removed.
+  - `TaskGenome` is **unblocked**. Its V0.1 fields are: `tenant_id`, `goal`, `required_capabilities`,
+    `information_dependencies`, `risk_level`, `autonomy_level`, `allowed_actions`,
+    `reliability_contract`.
+  - `MissionState` is unblocked by consequence, since its only remaining dependency was `TaskGenome`.
+  - **D-071** records the future question of detached or reusable genome representations.
+  - Untouched: **which** characteristics strategy memory derives from a genome is a V1.0 question the
+    handoff leaves open and which is deliberately not logged here, being outside V0.1.
+
 ---
 
 ## Open — require the human owner
@@ -977,8 +1065,8 @@ has been resolved. Work that depends on one of them is blocked until the owner d
 Count: 43. Highest-impact first is **D-015** (how verification confidence is computed), then
 **D-007** (capability vocabulary) and **D-012** (predicate language) for V0.2.
 
-**All type-level and cross-cutting V0.1 blockers are cleared.** Exactly five field-level items
-remain for V0.1: **D-031**, **D-065**, **D-067**, **D-068**, **D-069**.
+**All type-level and cross-cutting V0.1 blockers are cleared.** Three field-level items remain for
+V0.1: **D-065**, **D-067**, **D-069**.
 
 **Standing rule for all Open items:** no placeholder enum, type, sentinel or inferred value may be
 invented to make code compile. An Open item blocks the field it touches; it does not license a
@@ -1309,20 +1397,26 @@ one is not.
 - **Needs:** Owner to decide the origin of `TaskGenome.risk_level`. Related to **D-056** (its value
   set) and **D-015** (the general question of model-asserted values driving decisions).
 
-### D-031 — `evidence_requirements` (§6) vs "Minimum independent evidence" (§30)
+### D-070 — Is `evidence_requirements` a duplicate, or a distinct descriptive requirement?
 
-- **Status:** Open · **Source:** handoff §6 vs §30 · **Split out of D-013, left Open by the owner**
-- **Finding:** §30's "Minimum independent evidence: 3" is plainly a numeric acceptance threshold and
-  belongs in the ReliabilityContract under D-013. §6's `evidence_requirements` is ambiguous: it
-  could be the same numeric threshold — in which case it is a duplicate and moves to the contract —
-  or a descriptive intrinsic requirement of the task, for example "must cite the architecture
-  documentation", in which case it is task identity and stays in the genome. The handoff does not
-  disambiguate, and §5's user-facing mission lists "Evidence requirements" without further detail.
-- **Why it was not folded into D-013:** same reasoning as D-030.
-- **Effect while Open:** whether `evidence_requirements` appears in TaskGenome at all is
-  undetermined. Partially blocks V0.1 — one field only.
-- **Needs:** Owner to state whether §6's `evidence_requirements` is a threshold or a description.
-  If it is both, that is a third answer and the field splits across the two models.
+- **Status:** Open · **Source:** handoff §5, §6, §17, §30 · **Split out of D-031, deferred by the owner**
+- **Finding:** D-031 removes `evidence_requirements` from the V0.1 `TaskGenome` without deciding what
+  it is. The substantive question survives: is §6's field the same concern as §30's
+  `Minimum independent evidence` — in which case D-013 already places it in the contract and the
+  genome never needs it — or a genuinely distinct **descriptive** requirement, such as "must cite the
+  architecture documentation", which would be task identity and belong in the genome?
+
+  The evidence available is thin in a specific way: the field is **named three times (§5, §6, §17)
+  and exemplified zero times**. The only concrete evidence-requirement content anywhere in the
+  handoff is §30's numeric clause. A §5/§30 structural parallel — "Required confidence" ↔ "Minimum
+  quality", "Evidence requirements" ↔ "Minimum independent evidence" — suggests the duplicate
+  reading, but the handoff never states that mapping.
+- **If it is distinct:** its **representation** is also unspecified. Nothing in the handoff shows
+  descriptive evidence content, so defining a shape now would require invention. **No replacement
+  representation may be defined** until this is answered.
+- **Effect while Open:** none on V0.1 by decision (D-031).
+- **Needs:** Deferred to the milestone where verification (V0.4) and the evidence judge (V0.8)
+  exist, so the requirement can be defined against real behaviour rather than against a field list.
 
 ### D-032 — The literal default value of `tenant_id`
 
@@ -1541,22 +1635,21 @@ one is not.
   external events share one shape) and with **D-052**/**D-059**, since some payloads carry status
   reasons.
 
-### D-068 — Is `TaskGenome` mission-owned, or independently reusable?
+### D-071 — Will detached or reusable genome representations ever be needed?
 
-- **Status:** Open · **Source:** handoff §6 vs §21, §22 · **Surfaced in the V0.1 contract specification; logged at the owner's instruction**
-- **Finding:** §6 describes the Task Genome as the structured form of one mission's intent, which
-  reads as mission-owned and would carry `mission_id`. But §21 stores "task_genome characteristics"
-  in strategy memory and §22 ranks strategies for "a future **similar** task" — which reads as the
-  genome, or features derived from it, being **reused across missions** as a similarity key. A
-  genome carrying `mission_id` is by construction unique per mission and cannot itself be the
-  similarity key.
+- **Status:** Open · **Source:** handoff §21, §22 · **Split out of D-068, deferred by the owner**
+- **Finding:** D-068 makes `TaskGenome` mission-owned with ownership expressed by containment. If a
+  genome is ever stored **detached** from its `MissionState` — for strategy memory (§21), telemetry
+  (§33), or a vector collection (§25) — it will not say which mission it belonged to, and something
+  will have to attach that at write time or carry it in the storage layer.
 
-  This tension is what made **D-013** decide as it did: the genome was kept free of constraint
-  thresholds precisely so it would remain a clean similarity key. D-068 asks the next question —
-  whether the genome *is* that key, or whether §21's "characteristics" are separately derived
-  features and the genome remains mission-owned.
-- **Effect while Open:** determines whether `TaskGenome` carries `mission_id`.
-- **Needs:** Owner decision. Material for V1.0 strategy memory as well as for the V0.1 field list.
+  This is the same accepted cost recorded in **D-033** for `tenant_id` being root-only, and it lands
+  in the same place: V1.0 strategy memory.
+- **Why it is not urgent:** §21 stores `task_class` and `task_genome **characteristics**` — derived
+  features, not the genome object — so the detached case may never arise.
+- **Effect while Open:** none on V0.1.
+- **Needs:** Revisit at V1.0 when strategy memory is built. Adding a back-reference then would be
+  additive.
 
 ### D-069 — Is §30's high-risk approval clause a contract field or a policy rule?
 

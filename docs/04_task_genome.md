@@ -31,7 +31,7 @@ The handoff specifies fields "conceptually equivalent to" the following (§6):
 | `latency_budget` | Maximum acceptable time |
 | `resource_budget` | Maximum acceptable resource/token use |
 | `autonomy_level` | How autonomously EIDOS may act |
-| `evidence_requirements` | What evidence the result must carry |
+| `evidence_requirements` | What evidence the result must carry — ⚠️ **not in V0.1**, see D-031/D-070 |
 | `allowed_actions` | Actions permitted for this mission |
 
 Handoff example (§6):
@@ -115,9 +115,12 @@ always user-supplied or may be synthesised is **D-066**; per-field optionality i
 > - **D-051 / D-056 — resolved.** The shared task-risk vocabulary is
 >   `RiskLevel = low | medium | high`, a closed ordinal word-valued scale. Not reused for §40 action
 >   risk or §28 tool risk.
-> - **D-031** — `evidence_requirements` (§6) vs "Minimum independent evidence" (§30): §6's field may
->   be a numeric threshold (contract) or a descriptive task requirement (genome). **Still open** —
->   one field of this model remains undetermined.
+> - **D-031 — resolved.** V0.1's `TaskGenome` **does not carry `evidence_requirements`**;
+>   `min_independent_evidence` lives on the `ReliabilityContract` per §30. Nothing in V0.1 produces,
+>   consumes or checks evidence — verification is V0.4, the evidence judge V0.8 — and **D-041**
+>   already set this precedent by excluding evidence fields from `MissionState`. Whether the field is
+>   ultimately a duplicate of the contract clause or a distinct descriptive requirement is **D-070**,
+>   deferred to V0.4/V0.8. **No replacement representation may be defined meanwhile.**
 
 ## 5. Autonomy level
 
@@ -161,6 +164,28 @@ governance spine — per D-051, §29 uses no risk scale at all.
 neither. A genome written per §6 would not match a registry populated per §7.
 
 See `decisions.md` **D-007**. Capability validation (§14) cannot be written until this is resolved.
+
+## 6a. Mission ownership — `decisions.md` D-068
+
+**`TaskGenome` is mission-owned and does NOT carry `mission_id`.** Ownership is expressed through
+**containment** by `MissionState`, which under **D-010a** already holds `task_genome`. Adding a
+back-reference would put one value in two places and make "a genome for mission X inside a state for
+mission Y" representable — the duplication **D-013** rejected for constraints and §9/§10 reject for
+state.
+
+The reusable-descriptor reading was rejected on the handoff's own terms. Every creation reference is
+per-mission (§5, §41, §73, and the loop in §2/§46/§83); §54's identifier list contains no genome id;
+and **D-045** makes the genome reference a mission-specific contract, which a reusable genome could
+not coherently carry.
+
+The decisive detail is in §21, which stores **`task_class`** *and* **`task_genome characteristics`**
+as two separate entries. If the genome were itself the similarity key, `task_class` would be
+redundant — and the second entry is not `task_genome` but its **characteristics**, i.e. features
+*derived from* the genome. §22 confirms this by keying learning on `task type`.
+
+> **Still open:** **D-071** — whether detached or reusable genome representations are ever needed. If
+> a genome is stored apart from its `MissionState` (§21, §25, §33), attribution must come from the
+> storage layer. Adding a back-reference then would be additive.
 
 ## 7. Identity fields
 
@@ -206,9 +231,9 @@ storage layer or re-attached at write time. A V1.0 concern, but a real cost of t
 | Id | Question | Blocks |
 |---|---|---|
 | D-057 | How is `risk_level` determined? §5's user-stated tolerance maps to the contract; the assessed value's provenance is unspecified | V0.2 policy validation |
-| D-031 | Is `evidence_requirements` a threshold or a description? | **V0.1, field existence** |
+| D-070 | Is `evidence_requirements` a duplicate of `min_independent_evidence`, or a distinct descriptive requirement — and if distinct, what representation? | V0.4 / V0.8 |
 | D-031 | Is `evidence_requirements` a numeric threshold or a descriptive task requirement? | V0.1, one field |
-| D-068 | Is `TaskGenome` mission-owned (carries `mission_id`) or reusable as a similarity key? §6 vs §21/§22 | **V0.1, one field** |
+| D-071 | Will detached or reusable genome representations ever be needed? | V1.0 strategy memory |
 | D-007 | Capability vocabulary and matching semantics | V0.2 capability validation |
 | D-014 | Does `autonomy_level` use the §29 0–4 scale, and what is §40's concept called instead? | V0.1 |
 | D-015 | How measurable proxies combine into an evaluated quality figure | V0.4, V1.2 |
