@@ -163,10 +163,36 @@ Modify configuration     -> human approval
 Delete critical resource -> blocked
 ```
 
-> ⚠️ §40 separately sketches a five-point **action**-risk scale — very low, low, medium, high,
-> extreme. Whether that vocabulary is the same one used by §6's `risk_level` and §30's "Maximum
-> risk" is never stated. See `decisions.md` **D-051**. Do not assume task risk, tolerated risk and
-> action risk share a value set.
+**Risk vocabularies — `decisions.md` D-051, decided by the human owner.**
+
+Risk appears in four places in the handoff and they are **not one concept**:
+
+| Concept | Where | Typed in V0.1? |
+|---|---|---|
+| Risk of the **task** (assessed / intrinsic) | §6 `risk_level` | yes — task-risk vocabulary |
+| Maximum risk the mission may **tolerate** | §30 "Maximum risk" | yes — **same** task-risk vocabulary |
+| Risk of an **action** | §40 | **no** — separate concept |
+| Risk of a **tool** | §28 | **no** — separate concept |
+
+`TaskGenome.risk_level` and `ReliabilityContract.max_risk_level` are **distinct quantities**
+(`decisions.md` **D-030**) sharing **one vocabulary** (**D-051**), so that assessed and tolerated
+risk can be compared **deterministically** (invariant 14). This is the case where a shared name is a
+comparison pair rather than a duplicate, so both survive D-013's disjoint decomposition — one in each
+model. Action risk and tool risk are separate concepts and the task-risk type is **not** reused for
+them in V0.1.
+
+**How either value is calculated is deliberately out of scope** and recorded as **D-057**. §5's
+user-stated "Risk tolerance" maps cleanly onto the contract field; the provenance of the assessed
+value is unspecified, and whether it is model-asserted or rule-derived matters for invariant 14.
+
+**§40's five-point scale was explicitly declined** as the V0.1 task-risk enum: §40 marks itself
+experimental, its anchors are all verbs and so action-shaped, and `Change config → medium/high` is
+not a single value. Note that §29 — the governance section that actually drives enforcement — uses
+**no risk scale at all**; it runs on autonomy levels 0–4 and direct action-to-outcome mapping.
+
+> ⚠️ **D-056 is Open: the concrete task-risk value set.** The handoff contains no task-risk scale,
+> and none may be invented. `TaskGenome` and `ReliabilityContract` should be written **last** among
+> the seven V0.1 contracts for this reason.
 
 **The runtime must enforce this deterministically** (invariant 14). Enforcement lives in code, never
 in a prompt.
@@ -296,8 +322,8 @@ and must be testable without a UI.
 |---|---|---|
 | D-015 | How verification confidence is computed from measurable proxies — or whether verification is pass/fail with no scalar | V0.4, V1.2 |
 | D-016 | Which quality proxies, and how they combine into `quality_threshold` | V0.1, V1.0 |
-| D-030 | Is assessed `risk_level` distinct from tolerated "Maximum risk"? | V0.1, one field |
-| D-051 | The `RiskLevel` **value set** — §5/§6/§30 give only "medium"; §40's five-point action-risk scale may be a different vocabulary. Independent of D-030 | **V0.1, the field's type** |
+| D-057 | How either risk value is determined — model-asserted or rule-derived (matters for invariant 14) | V0.2 policy validation |
+| D-056 | The concrete **task-risk value set** — deferred by D-051; the handoff supplies none | **V0.1, the field's type** |
 | D-031 | Is `evidence_requirements` a threshold or a description? | V0.1, one field |
 | D-042 | The exact list of ReliabilityContract budget fields | V0.1, field list |
 | D-045 | What applies when no ReliabilityContract is supplied | V0.1, one flag |

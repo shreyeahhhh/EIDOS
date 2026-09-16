@@ -96,12 +96,15 @@ Because no value has two homes, **no precedence rule exists or is needed.**
 > **Still open — two sub-ambiguities the owner deliberately left unresolved.** D-013 settles the
 > structural rule only; it does not settle whether these particular pairs are the same quantity:
 >
-> - **D-030** — `risk_level` (§6) vs "Maximum risk" (§30): assessed risk and tolerated risk may be a
->   comparison pair, one field in each model, or the same value named twice.
+> - **D-030 — resolved.** `risk_level` (assessed/intrinsic risk of the task) and
+>   `ReliabilityContract.max_risk_level` (maximum risk the mission may tolerate) are **distinct
+>   quantities**, one in each model. This is the case where a shared name is a comparison pair rather
+>   than a duplicate. **D-051** supplies the shared vocabulary that makes the comparison well-formed;
+>   **D-056** still owes the value set. How either value is *calculated* is deliberately out of
+>   scope — see **D-057**.
 > - **D-031** — `evidence_requirements` (§6) vs "Minimum independent evidence" (§30): §6's field may
->   be a numeric threshold (contract) or a descriptive task requirement (genome).
->
-> Until these are answered, one field of this model remains undetermined in each case.
+>   be a numeric threshold (contract) or a descriptive task requirement (genome). **Still open** —
+>   one field of this model remains undetermined.
 
 ## 5. Autonomy level
 
@@ -174,8 +177,8 @@ storage layer or re-attached at write time. A V1.0 concern, but a real cost of t
 
 | Id | Question | Blocks |
 |---|---|---|
-| D-030 | Is `risk_level` (assessed) distinct from "Maximum risk" (tolerated), or the same value twice? | V0.1, one field |
-| D-051 | What **values** may a risk level take? §5/§6/§30 give only "medium"; §40 gives a five-point action-risk scale that may or may not be the same vocabulary | **V0.1, the field's type** |
+| D-057 | How is `risk_level` determined? §5's user-stated tolerance maps to the contract; the assessed value's provenance is unspecified | V0.2 policy validation |
+| D-056 | The concrete **task-risk value set**. D-051 settled the structure; the handoff contains no task-risk scale, and §40's was explicitly declined | **V0.1, the field's type** |
 | D-031 | Is `evidence_requirements` a numeric threshold or a descriptive task requirement? | V0.1, one field |
 | D-007 | Capability vocabulary and matching semantics | V0.2 capability validation |
 | D-014 | Does `autonomy_level` use the §29 0–4 scale, and what is §40's concept called instead? | V0.1 |

@@ -536,6 +536,85 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
     nodes may be serialized by the runtime under `max_parallel_branches`. This was raised and the
     owner accepted "may" as sufficient.
 
+### D-051 — Task risk is one shared vocabulary; action risk and tool risk are separate concepts; the value set is deferred
+
+- **Status:** Accepted · **Date:** 2026-09-16 · **Decided by:** human owner
+- **Source:** handoff §5, §6, §28, §29, §30, §40
+- **Context:** Risk appears in four places and only one states values. §5 ("Risk tolerance"), §6
+  (`risk_level`) and §30 ("Maximum risk") each use the single word *medium*. §40 gives the only
+  enumeration — very low, low, medium, high, extreme — for **action** risk. §28 lists a per-tool
+  "risk level" with no values. The four measure different things: risk of the task, risk the user
+  tolerates, risk of an action, risk of a tool. Notably §29, the governance section that actually
+  drives enforcement, uses **no risk scale at all** — it runs on autonomy levels 0–4 and direct
+  action-to-outcome mapping.
+
+- **Decision:**
+  1. `TaskGenome.risk_level` and `ReliabilityContract.max_risk_level` represent **the same task-risk
+     vocabulary**, so that assessed risk and tolerated risk can be compared **deterministically**.
+  2. **Action risk (§40) and tool risk (§28) are separate concepts.** The task-risk type is neither
+     reused for them nor assigned to them in V0.1.
+  3. **§40's five-point values are not adopted** as the V0.1 task-risk enum. §40 is explicitly
+     experimental, and its `Change config → medium/high` entry is not a single enum value.
+  4. **No replacement value set is invented.**
+  5. The concrete task-risk value set is recorded as **Open** and deferred until an explicit
+     product/architecture decision — see **D-056**.
+
+- **Rationale:** A single shared scale for §6 and §30 is forced by the comparison itself: a
+  deterministic `assessed <= tolerated` check requires both sides to be ordinally comparable, and
+  invariant 14 requires that determinism to live in code. Beyond those two fields nothing in the
+  handoff requires a shared vocabulary, and the four concepts plainly measure different things — so
+  unifying all four would assert a relationship the handoff never states.
+
+  Declining §40's values avoids repeating a mistake already made once in this project: **D-014** had
+  to separate §40's "autonomy budget" from §29's autonomy levels because they collided on a word.
+  Importing §40's *other* vocabulary into two core contracts would risk the same class of coupling a
+  second time, and would promote an artifact the handoff itself marks "experimental until its
+  semantics are properly designed" into a permanent contract type.
+
+- **Consequences:**
+  - `TaskGenome` and `ReliabilityContract` remain blocked on **D-056** and should be written **last**
+    among the seven V0.1 contracts.
+  - §28's tool risk and §40's action risk stay untyped in V0.1. Neither is on the V0.1 path, and §29
+    governance does not need a risk scale to function — a point that removes any urgency to settle
+    D-056 hastily.
+  - `ReliabilityContract.require_approval_above_risk` (§30) is the one field that genuinely needs an
+    ordinal threshold comparison, and it draws on the same task-risk vocabulary.
+  - **D-046** is unaffected: risk is not a numeric bound.
+  - This decision answered **D-030** by implication — "so that assessed and tolerated risk can be
+    compared" presupposes two distinct quantities. Rather than let it close silently, D-030 was
+    raised and **ratified explicitly by the owner on the same date**. See D-030 under Accepted.
+
+### D-030 — Assessed task risk and tolerated risk are distinct quantities
+
+- **Status:** Accepted · **Date:** 2026-09-16 · **Decided by:** human owner
+- **Source:** handoff §6 vs §30; ratified explicitly rather than inherited from D-051
+- **Context:** §6 places `risk_level` in the Task Genome; §30 places "Maximum risk" in the
+  Reliability Contract. Either they are two different quantities — assessed versus tolerated — or
+  the same quantity named twice, in which case one disappears under D-013's disjoint decomposition.
+
+- **Decision:** they are **distinct quantities**.
+  - `TaskGenome.risk_level` — the **assessed / intrinsic** risk associated with the mission or task.
+  - `ReliabilityContract.max_risk_level` — the **maximum risk the mission is permitted to tolerate**.
+
+  They **may be compared during later validation**. **This decision does not define how either value
+  is calculated.**
+
+- **Why it was ratified separately:** D-051 stated that the two fields share one vocabulary "so that
+  assessed risk and tolerated risk can be compared deterministically", which presupposes two
+  distinct quantities and therefore answered this item by implication. Closing D-030 on that basis
+  would have been a silent resolution of the kind CLAUDE.md §7 forbids, so it was raised and
+  ratified explicitly instead. The record now shows a decision, not an inference.
+
+- **Consequences:**
+  - Both fields survive, one in each model, consistent with **D-013**'s disjoint decomposition — this
+    is the case where a shared *name* is a comparison pair rather than a duplicate.
+  - **D-051** supplies the shared vocabulary that makes the comparison well-formed; **D-056** still
+    owes the value set, so both fields remain untypeable for now.
+  - The stated non-scope — how either value is calculated — is recorded as **D-057**. `max_risk_level`
+    has an obvious source in §5's user-stated "Risk tolerance"; the provenance of the assessed value
+    does not, and that gap is the substance of D-057.
+  - Where the comparison is enforced is a validation question (§14 stage 5), not settled here.
+
 ---
 
 ## Open — require the human owner
@@ -557,9 +636,9 @@ from D-019; D-035 through D-038 from D-011; D-010b and D-039 through D-041 from 
 through D-046 from D-009. Three further V0.1 scoping decisions followed: **D-033**, **D-047**,
 **D-048**.
 
-Open items still touching V0.1: **D-014**, **D-016**, **D-030**, **D-031**, **D-042**, **D-045** —
-each affecting one field, one flag or one type — plus **D-051** (the `RiskLevel` value set) and
-**D-052** (the `MissionStatus` value set), which **do block** the fields they type. D-014 and D-016
+Open items still touching V0.1: **D-014**, **D-016**, **D-031**, **D-042**, **D-045** — each
+affecting one field, one flag or one type — plus **D-056** (the task-risk value set) and **D-052**
+(the `MissionStatus` value set), which **do block** the fields they type. D-014 and D-016
 predate the blocking-decision round and were not part of it. **D-053** and **D-054** are minor and
 affect representation rather than structure. **D-055** does not block V0.1.
 
@@ -795,20 +874,24 @@ one is not.
   the loop terminates only on the evidence judge plus the overall `max_execution_time`. Blocks V0.8,
   and should be settled when D-009 is settled.
 
-### D-030 — `risk_level` (§6) vs "Maximum risk" (§30)
+### D-057 — How the two risk values are determined
 
-- **Status:** Open · **Source:** handoff §6 vs §30 · **Split out of D-013, left Open by the owner**
-- **Finding:** §6 places `risk_level` in the Task Genome; §30 places "Maximum risk: Medium" in the
-  Reliability Contract. These may be two different quantities — the **assessed** risk of the task
-  versus the **tolerated** risk the user accepts — in which case they are a comparison pair
-  (`assessed <= tolerated`) and both survive under D-013's disjoint decomposition, one in each
-  model. Or they may be the same quantity named twice, in which case one of them disappears.
-- **Why it was not folded into D-013:** D-013 settles the structural rule that no threshold has two
-  homes. It does not settle whether these two named values *are* the same threshold. Answering that
-  by implication would be a silent resolution, which CLAUDE.md §7 forbids.
-- **Effect while Open:** one field of TaskGenome and one field of ReliabilityContract remain
-  undetermined. Partially blocks V0.1 — the models can otherwise be specified.
-- **Needs:** Owner to state whether assessed risk and tolerated risk are distinct quantities.
+- **Status:** Open · **Source:** not specified by the handoff · **Scope boundary stated explicitly by the owner in D-030**
+- **Finding:** D-030 establishes that assessed task risk and tolerated risk are distinct quantities,
+  and states explicitly that it **does not define how either value is calculated**. The handoff does
+  not supply that either. §5 has the user state "Risk tolerance" as a mission input, which maps
+  cleanly onto `ReliabilityContract.max_risk_level`. But §6's `risk_level` sits in the **derived**
+  Task Genome, and nothing says who assigns it — the user, the planner, a deterministic rule over
+  `allowed_actions`, or something else.
+- **Why it matters:** if assessed risk is produced by a model, it is a model-asserted judgement
+  driving a governance decision, which is the pattern §18 warns against and which **D-015** already
+  flags for verification confidence. If it is a deterministic rule, it needs a defined input. The
+  two answers have materially different consequences for invariant 14, which requires governance to
+  be deterministic and enforced in code rather than by prompt.
+- **Effect while Open:** none on V0.1 — the field exists under D-030 regardless of its provenance.
+  Material when policy validation is built (§14 stage 5, V0.2) and for governance at V1.2.
+- **Needs:** Owner to decide the origin of `TaskGenome.risk_level`. Related to **D-056** (its value
+  set) and **D-015** (the general question of model-asserted values driving decisions).
 
 ### D-031 — `evidence_requirements` (§6) vs "Minimum independent evidence" (§30)
 
@@ -979,19 +1062,23 @@ one is not.
 - **Needs:** Owner to decide whether either or both are work steps, and if HUMAN_APPROVAL is a work
   step, what capability it requests.
 
-### D-051 — The `RiskLevel` value set
+### D-056 — The concrete task-risk value set
 
-- **Status:** Open · **Source:** handoff §5, §6, §30 vs §40 · **Found while writing the V0.1 contract specification**
-- **Finding:** §5, §6 and §30 all use the single value "medium" without giving a scale. §40 gives a
-  five-point scale for **action** risk: very low, low, medium, high, extreme. Whether task risk
-  (§6's `risk_level`), tolerated risk (§30's "Maximum risk") and action risk (§40) share one value
-  set is never stated.
-- **Relationship to D-030:** D-030 asks whether assessed and tolerated risk are **distinct
-  quantities**. D-051 asks what **values** either may take. They are independent: the answers could
-  be "two quantities, one shared scale", "two quantities, two scales", or "one quantity".
-- **Effect while Open:** blocks the risk-typed fields on both `TaskGenome` and `ReliabilityContract`.
-  **No placeholder enum is to be invented to make code compile.**
-- **Needs:** The value set or sets, and whether §40's action-risk scale is the same vocabulary.
+- **Status:** Open · **Source:** not supplied by the handoff · **Split out of D-051, deferred by the owner**
+- **Finding:** D-051 settles the **structure** of task risk — one vocabulary shared by
+  `TaskGenome.risk_level` and `ReliabilityContract.max_risk_level`. It does not settle the values,
+  and **the handoff does not contain a task-risk scale**. Three of the four risk sites (§5, §6, §30)
+  use only the single word "medium", which is consistent with almost any scale. The only enumeration
+  anywhere is §40's — very low, low, medium, high, extreme — and D-051 explicitly declined it on
+  three grounds: §40 is flagged experimental by the handoff itself, its anchors are all verbs and so
+  action-shaped rather than task-shaped, and one of its entries (`Change config → medium/high`) is
+  not a single value.
+- **Effect while Open:** blocks the risk-typed field on `TaskGenome` and on `ReliabilityContract`.
+  Those two contracts should therefore be written **last** among the seven. **No value set may be
+  invented, and §40's must not be adopted by default.**
+- **Needs:** An explicit product/architecture decision on how a user expresses risk tolerance. This
+  is a product judgement about the mission-authoring experience (§5's Mission Center) as much as a
+  type decision, which is why it was deferred rather than derived.
 
 ### D-052 — `MissionStatus` values not named by the handoff
 
