@@ -1,0 +1,260 @@
+# 03 — Architecture
+
+**Status:** DERIVED — current
+**Derived from:** handoff §7, §8, §9, §10, §11, §12, §16, §17, §27, §33, §34, §35, §36, §50, §75, §77, §78, §83
+**Authority:** This document is derived from `EIDOS_CLAUDE_CODE_HANDOFF.md` and subordinate to it.
+If this document and the handoff conflict, stop and report the conflict to the human owner.
+
+> Handoff §58/§60 refer to this document as `docs/02_architecture.md`. §81 numbers it `03`. That
+> inconsistency is inside the handoff and is reported, not resolved — see `decisions.md` D-001.
+
+---
+
+## 1. Component hierarchy
+
+Work core-outward, never bottom-up (§75).
+
+```text
+LEVEL 1 — Core thesis     Adaptive execution strategy selection
+LEVEL 2 — Runtime         Task Genome, Plan DSL, Compiler, LangGraph, MissionState
+LEVEL 3 — Interoperability A2A, MCP
+LEVEL 4 — Intelligence    Agentic RAG, Strategy memory, Pilot execution, Adaptive routing
+LEVEL 5 — Reliability     Verification, Policies, Autonomy, Recovery
+LEVEL 6 — Optimization    Caching, Historical performance, Exploration, Strategy learning
+LEVEL 7 — Product         Frontend, API, Deployment
+```
+
+## 2. The planning pipeline
+
+This is the architecture's spine and the source of invariants 3, 4 and 5.
+
+```text
+LLM
+ -> Plan DSL            (bounded, declarative, never code)
+ -> Validator           (deterministic)
+ -> Compiler            (deterministic)
+ -> LangGraph runtime
+```
+
+**LangGraph is the execution runtime for validated plans, not the strategy generator** (§11). It
+manages execution state, sequencing, parallel branches, routing, retries, checkpoints, controlled
+replanning and termination.
+
+**The LLM never generates executable LangGraph code** (§11, §12). Allowing an LLM to emit arbitrary
+runtime graph topology risks un-debuggable workflows, accidental cycles, runaway branching,
+uncontrolled recursion, inconsistent state, excessive cost and untestable behaviour. The bounded
+Plan DSL exists precisely to prevent this.
+
+## 3. State architecture
+
+**MissionState is the only authoritative global state** (§9). This is a hard invariant.
+
+```text
+A2A events/results
+        -> EIDOS event handling
+        -> MissionState reducer
+        -> LangGraph checkpoint/state
+```
+
+Agents must **never** directly mutate MissionState. Remote agents keep their own internal state;
+EIDOS holds only the state it needs to reason about the mission.
+
+The failure mode being designed against (§10) is three competing global state systems:
+
+```text
+LangGraph state  <->  A2A state  <->  Agent internal state
+```
+
+Instead:
+
+```text
+Global MissionState  +  Remote AgentTask records  +  Event-based synchronization
+```
+
+Details in `06_mission_state.md`.
+
+## 4. Capability architecture
+
+Agents are not hard-coded into workflows. EIDOS maintains an **Agent Capability Registry** (§7).
+
+An agent exposes: `agent_id`, `version`, `capabilities`, `supported_inputs`, `supported_outputs`,
+`required_permissions`, `supported_tools`, `historical_latency`, `historical_success`,
+`historical_verification_rate`, `availability`.
+
+Providers may include a local open-source model, an OpenAI model, an Anthropic model, a Google
+model, a specialized model, an external remote agent, or a human reviewer. **The architecture must
+not assume any single model remains dominant** (§7).
+
+Plans request **capabilities, not named agents** (invariant 11). Capability-to-agent binding happens
+at selection/execution time.
+
+> **Open:** the capability vocabulary in §6 and the one in §7 do not match, and the matching
+> semantics (exact / hierarchical / similarity) are unspecified. See `decisions.md` D-007.
+
+## 5. Model independence
+
+> **Never make the underlying model the product.** The model is a worker. (§36)
+
+```text
+                      EIDOS
+                        |
+               Model/Agent Interface
+                        |
+        +---------------+---------------+
+   Local Model      External Model   Other Model
+        +---------------+---------------+
+                        |
+                  Capabilities
+```
+
+A model may be replaced without redesigning EIDOS. Different capabilities may use different models
+depending on the task and policy. This is invariant 9: no model, vendor or SDK name appears in
+contracts, planning, validation, compiler, runtime or state.
+
+> **Open:** which module owns the Model/Agent Interface, and what its interface is. See
+> `decisions.md` D-018.
+
+## 6. Interoperability boundaries
+
+### A2A — the agent boundary
+
+A2A (Agent2Agent) is the communication layer between independent agent systems. It is used at
+**meaningful independent-agent boundaries only**. Do not force every internal function call through
+A2A to claim A2A support (§8). Tightly coupled internal nodes run locally; independently deployable
+agent capabilities use A2A.
+
+Remote tasks have their own lifecycle and identifiers and are represented **separately** from global
+mission state, as `AgentTask` records. Detail in `07_a2a_contract.md`. Deferred to V0.6.
+
+### MCP — the tool boundary
+
+```text
+Agent -> MCP -> Permission / Policy -> Tool or resource
+```
+
+Agents do not directly access environment capabilities (§27). The initial tool set is deliberately
+small — `search_documents`, `retrieve_evidence`. **Do not create 20 MCP tools in V1.** Detail in
+`08_mcp_contract.md`. Deferred to V0.7.
+
+## 7. Strategy architecture
+
+For each mission EIDOS generates a **small number** of candidate strategies — start with 2–3, never
+an unlimited number (§16). Bounded alternatives are enough for meaningful experiments.
+
+Strategy factors (§17): agent selection, agent ordering, parallelization, model selection, tool
+selection, retrieval strategy, verification strategy, retry strategy, replanning strategy, context
+allocation.
+
+Strategies are weighed against quality, latency, resource usage, reliability, risk, tool calls,
+agent calls, evidence requirements and autonomy constraints.
+
+The cold-start problem is handled progressively (§18): rules and heuristics → small pilot → measure
+actual signals → continue/abandon/replan → store real execution data → use historical evidence for
+future decisions. A model-asserted quality score is **not** ground truth.
+
+> **Open:** whether a "Strategy" is the same object as a "Plan" or a Plan plus binding decisions the
+> DSL does not encode. See `decisions.md` D-020. Several §17 factors (model selection, retrieval
+> strategy, context allocation) are not expressible in the §13 plan primitives.
+
+## 8. The feedback loop
+
+AgentOps is not a dashboard. The architecture is (§34):
+
+```text
+Execution telemetry -> Evaluation -> Performance memory -> Future strategy selection
+```
+
+closing the loop:
+
+```text
+Plan -> Execute -> Observe -> Evaluate -> Remember -> Plan better
+```
+
+This loop is central to EIDOS.
+
+## 9. Context optimization
+
+Prompt caching is not the product feature; a broader **Context Optimization** layer is (§35).
+Potential levels: prompt/context cache, retrieval cache, tool-result cache, task-state cache.
+Stable system rules are reusable; repeated retrieval results and unchanged tool results are cache
+candidates; the current user request is dynamic. Measure cache hit rate, tokens saved, latency
+saved. The caching provider is not locked; in-process or local Redis during development.
+
+## 10. Target local deployment
+
+Everything runs locally (§77):
+
+```text
+                     EIDOS
+                       |
+                   FastAPI
+                       |
+                  LangGraph
+                       |
+       +---------------+---------------+
+   Research         Analysis       Verification
+     Agent            Agent            Agent
+       |               |               |
+       +------------ A2A --------------+
+                       |
+                      MCP
+                       |
+             +---------+---------+
+          Qdrant      SQLite    Files
+             |
+        Agentic RAG
+             |
+         Local LLM
+```
+
+Future cloud architecture is sketched in §78: web frontend → EIDOS API → control/planner → local
+worker and A2A workers → agents → MCP → Qdrant/PostgreSQL/tools. **Do not prematurely build it.**
+
+## 11. Package boundaries
+
+Per CLAUDE.md §3, a package is created only when the milestone that fills it begins. This section is
+the architectural map; `progress.md` tracks which of these exist.
+
+| Package | Responsibility | Milestone | Exists |
+|---|---|---|---|
+| `eidos.contracts` | Typed contracts: TaskGenome, ReliabilityContract, MissionState, MissionEvent, Plan, PlanStep, AgentTask | V0.1 | **yes** (empty) |
+| `eidos.capabilities` | Capability vocabulary, agent capability registry | V0.2 / V0.4 | no |
+| `eidos.planning` | Candidate strategy generation, strategy selection | V0.2+ | no |
+| `eidos.validation` | The validation pipeline of §14 | V0.2 | no |
+| `eidos.compiler` | Plan DSL → runtime graph, deterministic | V0.3 | no |
+| `eidos.runtime` | LangGraph execution of compiled plans | V0.3 | no |
+| `eidos.agents` | Research, Analysis, Verification | V0.4 | no |
+| `eidos.state` | Reducer, checkpoints, replay | V0.5 | no |
+| `eidos.policy` | Governance, autonomy levels, budgets | V0.2 hooks / V1.2 | no |
+| `eidos.telemetry` | Structured events, metrics | V0.9 | no |
+| `eidos.memory` | Strategy and execution memory | V1.0 | no |
+| `eidos.evaluation` | Evaluation harness, experiments | V1.1 | no |
+| `eidos.a2a` | A2A boundary | V0.6 | no |
+| `eidos.mcp` | MCP tool boundary | V0.7 | no |
+| `eidos.rag` | Agentic RAG, retrieval, reranking, evidence judging | V0.8 | no |
+| `eidos.api` | FastAPI surface | later | no |
+
+### Dependency rules
+
+- Core layers — `contracts`, `validation`, `compiler`, `runtime`, `state` — must not import agent,
+  provider, protocol or storage implementations.
+- Deterministic components — validator, compiler, reducer, policy — perform no I/O, no network
+  calls, no LLM calls, hold no hidden global state and do not depend on wall-clock time in logic.
+- `contracts` depends on nothing inside `eidos`.
+
+---
+
+## Open questions
+
+| Id | Question |
+|---|---|
+| D-007 | Capability vocabulary and matching semantics |
+| D-018 | Which module owns the model/agent interface |
+| D-020 | Strategy vs Plan — one object or two |
+| D-009 | Where execution bounds originate |
+| D-024 | Whether the FAISS/Qdrant comparison is an out-of-runtime experiment |
+
+## Out of scope for this document
+
+Contract field definitions (`04`–`09`), reliability mechanics (`10_reliability.md`), evaluation
+design (`11_evaluation.md`), the normative invariant list (`12_architecture_invariants.md`).

@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eidos"
+version = "0.0.0"
+description = "EIDOS — Execution Intelligence & Dynamic Orchestration System"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = [
+    "tests/unit",
+    "tests/integration",
+    "tests/protocol",
+    "tests/scenarios",
+]
