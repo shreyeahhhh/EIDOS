@@ -173,6 +173,15 @@ is recorded so it is visible rather than arriving later as a fait accompli.
 > **Still open:** **D-039** (reducer signature — V0.5), **D-010b** (checkpoint semantics — V0.5),
 > **D-040** (the exact MissionState/LangGraph split — V0.3), **D-041** (evidence and final
 > mission-result fields — V0.4 and V0.8). None blocks V0.1.
+>
+> ⚠️ **D-052 does touch V0.1: the `status` value set.** Only four mission states are handoff-named —
+> `MISSION_CREATED`, `MISSION_COMPLETED`, `MISSION_FAILED` (§33) and the paused state from §32's
+> `MISSION PAUSED — human review required`. States covering planning and execution are **not named
+> anywhere in the handoff**. No inferred state may be added to make code compile.
+>
+> Also open and affecting representation rather than structure: **D-053** (identifier
+> representation) and **D-054** (whether timestamps are explicit inputs rather than clock defaults —
+> D-011 already requires this for `MissionEvent`; whether it generalises is undecided).
 
 ### Constraints the field set satisfies
 
@@ -221,6 +230,7 @@ see `decisions.md` **D-017**.
 
 | Id | Question | Blocks |
 |---|---|---|
+| D-052 | The `MissionStatus` value set beyond the four states §32/§33 name | **V0.1, the field's type** |
 | D-039 | The reducer signature — does it return an outcome alongside state? | V0.5 |
 | D-010b | Checkpoint contents, granularity and trigger | V0.5 |
 | D-040 | The exact MissionState / LangGraph execution-state split | V0.3 |

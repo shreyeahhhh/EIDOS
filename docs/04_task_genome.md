@@ -175,6 +175,7 @@ storage layer or re-attached at write time. A V1.0 concern, but a real cost of t
 | Id | Question | Blocks |
 |---|---|---|
 | D-030 | Is `risk_level` (assessed) distinct from "Maximum risk" (tolerated), or the same value twice? | V0.1, one field |
+| D-051 | What **values** may a risk level take? §5/§6/§30 give only "medium"; §40 gives a five-point action-risk scale that may or may not be the same vocabulary | **V0.1, the field's type** |
 | D-031 | Is `evidence_requirements` a numeric threshold or a descriptive task requirement? | V0.1, one field |
 | D-007 | Capability vocabulary and matching semantics | V0.2 capability validation |
 | D-014 | Does `autonomy_level` use the §29 0–4 scale, and what is §40's concept called instead? | V0.1 |

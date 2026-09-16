@@ -163,6 +163,11 @@ Modify configuration     -> human approval
 Delete critical resource -> blocked
 ```
 
+> ⚠️ §40 separately sketches a five-point **action**-risk scale — very low, low, medium, high,
+> extreme. Whether that vocabulary is the same one used by §6's `risk_level` and §30's "Maximum
+> risk" is never stated. See `decisions.md` **D-051**. Do not assume task risk, tolerated risk and
+> action risk share a value set.
+
 **The runtime must enforce this deterministically** (invariant 14). Enforcement lives in code, never
 in a prompt.
 
@@ -292,6 +297,7 @@ and must be testable without a UI.
 | D-015 | How verification confidence is computed from measurable proxies — or whether verification is pass/fail with no scalar | V0.4, V1.2 |
 | D-016 | Which quality proxies, and how they combine into `quality_threshold` | V0.1, V1.0 |
 | D-030 | Is assessed `risk_level` distinct from tolerated "Maximum risk"? | V0.1, one field |
+| D-051 | The `RiskLevel` **value set** — §5/§6/§30 give only "medium"; §40's five-point action-risk scale may be a different vocabulary. Independent of D-030 | **V0.1, the field's type** |
 | D-031 | Is `evidence_requirements` a threshold or a description? | V0.1, one field |
 | D-042 | The exact list of ReliabilityContract budget fields | V0.1, field list |
 | D-045 | What applies when no ReliabilityContract is supplied | V0.1, one flag |

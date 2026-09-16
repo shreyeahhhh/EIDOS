@@ -447,8 +447,13 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
 These are ambiguities, contradictions and gaps found in the handoff during the bootstrap read. None
 has been resolved. Work that depends on one of them is blocked until the owner decides.
 
-Count: 34. Highest-impact first is **D-015** (how verification confidence is computed), then
-**D-007** (capability vocabulary) and **D-012** (predicate language) for V0.2.
+Count: 40. Highest-impact first is **D-015** (how verification confidence is computed), then
+**D-049** and **D-050** (the `PlanStepKind` value set), then **D-007** (capability vocabulary) and
+**D-012** (predicate language) for V0.2.
+
+**Standing rule for all Open items:** no placeholder enum, type, sentinel or inferred value may be
+invented to make code compile. An Open item blocks the field it touches; it does not license a
+guess. Where a type cannot be written without an answer, the field waits.
 
 **All five decisions blocking V0.1 were resolved on 2026-09-16** and moved to Accepted: **D-013**,
 **D-019**, **D-011**, **D-010a**, **D-009**. Each exposed sub-questions that the owner deliberately
@@ -457,9 +462,15 @@ from D-019; D-035 through D-038 from D-011; D-010b and D-039 through D-041 from 
 through D-046 from D-009. Three further V0.1 scoping decisions followed: **D-033**, **D-047**,
 **D-048**.
 
-Six Open items still touch V0.1 **partially**, each affecting one field, one flag or one type rather
-than blocking the milestone: **D-014**, **D-016**, **D-030**, **D-031**, **D-042**, **D-045**.
-D-014 and D-016 predate the blocking-decision round and were not part of it.
+Open items still touching V0.1: **D-014**, **D-016**, **D-030**, **D-031**, **D-042**, **D-045** —
+each affecting one field, one flag or one type — plus **D-049**, **D-050**, **D-051** and **D-052**,
+which were found while writing the V0.1 contract specification and **do block** the contracts they
+touch. D-014 and D-016 predate the blocking-decision round and were not part of it. **D-053** and
+**D-054** are minor and affect representation rather than structure.
+
+D-049 and D-050 are the consequential ones: together they determine the `PlanStepKind` value set, and
+D-050 arises from a consequence of **D-004** that was not visible when D-004 was taken. Neither
+D-004 nor D-047 has been modified.
 
 The Open count rising as decisions are made is expected and healthy: each resolution replaces one
 vague question with several precise ones, and a precise Open item is cheap to answer while a vague
@@ -850,6 +861,96 @@ one is not.
   contract is required or optional.
 - **Needs:** Owner decision. Note the three options are not equivalent: system-ceilings-as-defaults
   is permissive, a synthesised default contract is explicit, and rejection is strictest.
+
+### D-049 — Is `AGENT` a ninth `PlanStepKind`?
+
+- **Status:** Open · **Source:** handoff §13 (example vs enumerated list) · **Found while writing the V0.1 contract specification**
+- **Finding:** §13 enumerates eight allowed primitives — `SEQUENTIAL`, `PARALLEL`, `ROUTE`, `VERIFY`,
+  `RETRY`, `REPLAN`, `HUMAN_APPROVAL`, `TERMINATE`. §13's **own example** contains
+  `{ "type": "agent", "capability": "research" }`, and **`agent` is not in that list**.
+
+  All eight enumerated primitives are control-flow constructs. The step that actually performs work
+  and carries a `capability` is the unlisted one. Invariant 11 requires plans to request
+  capabilities, so some step kind must hold a capability — and the handoff shows that kind only in
+  an example.
+- **Why it matters:** it determines the `PlanStepKind` value set and which kind carries `capability`.
+  **D-047 approved "the eight PlanStep kinds"** on the understanding that §13's list was complete.
+  If `AGENT` is a ninth kind, D-047's scope statement needs revisiting — it is not wrong, but it is
+  incomplete.
+- **Effect while Open:** blocks the `PlanStep` contract. **No placeholder kind is to be invented to
+  make code compile.**
+- **Needs:** Owner to decide whether `AGENT` is a ninth kind, whether capability-bearing steps are
+  expressed some other way, or whether §13's list was simply not exhaustive.
+
+### D-050 — Are `SEQUENTIAL` and `PARALLEL` redundant under an ID-addressed DAG?
+
+- **Status:** Open · **Source:** handoff §13 vs **D-004** · **Found while writing the V0.1 contract specification**
+- **Finding:** §13's example is the **nested tree** form. D-004 replaced that with an ID-addressed
+  DAG as the canonical representation. In a DAG, "these two steps run in parallel" is expressed by
+  **the absence of a dependency edge** between them, and "A then B" by the presence of one. Ordering
+  *is* the edge structure.
+
+  `SEQUENTIAL` and `PARALLEL` as explicit **step kinds** therefore encode information the graph
+  already carries — and can contradict it. A `PARALLEL` step whose children have edges between them
+  is self-inconsistent, and nothing in the current model says which wins.
+- **Why it matters:** this is a consequence of D-004 that was **not visible when D-004 was taken**.
+  It touches two Accepted decisions, D-004 and D-047. Neither is being modified.
+- **Effect while Open:** blocks the `PlanStepKind` value set alongside D-049.
+- **Needs:** Owner to choose among: drop both as step kinds and let edges carry ordering; keep them
+  as grouping or annotation with an explicit rule that edges are authoritative on conflict; or keep
+  D-047's eight as approved and accept the redundancy with a documented precedence rule.
+
+### D-051 — The `RiskLevel` value set
+
+- **Status:** Open · **Source:** handoff §5, §6, §30 vs §40 · **Found while writing the V0.1 contract specification**
+- **Finding:** §5, §6 and §30 all use the single value "medium" without giving a scale. §40 gives a
+  five-point scale for **action** risk: very low, low, medium, high, extreme. Whether task risk
+  (§6's `risk_level`), tolerated risk (§30's "Maximum risk") and action risk (§40) share one value
+  set is never stated.
+- **Relationship to D-030:** D-030 asks whether assessed and tolerated risk are **distinct
+  quantities**. D-051 asks what **values** either may take. They are independent: the answers could
+  be "two quantities, one shared scale", "two quantities, two scales", or "one quantity".
+- **Effect while Open:** blocks the risk-typed fields on both `TaskGenome` and `ReliabilityContract`.
+  **No placeholder enum is to be invented to make code compile.**
+- **Needs:** The value set or sets, and whether §40's action-risk scale is the same vocabulary.
+
+### D-052 — `MissionStatus` values not named by the handoff
+
+- **Status:** Open · **Source:** handoff §32, §33 · **Raised by Claude Code; left Open by the owner**
+- **Finding:** Four mission states are handoff-named: `MISSION_CREATED`, `MISSION_COMPLETED`,
+  `MISSION_FAILED` (§33's event types) and the paused state from §32's
+  `MISSION PAUSED — human review required`. A working status enum would plausibly also need states
+  covering planning and execution, but **no such states are named anywhere in the handoff** — they
+  were a derivation in the draft contract specification, not a handoff fact.
+- **Effect while Open:** the `MissionState.status` value set is undetermined beyond the four named
+  states. **No inferred states are to be added to make code compile.**
+- **Needs:** Owner to either confirm the additional states or restrict the enum to what §32 and §33
+  name.
+
+### D-053 — Identifier representation
+
+- **Status:** Open · **Source:** not addressed in the handoff · **Raised by Claude Code; minor**
+- **Finding:** The handoff names many identifiers (§10, §33, §54) but never specifies their
+  representation — UUID, opaque string, or a structured/prefixed form. The draft specification
+  proposed opaque strings generated as UUIDs; that proposal has not been ruled on.
+- **Effect while Open:** minor. Affects every contract's identity fields, but is cheap to change
+  while nothing is persisted (D-005).
+- **Needs:** Confirmation, so the choice is recorded rather than made by whoever writes the first
+  model.
+
+### D-054 — Where timestamps come from
+
+- **Status:** Open · **Source:** implied by CLAUDE.md §8; not addressed in the handoff · **Raised by Claude Code; minor**
+- **Finding:** The draft specification proposed that timestamps are **explicit required inputs, never
+  defaulted from the clock**, so that contract construction stays deterministic and tests do not
+  depend on wall-clock time. CLAUDE.md §8 requires deterministic components to avoid wall-clock
+  dependence in logic, but contracts are not named in that list, so the rule does not decide this by
+  itself.
+- **Relationship to D-011:** D-011 already requires `MissionEvent` to carry both `occurred_at`
+  (producer clock) and `recorded_at` (EIDOS ingestion), and the reducer must not read the clock. This
+  item asks whether the same discipline applies to every other model's timestamps.
+- **Effect while Open:** minor, but it determines whether V0.1 unit tests are deterministic.
+- **Needs:** Confirmation.
 
 ### D-046 — Numerical bound values
 

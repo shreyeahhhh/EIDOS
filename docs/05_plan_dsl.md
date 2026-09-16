@@ -84,6 +84,24 @@ TERMINATE
 
 Adding a primitive is an architectural change requiring human approval and a `decisions.md` entry.
 
+> ⚠️ **The value set of `PlanStepKind` is Open. Two problems were found with this list while writing
+> the V0.1 contract specification.**
+>
+> **D-049 — `AGENT` appears to be a ninth kind.** All eight primitives above are control-flow
+> constructs. §13's **own example** contains `{ "type": "agent", "capability": "research" }`, and
+> `agent` is **not** in the enumerated list. Invariant 11 requires plans to request capabilities, so
+> some kind must carry `capability` — and the handoff shows that kind only in an example.
+>
+> **D-050 — `SEQUENTIAL` and `PARALLEL` may be redundant under D-004.** §13's example is the nested
+> tree form. Under an ID-addressed DAG, "these run in parallel" is the **absence of an edge** and
+> "A then B" is the **presence of one** — ordering *is* the edge structure. As explicit step kinds
+> these two encode what the graph already carries, and a `PARALLEL` step whose children have edges
+> between them is self-inconsistent with nothing to say which wins. This is a consequence of D-004
+> that was not visible when D-004 was taken.
+>
+> **Neither D-004 nor D-047 has been modified.** Both remain Accepted as written. No placeholder
+> kind may be invented to make code compile.
+
 V0.3 maps `SEQUENTIAL`, `PARALLEL`, `ROUTE`, `VERIFY`, `RETRY` and `REPLAN` into runtime nodes
 (§50). `HUMAN_APPROVAL` and `TERMINATE` are not listed in the V0.3 mapping.
 
@@ -222,6 +240,8 @@ verification; and an ordered variant that front-loads architecture before target
 
 | Id | Question | Blocks |
 |---|---|---|
+| D-049 | Is `AGENT` a ninth `PlanStepKind`? Which kind carries `capability`? | **V0.1 `PlanStep`** |
+| D-050 | Are `SEQUENTIAL` / `PARALLEL` redundant under D-004's DAG, and what wins on conflict? | **V0.1 `PlanStep`** |
 | D-012 | Predicate language for ROUTE / RETRY / REPLAN / TERMINATE | V0.2, V0.3 |
 | D-046 | Numerical bound values | V0.2 |
 | D-043 | Declared plan limits vs actual execution counters | V0.2, V0.3 |
