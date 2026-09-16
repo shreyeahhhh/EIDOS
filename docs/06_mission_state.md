@@ -176,9 +176,11 @@ is recorded so it is visible rather than arriving later as a fait accompli.
 > **D-040** (the exact MissionState/LangGraph split — V0.3), **D-041** (evidence and final
 > mission-result fields — V0.4 and V0.8). None blocks V0.1.
 >
-> Also open and affecting representation rather than structure: **D-053** (identifier
-> representation) and **D-054** (whether timestamps are explicit inputs rather than clock defaults —
-> D-011 already requires this for `MissionEvent`; whether it generalises is undecided).
+**Representation — resolved.** **D-053**: identifiers are opaque **UUID-backed** values with distinct
+per-kind types (`TenantId`, `MissionId`, `ExecutionId`, `PlanId`, `EventId`, `AgentId`, …), with
+readability handled at the display layer. **D-054**: **all contract timestamps are explicit required
+inputs** — no model may read the wall clock during construction, which keeps construction
+deterministic and keeps replay faithful. Both are stated in full in `docs/03_architecture.md` §11.
 
 ### Mission status — `decisions.md` D-052
 

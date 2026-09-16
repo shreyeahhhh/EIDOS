@@ -234,6 +234,37 @@ the architectural map; `progress.md` tracks which of these exist.
 | `eidos.rag` | Agentic RAG, retrieval, reranking, evidence judging | V0.8 | no |
 | `eidos.api` | FastAPI surface | later | no |
 
+### Contract representation rules
+
+These apply to every contract in `eidos.contracts` and are cross-cutting rather than per-model.
+
+**Identifiers — `decisions.md` D-053.** Opaque **UUID-backed** values, represented through **distinct
+per-kind types** (`TenantId`, `MissionId`, `ExecutionId`, `PlanId`, `EventId`, `AgentId`, and the
+other kinds the contracts define).
+
+UUID-backed because `event_id` is the idempotency key under **D-011** and must be collision-free
+across processes once V0.6 introduces a second identifier producer; §53's `mission_1842` implies a
+counter, which is a coordination point EIDOS has no mechanism for. Distinct types because nine
+identifier kinds flowing through seven contracts is where a plan id gets passed where a mission id
+belongs.
+
+**Readability is a display-layer concern**, not a representation one — replay traces (§73), the
+Execution Replay and Evidence Explorer views (§41) and telemetry (§33) render short forms rather than
+the contracts carrying readable values.
+
+**Timestamps — `decisions.md` D-054.** **All contract timestamps are explicit required inputs. No
+contract model may silently obtain the current wall-clock time during construction.**
+
+The deciding argument is **replay**: invariant 15 requires a completed mission to be reconstructible
+from recorded events, and a clock-defaulting timestamp would stamp reconstruction time onto
+historical state, making the replay unfaithful in fields nobody intended to change. There is also a
+back-door argument — the reducer produces new `MissionState` values, so a clock-defaulting model
+would reintroduce into the reducer the very clock dependence the dependency rules below forbid it.
+
+This is **D-011's principle applied consistently**: that decision already requires `MissionEvent` to
+carry `occurred_at` (producer clock) and `recorded_at` (EIDOS ingestion), with the reducer reading
+neither from the clock.
+
 ### Dependency rules
 
 - Core layers — `contracts`, `validation`, `compiler`, `runtime`, `state` — must not import agent,

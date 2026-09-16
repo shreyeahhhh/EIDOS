@@ -21,7 +21,7 @@ No measurement of any kind has been taken, so no metric appears anywhere in this
 
 - [x] `CLAUDE.md` — permanent rules, 18 architecture invariants
 - [x] `progress.md` — this file
-- [x] `decisions.md` — 22 Accepted, 45 Open, 3 Deferred (counts current as of the latest decision below)
+- [x] `decisions.md` — 24 Accepted, 43 Open, 3 Deferred (counts current as of the latest decision below)
 - [x] `README.md`, `pyproject.toml`, `.gitignore`
 - [x] `docs/01`–`docs/12` — the twelve documents required by handoff §81
 - [x] `src/eidos/` and `src/eidos/contracts/` — docstring only, no code
@@ -109,8 +109,12 @@ quotation**. No numerical defaults in V0.1. **D-065**, **D-043** and **D-044** l
 D-030, D-051, §53 and invariant 14; the labels `low` and `high` are explicitly ratified additions
 completing the handoff-supplied `medium`. Not reused for §40 action risk or §28 tool risk.
 
-What remains for V0.1 is **field-level**: D-031, D-065, D-067, D-068, D-069, plus cross-cutting
-D-053 and D-054.
+**D-053 and D-054 resolved** (2026-09-16, human owner): identifiers are UUID-backed opaque values
+with distinct per-kind types, readability handled at the display layer; all contract timestamps are
+explicit required inputs, with no model reading the wall clock during construction. Both recorded in
+`docs/03_architecture.md` §11 as cross-cutting contract rules.
+
+**Exactly five field-level items remain for V0.1:** D-031, D-065, D-067, D-068, D-069.
 
 **D-052 resolved** (2026-09-16, human owner): `MissionStatus` contains exactly `created`,
 `completed`, `failed`, `paused`, with `status_reason` carrying the explanation. `PLANNING` and
@@ -235,7 +239,7 @@ Highest-impact first.
 | **D-060** is §29 level 3 ordinal or a gate | V1.2 | Levels 0/1/2/4 describe capability; level 3 describes a process. Invariant 14 makes the difference real. |
 | **D-062** naming for §40's autonomy budget | before implementation | Shares the word "autonomy" with §29's levels while being a different concept. |
 | **D-034** `plan_id`/`event_id` in invariant 18 | none | Two identifiers entered an invariant by derivation, not decision. CLAUDE.md unamended pending the call. |
-| **D-032** literal default for `tenant_id` | V0.1, constant only | Split out of D-019 and left Open by the owner. |
+| **D-032** literal default for `tenant_id` | V0.1, constant only | Split out of D-019 and left Open by the owner. Now typed as a `TenantId` per D-053, so the value is a UUID choice. |
 | **D-020** Strategy vs Plan | V0.2, V1.0 | Determines whether one contract or two is needed. |
 | **D-018** model-provider abstraction boundary | V0.4 | Invariant 9 forbids vendor names in core layers; the boundary's owner is unspecified. |
 | **D-029** RAG reformulation loop has no bound | V0.8 | Every other loop in the handoff is explicitly bounded; §24's retrieval loop is not. Invariant 7 says execution never loops. |

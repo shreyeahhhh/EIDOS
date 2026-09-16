@@ -901,6 +901,72 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
     tool risk later need a finer mapping, widening this scale is a contract change to be decided,
     not assumed.
 
+### D-053 — Identifiers are UUID-backed opaque values with distinct per-kind types
+
+- **Status:** Accepted · **Date:** 2026-09-16 · **Decided by:** human owner
+- **Source:** not addressed by the handoff; constrained by D-011, §54, §10, §33, §53
+- **Context:** The handoff names nine identifier kinds across §10, §33, §54 and §8, and specifies a
+  representation for none of them. Its single concrete example is §53's `"mission_id":
+  "mission_1842"` — a prefixed readable string — but §53 labels itself conceptual.
+
+- **Decision:** identifiers use **opaque UUID-backed values**, represented through **distinct
+  per-identifier types** where practical: `TenantId`, `MissionId`, `ExecutionId`, `PlanId`,
+  `EventId`, `AgentId`, and the other identifier kinds the contracts define. The underlying
+  representation is UUID-backed; the per-kind typing prevents accidental cross-use.
+
+  **Readability is handled at the display and logging layer, not by changing the representation.**
+
+- **Rationale:** UUID-backed because **`event_id` is the idempotency key** under D-011, and it must
+  be collision-free across processes once V0.6 introduces a second process generating identifiers.
+  §53's `mission_1842` implies a counter, and a counter is a coordination point EIDOS has no
+  mechanism for; §53 being conceptual, it is read as illustrating a shape rather than mandating a
+  sequence.
+
+  Distinct types because nine identifier kinds flowing through seven contracts is precisely where
+  a plan id gets passed where a mission id belongs — a failure the type system can prevent for the
+  cost of one declaration each.
+
+- **Consequences:**
+  - Applies to every contract's identity fields.
+  - **Accepted cost:** identifiers are unreadable in raw form, which touches the places EIDOS most
+    needs legibility — replay traces (§73), the Execution Replay and Evidence Explorer views (§41),
+    and telemetry (§33). Recovered at the **display layer** (for example rendering a short prefix),
+    which is where the decision places it.
+  - Cheap to revisit while nothing is persisted (**D-005**); expensive after **D-017**.
+
+### D-054 — All contract timestamps are explicit required inputs
+
+- **Status:** Accepted · **Date:** 2026-09-16 · **Decided by:** human owner
+- **Source:** not addressed by the handoff; follows D-011 and invariant 15
+- **Context:** **D-011** already requires `MissionEvent` to carry both `occurred_at` (producer clock)
+  and `recorded_at` (EIDOS ingestion), and requires the reducer not to read the clock. Whether that
+  discipline generalises to every other model's timestamps — `MissionState.created_at` /
+  `updated_at`, `Plan`, and the rest — was unstated. CLAUDE.md §8 names validator, compiler, reducer
+  and policy as needing freedom from wall-clock dependence, but **not** contracts, so §8 does not
+  decide this by itself.
+
+- **Decision:** **all contract timestamps are explicit required inputs.** **No contract model may
+  silently obtain the current wall-clock time during construction.**
+
+- **Rationale:** The deciding argument is **replay**, not test convenience. Invariant 15 requires a
+  completed mission to be replayable from recorded events. If `MissionState` timestamps defaulted to
+  the clock, a replayed state would differ from the original in fields nobody intended to change,
+  and the replay would not be a faithful reconstruction — it would silently stamp reconstruction
+  time onto historical state.
+
+  There is also a back-door argument: the reducer produces new `MissionState` values, so a
+  clock-defaulting `MissionState` would reintroduce into the reducer exactly the clock dependence
+  CLAUDE.md §8 forbids it.
+
+  This is **D-011's principle applied consistently**, not a new rule.
+
+- **Consequences:**
+  - Construction is deterministic, so V0.1 unit tests are reproducible without freezing time.
+  - Replay reconstructs state with historical timestamps rather than replay-time ones.
+  - **Accepted cost:** every caller must supply a time, which is verbose at call sites.
+  - Whatever supplies the time becomes an explicit dependency rather than an ambient one — relevant
+    when the reducer is built at V0.5 (**D-039**).
+
 ---
 
 ## Open — require the human owner
@@ -908,11 +974,11 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
 These are ambiguities, contradictions and gaps found in the handoff during the bootstrap read. None
 has been resolved. Work that depends on one of them is blocked until the owner decides.
 
-Count: 45. Highest-impact first is **D-015** (how verification confidence is computed), then
+Count: 43. Highest-impact first is **D-015** (how verification confidence is computed), then
 **D-007** (capability vocabulary) and **D-012** (predicate language) for V0.2.
 
-**All type-level V0.1 blockers are cleared.** What remains for V0.1 is field-level: **D-031**,
-**D-065**, **D-067**, **D-068**, **D-069**, plus the cross-cutting **D-053** and **D-054**.
+**All type-level and cross-cutting V0.1 blockers are cleared.** Exactly five field-level items
+remain for V0.1: **D-031**, **D-065**, **D-067**, **D-068**, **D-069**.
 
 **Standing rule for all Open items:** no placeholder enum, type, sentinel or inferred value may be
 invented to make code compile. An Open item blocks the field it touches; it does not license a
@@ -1446,31 +1512,6 @@ one is not.
 - **Effect while Open:** none on V0.1 — no verification exists to produce the outcome. Material at
   V0.4 when verification lands, and at V1.2 for governance.
 - **Needs:** Owner decision, ideally before verification is built at V0.4.
-
-### D-053 — Identifier representation
-
-- **Status:** Open · **Source:** not addressed in the handoff · **Raised by Claude Code; minor**
-- **Finding:** The handoff names many identifiers (§10, §33, §54) but never specifies their
-  representation — UUID, opaque string, or a structured/prefixed form. The draft specification
-  proposed opaque strings generated as UUIDs; that proposal has not been ruled on.
-- **Effect while Open:** minor. Affects every contract's identity fields, but is cheap to change
-  while nothing is persisted (D-005).
-- **Needs:** Confirmation, so the choice is recorded rather than made by whoever writes the first
-  model.
-
-### D-054 — Where timestamps come from
-
-- **Status:** Open · **Source:** implied by CLAUDE.md §8; not addressed in the handoff · **Raised by Claude Code; minor**
-- **Finding:** The draft specification proposed that timestamps are **explicit required inputs, never
-  defaulted from the clock**, so that contract construction stays deterministic and tests do not
-  depend on wall-clock time. CLAUDE.md §8 requires deterministic components to avoid wall-clock
-  dependence in logic, but contracts are not named in that list, so the rule does not decide this by
-  itself.
-- **Relationship to D-011:** D-011 already requires `MissionEvent` to carry both `occurred_at`
-  (producer clock) and `recorded_at` (EIDOS ingestion), and the reducer must not read the clock. This
-  item asks whether the same discipline applies to every other model's timestamps.
-- **Effect while Open:** minor, but it determines whether V0.1 unit tests are deterministic.
-- **Needs:** Confirmation.
 
 ### D-046 — Numerical bound values
 
