@@ -93,6 +93,16 @@ recall invisibly. Full rationale and the interpretations rejected are in `decisi
 
 Because no value has two homes, **no precedence rule exists or is needed.**
 
+**The reference is required — `decisions.md` D-045.** Every `TaskGenome` must reference a
+`ReliabilityContract`. EIDOS's reliability and evaluation semantics require explicit acceptance
+criteria: without a contract there is no defined referent for satisfaction, required quality, or
+mission-level budgets. Invariant 13 would have nothing to report against, §31's comparison would have
+nothing on its right-hand side, and §49's evaluation step would have nothing to evaluate.
+
+This is the one V0.1 decision that **departs from a literal reading of the handoff's wording** —
+§30 says a mission "can have" a contract. It is recorded as such in D-045. Whether the contract is
+always user-supplied or may be synthesised is **D-066**; per-field optionality is **D-065**.
+
 > **Still open — two sub-ambiguities the owner deliberately left unresolved.** D-013 settles the
 > structural rule only; it does not settle whether these particular pairs are the same quantity:
 >
@@ -102,6 +112,9 @@ Because no value has two homes, **no precedence rule exists or is needed.**
 >   than a duplicate. **D-051** supplies the shared vocabulary that makes the comparison well-formed;
 >   **D-056** still owes the value set. How either value is *calculated* is deliberately out of
 >   scope — see **D-057**.
+> - **D-051 / D-056 — resolved.** The shared task-risk vocabulary is
+>   `RiskLevel = low | medium | high`, a closed ordinal word-valued scale. Not reused for §40 action
+>   risk or §28 tool risk.
 > - **D-031** — `evidence_requirements` (§6) vs "Minimum independent evidence" (§30): §6's field may
 >   be a numeric threshold (contract) or a descriptive task requirement (genome). **Still open** —
 >   one field of this model remains undetermined.
@@ -118,13 +131,28 @@ Level 3  Human approval required
 Level 4  Authorized autonomous execution
 ```
 
-The example's `1` is consistent with the mission it describes (read documents, read repository,
-query monitoring), but the handoff never states that §6's field uses the §29 scale.
+**Resolved — `decisions.md` D-014, decided by the human owner.** `TaskGenome.autonomy_level` uses
+this §29 scale. No additional levels are invented.
 
-Separately, §40 introduces an "autonomy budget / autonomy debt" — an accumulating risk score — which
-is a **different concept using the same word**, and which §40 itself marks experimental.
+§29 is the **only** autonomy enumeration in the handoff, and the evidence is consistent: §6's example
+value `1` matches both the read-only mission it describes and §29's "Level 1 Safe read-only actions".
+This is deliberately *unlike* the risk case (**D-056**), where the handoff supplies no task-risk
+scale at all — here declining the scale would discard evidence rather than avoid an invention.
 
-See `decisions.md` **D-014**.
+Nothing enforces this in V0.1; the policy engine is V1.2. Only the field's type was at stake. Note
+that `autonomy_level` carries more enforcement weight than `risk_level`, because §29 is the
+governance spine — per D-051, §29 uses no risk scale at all.
+
+> **Still open:**
+> - **D-060** — §29's levels may not be one ordered dimension. Levels 0, 1, 2 and 4 describe what the
+>   system *may do* and are monotonic; **level 3 describes a *process*, not a capability class**, and
+>   §29's own `Modify configuration → human approval` example maps an action to a **gate** rather
+>   than to a level. Whether `autonomy_level` is truly ordinal is unresolved.
+> - **D-061** — approval is expressible twice: mission-wide level 3, and the `HUMAN_APPROVAL`
+>   `PlanStepKind` (§13). Their relationship is unstated. Two mechanisms for one concept is the
+>   pattern D-013 and §9/§10 both reject.
+> - **D-062** — §40's "autonomy budget / autonomy debt" is a **different concept sharing the word**.
+>   It must be given a distinct name before it is ever implemented. §40 itself marks it experimental.
 
 ## 6. Capabilities
 
@@ -178,13 +206,15 @@ storage layer or re-attached at write time. A V1.0 concern, but a real cost of t
 | Id | Question | Blocks |
 |---|---|---|
 | D-057 | How is `risk_level` determined? §5's user-stated tolerance maps to the contract; the assessed value's provenance is unspecified | V0.2 policy validation |
-| D-056 | The concrete **task-risk value set**. D-051 settled the structure; the handoff contains no task-risk scale, and §40's was explicitly declined | **V0.1, the field's type** |
+| D-031 | Is `evidence_requirements` a threshold or a description? | **V0.1, field existence** |
 | D-031 | Is `evidence_requirements` a numeric threshold or a descriptive task requirement? | V0.1, one field |
+| D-068 | Is `TaskGenome` mission-owned (carries `mission_id`) or reusable as a similarity key? §6 vs §21/§22 | **V0.1, one field** |
 | D-007 | Capability vocabulary and matching semantics | V0.2 capability validation |
 | D-014 | Does `autonomy_level` use the §29 0–4 scale, and what is §40's concept called instead? | V0.1 |
-| D-016 | What measurement procedure sits behind `quality_threshold`? | V0.1 |
-| D-014 | Does `autonomy_level` use the §29 0–4 scale? | V0.1, one field's type |
-| D-045 | Is the ReliabilityContract reference required or optional? | V0.1, one flag |
+| D-015 | How measurable proxies combine into an evaluated quality figure | V0.4, V1.2 |
+| D-060 | Is §29's level 3 an ordinal point or a gate cutting across the scale? | V1.2 policy engine |
+| D-061 | Mission-wide `autonomy_level` vs the `HUMAN_APPROVAL` step kind | V0.3/V1.2 |
+| D-066 | Is the contract always user-supplied, or may EIDOS synthesise one? | mission creation; depends on D-046 |
 | — | Exact field names and units (e.g. `latency_budget` vs `latency_budget_ms`), and which of the ten fields are required vs optional. The handoff's list is explicitly "conceptual" and its example is partial. | V0.1 |
 
 ## Out of scope for this document

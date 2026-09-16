@@ -21,7 +21,7 @@ No measurement of any kind has been taken, so no metric appears anywhere in this
 
 - [x] `CLAUDE.md` — permanent rules, 18 architecture invariants
 - [x] `progress.md` — this file
-- [x] `decisions.md` — 16 Accepted, 39 Open, 3 Deferred (counts current as of the latest decision below)
+- [x] `decisions.md` — 22 Accepted, 45 Open, 3 Deferred (counts current as of the latest decision below)
 - [x] `README.md`, `pyproject.toml`, `.gitignore`
 - [x] `docs/01`–`docs/12` — the twelve documents required by handoff §81
 - [x] `src/eidos/` and `src/eidos/contracts/` — docstring only, no code
@@ -75,22 +75,48 @@ input, and the failure paths — not only the happy path (§61, CLAUDE.md §6).
 **The five named blocking decisions are resolved** — D-013, D-019, D-011, D-010a, D-009. The
 structural questions about V0.1 are settled.
 
-**But V0.1 is not fully unblocked.** Two Open items predating this round still touch V0.1 and were
-not part of the five:
+**D-016 resolved** (2026-09-16, human owner): `ReliabilityContract.min_quality` is a **plain scalar
+threshold** — a user-stated requirement, not an estimate, so it carries no uncertainty. The
+quality-**estimate** type §19 and invariant 17 require is **not** introduced in V0.1, because nothing
+in V0.1 produces an estimate; it is deferred to its proper owner as **D-063**. **D-064** logged:
+whether §31/§47 `confidence` and §30 `quality` are the same quantity. **D-015 untouched.**
 
-- **D-014** — does `autonomy_level` use §29's 0–4 scale? Determines a `TaskGenome` field's type.
-- **D-016** — the quality function. Determines whether the contract's quality threshold is a plain
-  value or a structured type.
+**D-014 resolved** (2026-09-16, human owner): `TaskGenome.autonomy_level` uses §29's 0–4 scale.
+Unlike the risk case, the handoff supplies a scale at the right abstraction with a consistent
+example, so declining it would discard evidence rather than avoid invention. **D-060**, **D-061**
+and **D-062** left Open.
 
-A further three affect one field or one flag each: **D-031** (`evidence_requirements` threshold or
-description), **D-042** (exact contract budget field list), **D-045** (no contract supplied).
+A further four affect one field each: **D-031** (`evidence_requirements` threshold or description),
+**D-065** (required vs optional per budget field), **D-067** (`MissionEvent.payload` typing),
+**D-068** (does `TaskGenome` carry `mission_id`?). **D-069** determines whether
+`ReliabilityContract` carries an approval-related field at all.
 
-**Two items still block the fields they type:**
+**The consolidated V0.1 contract specification is the approved design baseline** as of 2026-09-16.
+Three questions it surfaced but which had never been logged are now Open items: D-067, D-068, D-069.
 
-- **D-056** — the concrete task-risk value set. D-051 settled the structure; the handoff supplies no
-  task-risk scale and §40's was explicitly declined. `TaskGenome` and `ReliabilityContract` should
-  be written **last** among the seven contracts for this reason.
-- **D-052** — `MissionStatus` values beyond the four states §32 and §33 name.
+**D-045 resolved** (2026-09-16, human owner): **every `TaskGenome` must reference a
+`ReliabilityContract`.** Without one there is no defined referent for satisfaction, required quality,
+or mission-level budgets. This is the one V0.1 decision that departs from a literal reading of the
+handoff (§30's "can have"), and is recorded as such. **D-066** logged: user-supplied vs synthesised.
+
+**D-042 resolved** (2026-09-16, human owner): the V0.1 contract budget group is six mission-level
+fields — `max_retries`, `max_replans`, `max_agent_calls`, `max_tool_calls`, `max_execution_time`,
+`max_tokens` — recorded explicitly as a **reconciliation of the handoff's partial lists, not a
+quotation**. No numerical defaults in V0.1. **D-065**, **D-043** and **D-044** left Open.
+
+**All type-level V0.1 blockers are cleared.** **D-056 resolved** (2026-09-16, human owner):
+`RiskLevel = low | medium | high`, a closed ordinal word-valued scale. The shape was derived from
+D-030, D-051, §53 and invariant 14; the labels `low` and `high` are explicitly ratified additions
+completing the handoff-supplied `medium`. Not reused for §40 action risk or §28 tool risk.
+
+What remains for V0.1 is **field-level**: D-031, D-065, D-067, D-068, D-069, plus cross-cutting
+D-053 and D-054.
+
+**D-052 resolved** (2026-09-16, human owner): `MissionStatus` contains exactly `created`,
+`completed`, `failed`, `paused`, with `status_reason` carrying the explanation. `PLANNING` and
+`EXECUTING` were invented in a draft spec and are **not** added — every handoff-named state is an
+entry, exit or suspension boundary, and in-progress substates fall on D-010a's excluded side.
+**D-058** and **D-059** left Open.
 
 **D-030 resolved** (2026-09-16, human owner): assessed task risk and tolerated risk are **distinct
 quantities**, one field in each model. It was answered by implication by D-051 and was raised and
@@ -192,17 +218,22 @@ Highest-impact first.
 | **D-036** `AgentTask` lifecycle state machine | V0.6 | §10 mandates deterministic accept/reject "against lifecycle"; §8 never enumerates states or transitions. V0.6 protocol tests cannot be written without it. |
 | **D-043** declared plan limits vs execution counters | V0.2, V0.3 | Five limit names appear in both §14 and §32 while counting different things. Most likely of the bound family to cause a real defect. |
 | **D-046** numerical bound values | V0.2 | None established in V0.1 by decision; tuned from V0.9 telemetry, never presented as tuned before then. |
-| **D-042** exact contract budget field list | V0.1, field list | §14's list is "such as"; §30's example carries two of six. |
-| **D-045** no ReliabilityContract supplied | V0.1, one flag | §30 makes the contract optional; with no contract, "satisfied" is undefined. |
+| **D-065** budget fields required or optional | V0.1, optionality | Distinct from D-045: an omitted field on a present contract is not an absent contract. |
+| **D-066** contract user-supplied or synthesised | mission creation | Synthesis needs numbers D-046 defers; adopting it later would not contradict D-045. |
 | **D-012** predicate language for ROUTE/RETRY/REPLAN/TERMINATE | V0.2, V0.3 | Deterministic routing needs a defined, validatable condition form. |
 | **D-007** capability vocabulary and matching | V0.2, V0.4 | §6 and §7 use incompatible capability names. |
 | **D-006** MVP agent set: 3 or 5 capabilities | V0.4 | §49 says three; §16/§43 use five. |
 | **D-016** the quality function | V0.1, V1.0 | `quality_threshold` has no measurement procedure. |
-| **D-056** task-risk value set | **V0.1, two field types** | Structure settled by D-051; the handoff supplies no task-risk scale and §40's was declined. Product judgement, not derivable. |
+| **D-067** `MissionEvent.payload` typing | **V0.1, the payload field** | §33's thirteen types carry different payloads; "a dict" is unavailable under CLAUDE.md §8. |
+| **D-068** `TaskGenome.mission_id` | **V0.1, one field** | §6 reads mission-owned; §21/§22 read as a cross-mission similarity key. |
+| **D-069** high-risk approval clause | **V0.1, field existence** | §30's only non-numeric clause. Three mechanisms already touch approval. |
+| **D-059** contract-unsatisfied as `failed` or a fifth state | V0.4 | Invariant 13 requires it distinguishable from a crash; the handoff gives it no event name and no status value. |
 | **D-055** `VERIFY`/`HUMAN_APPROVAL` as work steps | not V0.1 | Both remain control-flow kinds meanwhile. Answering after `PlanStep` exists turns an additive change into a rework. |
 | **D-052** `MissionStatus` value set | **V0.1, one field's type** | Only four states are handoff-named; planning/execution states are not. |
-| **D-014** `autonomy_level` scale | V0.1, one field's type | Predates the blocking round; §6's example uses `1`, §29 defines 0–4, the link is never stated. |
-| **D-016** quality function | V0.1, one field's type | Predates the blocking round; determines whether the quality threshold is a plain value or structured. |
+| **D-063** quality-estimate type | before V0.4 | §19 and invariant 17 require uncertainty representation; the type belongs to whatever produces estimates. |
+| **D-064** `confidence` vs `quality` | V0.4; feeds D-042 | The handoff uses both words for what looks like one comparison. Two quantities would mean two contract thresholds. |
+| **D-060** is §29 level 3 ordinal or a gate | V1.2 | Levels 0/1/2/4 describe capability; level 3 describes a process. Invariant 14 makes the difference real. |
+| **D-062** naming for §40's autonomy budget | before implementation | Shares the word "autonomy" with §29's levels while being a different concept. |
 | **D-034** `plan_id`/`event_id` in invariant 18 | none | Two identifiers entered an invariant by derivation, not decision. CLAUDE.md unamended pending the call. |
 | **D-032** literal default for `tenant_id` | V0.1, constant only | Split out of D-019 and left Open by the owner. |
 | **D-020** Strategy vs Plan | V0.2, V1.0 | Determines whether one contract or two is needed. |

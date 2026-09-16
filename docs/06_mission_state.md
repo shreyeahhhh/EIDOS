@@ -141,7 +141,9 @@ runtime must answer **synchronously**:
 - plan versions and lineage
 - active plan
 - remote `AgentTask` records
-- budget consumption counters
+- budget consumption counters — corresponding to **D-042**'s six contract budgets:
+  `max_retries`, `max_replans`, `max_agent_calls`, `max_tool_calls`, `max_execution_time`,
+  `max_tokens`
 
 **Detailed per-node runtime execution state does not enter the authoritative MissionState merely
 because LangGraph has such state.**
@@ -174,14 +176,48 @@ is recorded so it is visible rather than arriving later as a fait accompli.
 > **D-040** (the exact MissionState/LangGraph split — V0.3), **D-041** (evidence and final
 > mission-result fields — V0.4 and V0.8). None blocks V0.1.
 >
-> ⚠️ **D-052 does touch V0.1: the `status` value set.** Only four mission states are handoff-named —
-> `MISSION_CREATED`, `MISSION_COMPLETED`, `MISSION_FAILED` (§33) and the paused state from §32's
-> `MISSION PAUSED — human review required`. States covering planning and execution are **not named
-> anywhere in the handoff**. No inferred state may be added to make code compile.
->
 > Also open and affecting representation rather than structure: **D-053** (identifier
 > representation) and **D-054** (whether timestamps are explicit inputs rather than clock defaults —
 > D-011 already requires this for `MissionEvent`; whether it generalises is undecided).
+
+### Mission status — `decisions.md` D-052
+
+**Resolved, decided by the human owner.** `MissionStatus` contains **exactly four** states:
+
+```text
+created    completed    failed    paused
+```
+
+`status_reason` carries the explanation associated with `paused` or other status outcomes — §32's
+"Maximum recovery budget exceeded", for instance.
+
+**The handoff never enumerates mission statuses.** These four are supported by three kinds of
+evidence: `created`/`completed`/`failed` from §33's event names, `completed` additionally as the only
+actual `status` value anywhere (§53) and as §43's display text, and `paused` from §32's rendered
+`MISSION PAUSED / Human review required`.
+
+**`PLANNING` and `EXECUTING` are deliberately absent.** Every handoff-named state is an entry, exit
+or suspension **boundary**; the omitted states are precisely the *in-progress* ones. That is
+coherent — the handoff describes missions from the outside, through events, API responses and UI
+displays. In-progress substates are runtime progress information, which **D-010a** excludes from
+authoritative MissionState and **D-040** defers to V0.3. Nothing in V0.1 could reach such a state in
+any case, since there is no planner, validator or runtime.
+
+The runtime's real need — distinguishing "can still accept events" from "terminal" from "suspended"
+— is met by four: *created and not yet completed, failed or paused* is the active condition. At V0.5
+the reducer will need "terminal" defined for rejecting late events, the same shape of problem
+**D-036** poses for `AgentTask`.
+
+**Accepted cost:** `created` names the state a mission occupies for most of its life, which reads
+oddly. Accepted knowingly as a naming consequence, not a correctness one.
+
+> **Still open:** **D-058** — whether `paused` later needs a more specific name or a split, once
+> there is a second reason to suspend a mission (a `HUMAN_APPROVAL` step, a policy hold).
+> **D-059** — whether "could not satisfy the reliability contract" (§30, §47, invariant 13) is
+> `failed` with a reason or a **fifth terminal state**. The handoff gives that outcome no event name
+> in §33 and no status value in §53. Invariant 13 requires it to be distinguishable from a crash or
+> a timeout; if it collapses into `failed`, that distinction lives entirely in `status_reason` and
+> every consumer must parse a reason rather than read a state. Material at V0.4.
 
 ### Constraints the field set satisfies
 
@@ -230,7 +266,8 @@ see `decisions.md` **D-017**.
 
 | Id | Question | Blocks |
 |---|---|---|
-| D-052 | The `MissionStatus` value set beyond the four states §32/§33 name | **V0.1, the field's type** |
+| D-059 | Is "could not satisfy the reliability contract" `failed` with a reason, or a fifth terminal state? | V0.4 |
+| D-058 | Should `paused` later become more specific, or split? | V0.3+ |
 | D-039 | The reducer signature — does it return an outcome alongside state? | V0.5 |
 | D-010b | Checkpoint contents, granularity and trigger | V0.5 |
 | D-040 | The exact MissionState / LangGraph execution-state split | V0.3 |
@@ -241,7 +278,7 @@ see `decisions.md` **D-017**.
 | D-038 | Bounding and persisting the processed-`event_id` set | V0.5+ |
 | D-017 | Is the event log or a state snapshot authoritative for persistence and replay? | V0.5+ |
 | D-033 | Does `tenant_id` propagate to nested models, or stay root-only? | V0.1 |
-| — | Whether §33's event list is closed or extensible, and how event payloads are typed | V0.1 |
+| D-067 | How `MissionEvent.payload` is typed — discriminated union, per-type classes, or another explicit representation. "A dict" is unavailable (CLAUDE.md §8) | **V0.1, the payload field** |
 
 ## Out of scope for this document
 
