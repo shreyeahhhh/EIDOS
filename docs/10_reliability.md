@@ -54,6 +54,17 @@ High-risk actions:           Require human approval
 EIDOS must be able to report **"Mission could not satisfy the requested reliability contract"** and
 must not force a confident-looking answer merely because the model produced output.
 
+⚠️ **The last line of that example is not a contract field** — `decisions.md` **D-069**. Every other
+clause is a *value*; that one is a *rule*, stated as prose with no number and no defined subject
+("high-risk" is undefined against D-056's `low | medium | high`, which is **task** risk, not action
+risk). Approval is a **governance concern**, routed through §29's `autonomy_level`, with per-step
+`HUMAN_APPROVAL` (§13) and per-tool policy (§28) as **separate mechanisms**. Four mechanisms in the
+handoff touch approval; two of them are mission-wide, and carrying both would duplicate one idea.
+
+This is a **second departure from §30's example**, after D-045. See **D-074** for the unresolved part:
+§30's wording is scoped to *actions* while §29's Level 3 is scoped to the *mission*, so the two may
+not be exactly equivalent.
+
 **Relationship to the Task Genome — resolved (`decisions.md` D-013, decided by the human owner).**
 
 The two models are disjoint. **TaskGenome** describes the task and its intrinsic requirements;
@@ -62,11 +73,11 @@ duplicated** across them, and the genome **references** the contract rather than
 Because no value has two homes, no precedence rule exists or is needed. See `docs/04_task_genome.md`
 §4 and `decisions.md` D-013 for the rationale.
 
-> **Still open:** D-013 settles the structural rule only. Two pairs remain unresolved at the owner's
-> instruction — **D-030** (`risk_level` assessed vs "Maximum risk" tolerated) and **D-031**
-> (`evidence_requirements` as threshold vs description). Each leaves one field of this model
-> undetermined.
->
+Both pairs D-013 exposed are now settled: **D-030** — assessed and tolerated risk are distinct
+quantities, one field in each model; **D-031** — this contract carries `min_independent_evidence`
+while the genome carries no parallel `evidence_requirements` field (**D-070** holds the remaining
+question).
+
 **The contract is required — `decisions.md` D-045.** Every `TaskGenome` must reference a
 `ReliabilityContract`. §30's "**can** have" was read as describing a system capability rather than
 granting permission to omit: with no contract, invariant 13 has no referent for "satisfied", §31's
@@ -76,8 +87,8 @@ literal reading of the handoff's wording**, and D-045 records it as such.
 
 > **Still open:** **D-066** — whether the contract is always user-supplied or may be synthesised by
 > EIDOS. Synthesis is currently unbuildable because it needs numbers that **D-046** defers to V0.2,
-> and adopting it later would not contradict D-045. **D-065** — per-field optionality, which now
-> carries the whole weight of optionality on its own.
+> and adopting it later would not contradict D-045. **D-073** — optionality of the non-budget
+> fields, which now carries the remaining weight of optionality (budgets are settled by **D-065**).
 
 ## 3. Verification
 
@@ -353,11 +364,33 @@ which is a **rule rather than a number** (**D-069**).
 Every one of the six needs a **system counterpart**, or D-009's `min(system, contract)` rule is
 undefined for it.
 
-> **Still open:** **D-065** (required vs optional per budget field — distinct from D-045, since an
-> omitted field on a present contract is not the same as an absent contract), **D-043** (declared
-> plan limits vs actual execution counters — if distinct, this six-field list grows), **D-044**
-> (`max_tokens` is in §30 and §63 but in **neither** §14's nor §32's list), **D-066** (user-supplied
-> vs synthesised), **D-046** (the values themselves), **D-029** (the Agentic RAG reformulation bound).
+**Optionality.** **The three non-budget fields — `min_quality`, `max_risk_level`,
+`min_independent_evidence` — are required** (`decisions.md` **D-073**). §30's example carries all
+three and no demonstration of omission exists anywhere, which is the same evidentiary standard that
+made the budgets optional — applied to opposite evidence. They also have **no system-ceiling
+fallback**: there is no system-wide "minimum quality". Optional criteria inside a contract **D-045**
+made required would hollow that decision out one level down.
+
+**All six budget fields are optional** (`decisions.md` **D-065**). When a budget is
+omitted the applicable **system ceiling** applies; when supplied, the mission may **tighten** the
+ceiling but **may not exceed** it (D-009). The fallback is **structural, not numeric** — ceilings
+have no values until V0.2 (**D-046**).
+
+The decisive evidence is that **§30's own example contract omits four of the six**, so omission is
+legal by demonstration rather than by inference. §5 shows the user stating only two of the six, and
+§53's API carries none — while `max_retries`, `max_replans`, `max_agent_calls` and `max_tool_calls`
+appear at exactly two places in the whole handoff, §14 and §32, and nowhere user-facing.
+
+D-045's rationale is unaffected: the contract is required so acceptance criteria always exist, and
+that weight sits on `min_quality`, `max_risk_level` and `min_independent_evidence`, not on budgets.
+
+> **Still open:** **D-073** (optionality of the **non-budget** fields — deliberately *not* settled by
+> D-065, because those have **no system-ceiling fallback**; an omitted `min_quality` would leave
+> invariant 13 with nothing to check), **D-072** (whether "omitted" and "explicitly at the ceiling"
+> must stay distinguishable for §19 prediction-error tracking and the §41 views), **D-043**
+> (declared plan limits vs actual execution counters), **D-044** (`max_tokens` is in §30 and §63 but
+> in **neither** §14's nor §32's list), **D-066** (user-supplied vs synthesised), **D-046** (the
+> values themselves), **D-029** (the Agentic RAG reformulation bound).
 >
 > **D-043 is the one most likely to cause a real defect.** Five limit names appear in both §14
 > (validation, rejecting a plan) and §32 (execution, pausing a mission), and the shared names count
@@ -415,7 +448,10 @@ and must be testable without a UI.
 | D-057 | How either risk value is determined — model-asserted or rule-derived (matters for invariant 14) | V0.2 policy validation |
 | D-057 | How either risk value is determined — model-asserted or rule-derived | V0.2 policy validation |
 | D-031 | Is `evidence_requirements` a threshold or a description? | V0.1, one field |
-| D-065 | Is each budget field required or optional, and what is the fallback when omitted? | V0.1, optionality |
+| D-074 | Is §30's approval wording exactly `autonomy_level >= 3`? §30 scopes to actions, §29 to the mission | V1.2 |
+| D-078 | Units for `max_execution_time` and `max_tokens` — the handoff uses ms, seconds and minutes for latency | **V0.1** |
+| D-079 | Is `tenant_id` required-to-supply or defaulted? | **V0.1** |
+| D-072 | Must "omitted" stay distinguishable from "explicitly at the ceiling"? | V0.9, V1.3 |
 | D-069 | Is §30's `High-risk actions: require human approval` a contract field, or a V1.2 policy rule? | **V0.1, field existence** |
 | D-045 | What applies when no ReliabilityContract is supplied | V0.1, one flag |
 | D-043 | Declared plan limits vs actual execution counters | V0.2, V0.3 |

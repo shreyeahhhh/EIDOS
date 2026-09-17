@@ -101,10 +101,11 @@ nothing on its right-hand side, and §49's evaluation step would have nothing to
 
 This is the one V0.1 decision that **departs from a literal reading of the handoff's wording** —
 §30 says a mission "can have" a contract. It is recorded as such in D-045. Whether the contract is
-always user-supplied or may be synthesised is **D-066**; per-field optionality is **D-065**.
+always user-supplied or may be synthesised is **D-066**. Per-field optionality is settled: the six
+budgets are optional (**D-065**), the three non-budget fields are required (**D-073**).
 
-> **Still open — two sub-ambiguities the owner deliberately left unresolved.** D-013 settles the
-> structural rule only; it does not settle whether these particular pairs are the same quantity:
+> **The sub-ambiguities D-013 left open are now all resolved.** D-013 settled the structural rule
+> only; these settle the particular pairs:
 >
 > - **D-030 — resolved.** `risk_level` (assessed/intrinsic risk of the task) and
 >   `ReliabilityContract.max_risk_level` (maximum risk the mission may tolerate) are **distinct
@@ -234,6 +235,9 @@ storage layer or re-attached at write time. A V1.0 concern, but a real cost of t
 | D-070 | Is `evidence_requirements` a duplicate of `min_independent_evidence`, or a distinct descriptive requirement — and if distinct, what representation? | V0.4 / V0.8 |
 | D-031 | Is `evidence_requirements` a numeric threshold or a descriptive task requirement? | V0.1, one field |
 | D-071 | Will detached or reusable genome representations ever be needed? | V1.0 strategy memory |
+| D-077 | Field optionality — never decided for this model's fields | **V0.1, all fields** |
+| D-080 | `capability` **representation** — distinct from D-007's vocabulary question | **V0.1** |
+| D-079 | Is `tenant_id` required-to-supply or defaulted? D-019 says both | **V0.1** |
 | D-007 | Capability vocabulary and matching semantics | V0.2 capability validation |
 | D-014 | Does `autonomy_level` use the §29 0–4 scale, and what is §40's concept called instead? | V0.1 |
 | D-015 | How measurable proxies combine into an evaluated quality figure | V0.4, V1.2 |

@@ -128,6 +128,7 @@ available, and the duplicate/late-event semantics in §4 above cannot be specifi
 
 | Id | Question |
 |---|---|
+| **D-081** | `AgentTask.status` **representation** — D-048 left semantics to D-036 but said nothing about type; any enum would pre-empt D-036. **Blocks V0.1**, and is the last undetermined field of this model |
 | D-023 | Which A2A SDK, protocol version and transport |
 | D-011 | Event ordering domain and idempotency key — constrains what the wire format must carry |
 | D-010 | MissionState fields and reducer contract |

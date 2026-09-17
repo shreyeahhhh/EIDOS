@@ -1,6 +1,6 @@
 # 06 — Mission State
 
-**Status:** DERIVED — ownership rules current; **field set OPEN** · target milestones **V0.1** (contracts) and **V0.5** (reducer, checkpoints, replay)
+**Status:** DERIVED — current · target milestones **V0.1** (contracts) and **V0.5** (reducer, checkpoints, replay)
 **Derived from:** handoff §8, §9, §10, §11, §15, §32, §33, §73
 **Authority:** This document is derived from `EIDOS_CLAUDE_CODE_HANDOFF.md` and subordinate to it.
 If this document and the handoff conflict, stop and report the conflict to the human owner.
@@ -127,6 +127,37 @@ This list is presented in the handoff as examples, not as a closed enumeration. 
 correspond to milestones that do not exist yet (A2A at V0.6, MCP at V0.7, RAG at V0.8), so the
 V0.1 `MissionEvent` contract must be able to carry them without the corresponding subsystems
 existing.
+
+### The V0.1 event shape — `decisions.md` D-067
+
+**Resolved, decided by the human owner.** For V0.1, `MissionEvent` contains **only the envelope**:
+
+```text
+event_id   tenant_id   mission_id   sequence   occurred_at   recorded_at   type
+```
+
+**There is no `payload` field in V0.1.**
+
+§33 names thirteen event types whose payloads plainly differ — a rejection reason, a tool call, a
+verification failure, a mission outcome — and **describes none of them**. §10 enumerates an event's
+fields and **does not list a payload at all**. CLAUDE.md §8 forbids untyped dicts crossing a module
+boundary, so a generic container is not an available fallback.
+
+Nothing in V0.1 emits an event, so defining thirteen payload shapes spanning V0.3–V0.8 would be
+thirteen inventions no test could exercise. This follows the same reasoning that excluded the
+quality-estimate type (**D-016**), `evidence_requirements` (**D-031**), evidence and result fields
+(**D-041**) and the `PLANNING`/`EXECUTING` statuses (**D-052**).
+
+**Intended future direction, recorded but not built:** a **typed, discriminated payload
+representation keyed by event type** — never an untyped mapping.
+
+> **Still open:** **D-037** (one shared event shape vs separate internal/external shapes),
+> **D-075** (per-type payload definitions, resolving incrementally as milestones land),
+> **D-076** (what payloads must *contain* for faithful replay).
+>
+> **D-076 carries the real risk.** D-010a makes MissionState a materialized view over the event log,
+> so *an event that is not recorded is not replayable*. Deferring payloads defers the point at which
+> that obligation becomes **testable**. It is not created by D-067 — only postponed.
 
 ## 5. The state shape
 
@@ -281,7 +312,13 @@ see `decisions.md` **D-017**.
 | D-038 | Bounding and persisting the processed-`event_id` set | V0.5+ |
 | D-017 | Is the event log or a state snapshot authoritative for persistence and replay? | V0.5+ |
 | D-033 | Does `tenant_id` propagate to nested models, or stay root-only? | V0.1 |
-| D-067 | How `MissionEvent.payload` is typed — discriminated union, per-type classes, or another explicit representation. "A dict" is unavailable (CLAUDE.md §8) | **V0.1, the payload field** |
+| D-077 | Field optionality — never decided for `MissionState` or `MissionEvent` | **V0.1, all fields** |
+| D-082 | Collection shapes — plan ordering, `agent_tasks` keying (§8 gives `AgentTask` no id of its own), counter types | **V0.1** |
+| D-083 | Timestamp representation — timezone-aware? naive rejected? Matters for comparing a producer's `occurred_at` with EIDOS's `recorded_at` across processes at V0.6 | **V0.1** |
+| D-079 | Is `tenant_id` required-to-supply or defaulted? | **V0.1** |
+| D-078 | Units for the budget counters | **V0.1** |
+| D-075 | Per-type payload definitions — §33 names thirteen types and describes none | V0.3–V0.8, incrementally |
+| D-076 | What payloads must carry for faithful replay under invariant 15 | V0.5, with D-039 |
 
 ## Out of scope for this document
 

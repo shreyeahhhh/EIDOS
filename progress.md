@@ -21,7 +21,7 @@ No measurement of any kind has been taken, so no metric appears anywhere in this
 
 - [x] `CLAUDE.md` — permanent rules, 18 architecture invariants
 - [x] `progress.md` — this file
-- [x] `decisions.md` — 26 Accepted, 43 Open, 3 Deferred (counts current as of the latest decision below)
+- [x] `decisions.md` — 30 Accepted, 51 Open, 3 Deferred (counts current as of the latest decision below)
 - [x] `README.md`, `pyproject.toml`, `.gitignore`
 - [x] `docs/01`–`docs/12` — the twelve documents required by handoff §81
 - [x] `src/eidos/` and `src/eidos/contracts/` — docstring only, no code
@@ -86,9 +86,50 @@ Unlike the risk case, the handoff supplies a scale at the right abstraction with
 example, so declining it would discard evidence rather than avoid invention. **D-060**, **D-061**
 and **D-062** left Open.
 
-Three field-level items remain: **D-065** (required vs optional per budget field), **D-067**
-(`MissionEvent.payload` typing), and **D-069** (whether `ReliabilityContract` carries an
-approval-related field at all).
+**D-065 resolved** (2026-09-17, human owner): all six budget fields are **optional**; an omitted
+budget falls back to the applicable system ceiling, and a supplied one may tighten but never exceed
+it. §30's own example contract omits four of the six, so omission is legal by demonstration. No
+numerical defaults in V0.1. **D-072** and **D-073** logged.
+
+**D-069 resolved** (2026-09-17, human owner): the high-risk approval clause is **not** a
+`ReliabilityContract` field. Approval is a governance concern routed through §29's `autonomy_level`,
+with per-step `HUMAN_APPROVAL` and per-tool policy as separate mechanisms. §29 already carries
+mission-wide approval, so this removes a duplicate; and an approval-threshold field could not be
+built honestly, since "high-risk actions" needs an action-risk notion D-051 left untyped. **This is a
+second departure from §30's example, after D-045.** **D-074** logged.
+
+**D-067 resolved** (2026-09-17, human owner): V0.1's `MissionEvent` carries **only the envelope** —
+`event_id`, `tenant_id`, `mission_id`, `sequence`, `occurred_at`, `recorded_at`, `type` — with **no
+payload field**. §33 names thirteen types and describes no payload; §10 lists an event's fields and
+omits payload entirely; and V0.1 emits no events at all. Intended future direction recorded: a typed
+discriminated payload keyed by event type, never an untyped mapping. **D-075** and **D-076** logged.
+
+**D-073 resolved** (2026-09-17, human owner): `min_quality`, `max_risk_level` and
+`min_independent_evidence` are **required**; the six budgets remain optional per D-065. §30's example
+carries all three with no demonstration of omission — the same standard that made budgets optional,
+applied to opposite evidence. **`ReliabilityContract` is now fully specified.**
+
+**A broader gap was identified and logged as D-077:** field optionality has never been decided for
+`TaskGenome`, `Plan`, `PlanStep`, `MissionEvent` or `MissionState`. It blocks all five.
+
+**Six representation gaps logged as D-078–D-083** (2026-09-17): units for time/token budgets,
+`tenant_id` required-vs-defaulted, `capability` representation, `AgentTask.status` representation,
+`MissionState` collection shapes and `Plan.version`, and timestamp representation.
+
+**All architectural V0.1 decisions are settled; what remains is representation.** None of D-077–D-083
+touches an invariant — but together they mean **no contract is currently constructible without an
+invention**, which is a sharper statement than "five of seven are writable" made earlier in this
+session. Per-contract blockers:
+
+| Contract | Blocked by |
+|---|---|
+| `AgentTask` | D-081 |
+| `ReliabilityContract` | D-078 |
+| `TaskGenome` | D-077, D-078, D-079, D-080 |
+| `Plan` | D-077, D-082 |
+| `PlanStep` | D-077, D-080 |
+| `MissionEvent` | D-077, D-079, D-083 |
+| `MissionState` | D-077, D-078, D-079, D-082, D-083 |
 
 **The consolidated V0.1 contract specification is the approved design baseline** as of 2026-09-16.
 Three questions it surfaced but which had never been logged are now Open items: D-067, D-068, D-069.
@@ -231,14 +272,22 @@ Highest-impact first.
 | **D-036** `AgentTask` lifecycle state machine | V0.6 | §10 mandates deterministic accept/reject "against lifecycle"; §8 never enumerates states or transitions. V0.6 protocol tests cannot be written without it. |
 | **D-043** declared plan limits vs execution counters | V0.2, V0.3 | Five limit names appear in both §14 and §32 while counting different things. Most likely of the bound family to cause a real defect. |
 | **D-046** numerical bound values | V0.2 | None established in V0.1 by decision; tuned from V0.9 telemetry, never presented as tuned before then. |
-| **D-065** budget fields required or optional | V0.1, optionality | Distinct from D-045: an omitted field on a present contract is not an absent contract. |
+| **D-077** field optionality for five contracts | **V0.1, five models** | Never decided for TaskGenome, Plan, PlanStep, MissionEvent, MissionState. Every field must be required or have a default. |
+| **D-078** units for time and token budgets | **V0.1** | The handoff uses ms (§6), seconds (§53) and minutes (§30) for latency. D-046's values would be meaningless without a canonical unit. |
+| **D-079** `tenant_id` required vs defaulted | **V0.1, five roots** | D-019 says both "required" and "carries a default"; those conflict. Determines whether D-032 is needed at all. |
+| **D-080** `capability` representation | **V0.1** | D-049 gave work steps a capability; the carrier's type was never decided. "Opaque identifier" was a Claude Code assumption, not a decision. |
+| **D-081** `AgentTask.status` representation | **V0.1** | D-048 left semantics open under D-036 but said nothing about type. Any enum would pre-empt D-036. |
+| **D-082** `MissionState` collections and `Plan.version` | **V0.1** | Plan ordering, `agent_tasks` keying (§8 gives AgentTask no id), counter types, and the version rule are all unstated. |
+| **D-083** timestamp representation | **V0.1** | D-054 settled where timestamps come from, not what they are. Matters for cross-process ordering at V0.6. |
+| **D-072** omitted vs explicitly-at-ceiling | V0.9, V1.3 | Argues for retaining the requested value alongside the effective one, not for making fields required. |
 | **D-066** contract user-supplied or synthesised | mission creation | Synthesis needs numbers D-046 defers; adopting it later would not contradict D-045. |
 | **D-012** predicate language for ROUTE/RETRY/REPLAN/TERMINATE | V0.2, V0.3 | Deterministic routing needs a defined, validatable condition form. |
 | **D-007** capability vocabulary and matching | V0.2, V0.4 | §6 and §7 use incompatible capability names. |
 | **D-006** MVP agent set: 3 or 5 capabilities | V0.4 | §49 says three; §16/§43 use five. |
-| **D-067** `MissionEvent.payload` typing | **V0.1, the payload field** | §33's thirteen types carry different payloads; "a dict" is unavailable under CLAUDE.md §8. |
+| **D-076** payload completeness for replay | V0.5, with D-039 | D-010a puts the completeness burden on the event log; deferring payloads defers when that becomes testable. |
+| **D-075** per-type payload definitions | V0.3–V0.8 | §33 names thirteen types and describes none. |
 | **D-071** detached/reusable genome representations | V1.0 | §21 stores derived characteristics, not the genome, so the detached case may never arise. |
-| **D-069** high-risk approval clause | **V0.1, field existence** | §30's only non-numeric clause. Three mechanisms already touch approval. |
+| **D-074** is §30's approval wording exactly `autonomy_level >= 3`? | V1.2 | §30 scopes to actions, §29 to the mission. If not equivalent, D-069 dropped a capability rather than a duplicate. |
 | **D-059** contract-unsatisfied as `failed` or a fifth state | V0.4 | Invariant 13 requires it distinguishable from a crash; the handoff gives it no event name and no status value. |
 | **D-055** `VERIFY`/`HUMAN_APPROVAL` as work steps | not V0.1 | Both remain control-flow kinds meanwhile. Answering after `PlanStep` exists turns an additive change into a rework. |
 | **D-063** quality-estimate type | before V0.4 | §19 and invariant 17 require uncertainty representation; the type belongs to whatever produces estimates. |

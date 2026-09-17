@@ -1055,6 +1055,193 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
   - Untouched: **which** characteristics strategy memory derives from a genome is a V1.0 question the
     handoff leaves open and which is deliberately not logged here, being outside V0.1.
 
+### D-065 — All six budget fields are optional; omission falls back to the system ceiling
+
+- **Status:** Accepted · **Date:** 2026-09-17 · **Decided by:** human owner
+- **Source:** handoff §5, §14, §30, §32, §53; governed by D-009 and D-042
+- **Context:** D-042 fixed the six-field budget group without settling whether each must be supplied.
+  The six divide sharply by where the handoff mentions them. `max_execution_time` appears in §5's
+  user input ("Maximum latency"), §30's contract example, §53's API and §14/§32. `max_tokens` appears
+  in §5 ("Resource/token budget"), §30 and §32. The other four — `max_retries`, `max_replans`,
+  `max_agent_calls`, `max_tool_calls` — appear at **exactly two places in the whole document**,
+  §14's plan-limit list and §32's execution hard-limit list, and **nowhere user-facing**.
+
+  The decisive observation is simpler than that asymmetry: **§30's own example contract omits four of
+  the six budgets.** The handoff presents that contract as valid, so omission is legal, which
+  eliminates "all six required" without needing any inference.
+
+- **Decision:** all six budget fields — `max_retries`, `max_replans`, `max_agent_calls`,
+  `max_tool_calls`, `max_execution_time`, `max_tokens` — are **optional**.
+  - When a budget is **omitted**, the applicable **system ceiling** is used.
+  - When a budget is **supplied**, the mission may **tighten** the system ceiling but **may not
+    exceed it**, per **D-009**.
+  - **No numerical defaults are introduced in V0.1.**
+
+- **Rationale:** One uniform rule, consistent with §30's worked example, with §5 (the user states
+  two of the six) and with §53 (the API carries none). Under D-009 the fallback is already defined
+  structurally — `effective = min(system, contract)` with the contract operand absent leaves the
+  system ceiling — so no new mechanism is introduced.
+
+  A split making the two user-facing budgets required was considered and rejected: that asymmetry
+  rests on *where the handoff happens to mention* each field, which is weaker evidence than a worked
+  example, and it would mandate fields the handoff never mandates — a second departure from
+  permissive wording after **D-045**.
+
+  D-045's rationale is not weakened. The contract is required so that acceptance criteria always
+  exist, and that weight is carried by `min_quality`, `max_risk_level` and
+  `min_independent_evidence`, not by the budgets. A contract stating no budgets is still a
+  meaningful contract.
+
+- **Consequences:**
+  - The six budget fields are declarable. `ReliabilityContract` now awaits only **D-069** and
+    **D-073**.
+  - The fallback is **structural, not numeric**: system ceilings have no values until V0.2
+    (**D-046**), so V0.1 records the rule and V0.2 supplies the numbers.
+  - **Accepted cost:** "omitted" and "explicitly at the ceiling" produce the same effective limit and
+    become indistinguishable. Recorded as **D-072**, which notes this argues for retaining the
+    requested value alongside the effective one rather than for making fields required.
+  - Four questions deliberately left Open: **D-072**, **D-043** (declared vs actual limits),
+    **D-044** (`max_tokens` in the validation/execution limit model), **D-073** (optionality of the
+    non-budget contract fields, explicitly **not** resolved here).
+
+### D-069 — The high-risk approval clause is not a ReliabilityContract field
+
+- **Status:** Accepted · **Date:** 2026-09-17 · **Decided by:** human owner
+- **Source:** handoff §5, §13, §28, §29, §30; invariant 14
+- **Context:** §30's example contract ends with `High-risk actions: Require human approval`. **Every
+  other clause in that example is a value** — a threshold or a budget; this one is a **rule** stated
+  as prose, with no number, no threshold, and no defined subject ("high-risk" is undefined against
+  **D-056**'s `low | medium | high`, which is *task* risk, not action risk). **D-042** flagged it as
+  a rule rather than a number when fixing the budget group.
+
+  The larger problem is multiplicity: **four mechanisms in the handoff touch approval** — §30's
+  clause and §29's Level 3, both mission-wide; §13's `HUMAN_APPROVAL` step kind, per-step; and §28's
+  tool policy, per-call. **D-061** already records the collision between the two middle ones. Two
+  mission-wide mechanisms expressing one idea is the duplication **D-013** rejected for constraints
+  and §9/§10 reject for state — and unlike D-030's assessed/tolerated risk pair, these are not a
+  comparison pair.
+
+- **Decision: option B.** `High-risk actions: Require human approval` is **not a
+  `ReliabilityContract` field in V0.1.**
+
+  Approval is treated as a **governance / policy concern**, handled through the existing autonomy and
+  approval mechanisms — especially §29's `autonomy_level` — with per-step `HUMAN_APPROVAL` and
+  per-tool policy remaining **separate mechanisms**.
+
+  **No approval-threshold field is created in `ReliabilityContract`.**
+
+- **Rationale:** §29 already carries mission-wide approval through `autonomy_level`, which **D-014**
+  made a real typed field, so this removes a duplicate rather than dropping a capability. And the
+  contract-field alternative cannot be built honestly: "high-risk actions" requires an **action-risk**
+  notion that **D-051** deliberately left untyped and **D-057** leaves undetermined, so the field
+  would have a type but nothing to compare against — a placeholder in all but name.
+
+  **Cost, stated plainly:** this is a **second departure from §30's example**, after **D-045** read
+  its "can have" as non-permissive. §30 shows the clause inside a contract and this decision says it
+  does not belong there.
+
+- **Consequences:**
+  - `ReliabilityContract` carries no approval field. It now awaits only **D-073**.
+  - Enforcement lives where invariant 14 requires it — in code, in the V1.2 policy engine — rather
+    than as per-mission data.
+  - Three questions left Open: **D-074** (is §30's wording exactly `autonomy_level >= 3`, given §30
+    is scoped to *actions* and §29 to the *mission*), **D-061** (mission-wide autonomy vs the
+    per-step `HUMAN_APPROVAL` kind), **D-057** (how action risk is determined at all).
+  - If **D-074** concludes the two are *not* equivalent, this decision dropped a capability rather
+    than a duplicate and would need revisiting. That is the risk this decision carries.
+
+### D-067 — V0.1 `MissionEvent` is the envelope only; no payload field
+
+- **Status:** Accepted · **Date:** 2026-09-17 · **Decided by:** human owner
+- **Source:** handoff §10, §33, §73; CLAUDE.md §8; precedent from D-016, D-031, D-041, D-052
+- **Context:** §33 names thirteen event types whose payloads plainly differ, and **describes none of
+  them**. §10 gives an event's field set — `event_id`, `a2a_task_id`, `sequence/version`,
+  `timestamp` — and **does not list a payload at all**. CLAUDE.md §8 forbids untyped dicts crossing a
+  module boundary, so a generic container is not an available answer.
+
+  Four options were analysed: (A) a discriminated union with a payload class per type, defined now;
+  (B) a typed base extended per milestone; (C) a constrained generic container; (D) no payload field
+  in V0.1.
+
+- **Decision: option D.** For V0.1, `MissionEvent` contains only the settled envelope:
+
+  ```text
+  event_id   tenant_id   mission_id   sequence   occurred_at   recorded_at   type
+  ```
+
+  **No `payload` field is included in the V0.1 contract.**
+
+  The eventual payload design is deferred to the milestones that actually produce events. **The
+  intended future direction is a typed, discriminated payload representation keyed by event type**,
+  not an untyped mapping.
+
+- **Rationale:** The precedent chain decides it. Four times already in this round something was
+  excluded because nothing in V0.1 could produce it — the quality-estimate type (**D-016**),
+  `evidence_requirements` (**D-031**), evidence and result fields in MissionState (**D-041**), and
+  the `PLANNING`/`EXECUTING` statuses (**D-052**). This is the strongest instance: not only can V0.1
+  not produce a payload, **V0.1 emits no events at all**. Defining thirteen payload shapes for types
+  spanning V0.3 through V0.8 would be thirteen inventions with no test able to exercise them.
+
+  It is also the only option consistent with §10, which enumerates an event's fields without
+  including a payload.
+
+  Option A remains the right **target**; recording the direction without building it mirrors how
+  D-016 recorded the estimate type's obligation without discharging it.
+
+- **Consequences:**
+  - `MissionEvent` is **unblocked** and fully typed for V0.1. Only **D-073** now blocks any contract.
+  - **Accepted cost:** `MissionEvent` is a pure envelope in V0.1 and will look incomplete to a reader.
+    The envelope is precisely what **D-011** settled and what the reducer will key on, so it is not
+    empty of purpose — but the appearance was weighed and accepted rather than overlooked.
+  - Three questions left Open: **D-037** (whether internal and external events share one shape),
+    **D-075** (per-type payload definitions), **D-076** (what payloads must carry for faithful replay
+    under invariant 15).
+  - **D-076 carries the real risk.** Deferring payloads defers the point at which "an event that is
+    not recorded is not replayable" becomes testable. That obligation comes from D-010a and
+    invariant 15; D-067 postpones the reckoning rather than creating it.
+
+### D-073 — The three non-budget ReliabilityContract fields are required
+
+- **Status:** Accepted · **Date:** 2026-09-17 · **Decided by:** human owner
+- **Source:** handoff §4, §5, §30, §53; governed by D-045, and decided against the same evidentiary
+  standard as D-065
+- **Context:** D-065 settled optionality for the six budget fields only. The contract's other clauses
+  had never been asked about. §30's example carries all three — `Minimum quality: 90%`,
+  `Maximum risk: Medium`, `Minimum independent evidence: 3` — and §5 has the user state all three.
+  §53's API carries `minimum_confidence` and `risk_tolerance` but **not** an evidence count. (Whether
+  §53's `minimum_confidence` *is* `min_quality` is **D-064**, still Open, so §53 is weak evidence for
+  that field.)
+
+- **Decision:** `min_quality`, `max_risk_level` and `min_independent_evidence` are **required** in
+  V0.1. The six budget fields **remain optional** per **D-065**, using the system ceiling when
+  omitted.
+
+  **No optionality for any other field is inferred from this decision.**
+
+- **Rationale:** This is the answer consistent with how **D-065** was decided, not in tension with it.
+  D-065 turned on a worked example **demonstrating omission** — §30 omits four of the six budgets.
+  Here §30's example **includes all three** non-budget clauses and no demonstration of omission
+  exists anywhere, so the same standard yields the opposite result.
+
+  It also keeps **D-045** coherent. D-045 made the contract required so acceptance criteria always
+  exist; optional criteria inside a required contract would hollow that out one level down. These
+  three are precisely the fields carrying that weight — D-065's rationale said explicitly that the
+  budgets do not. Structurally, budgets fall back to system ceilings; **these three have no
+  equivalent fallback**, because there is no system-wide "minimum quality" or tolerated risk.
+
+  A split making `min_independent_evidence` optional was considered and rejected: it rests on where
+  the handoff happens to mention things, which is the reasoning D-065 declined.
+
+- **Consequences:**
+  - `ReliabilityContract` is **fully specified and writable** — the first of the seven to reach that
+    state.
+  - **Accepted cost:** `min_independent_evidence` is mandatory from V0.1 while **nothing checks it
+    until V0.8**. The precedent chain (D-031, D-041, D-067) would normally argue for exclusion, but
+    **D-031 already decided the field is carried**, so only optionality remained. It is a value the
+    user supplies per §5, not one the system must compute.
+  - The broader gap this analysis exposed — optionality never decided for five other models — is
+    recorded as **D-077**.
+
 ---
 
 ## Open — require the human owner
@@ -1065,8 +1252,11 @@ has been resolved. Work that depends on one of them is blocked until the owner d
 Count: 43. Highest-impact first is **D-015** (how verification confidence is computed), then
 **D-007** (capability vocabulary) and **D-012** (predicate language) for V0.2.
 
-**All type-level and cross-cutting V0.1 blockers are cleared.** Three field-level items remain for
-V0.1: **D-065**, **D-067**, **D-069**.
+**All architectural V0.1 decisions are settled.** What remains is **representation**, and it is not
+cosmetic: **no contract is currently constructible without an invention.** The blockers are
+**D-077** (field optionality, five models) and **D-078**–**D-083** (units, `tenant_id` required vs
+defaulted, `capability`, `AgentTask.status`, `MissionState` collection shapes and `Plan.version`,
+timestamp representation). None touches an invariant.
 
 **Standing rule for all Open items:** no placeholder enum, type, sentinel or inferred value may be
 invented to make code compile. An Open item blocks the field it touches; it does not license a
@@ -1496,22 +1686,48 @@ one is not.
   set is derived from the persisted event log or stored separately. Should be settled alongside
   D-017.
 
-### D-065 — Is each ReliabilityContract budget field required or optional?
+### D-072 — Should "omitted" and "explicitly at the ceiling" be distinguishable?
 
-- **Status:** Open · **Source:** not stated by the handoff · **Split out of D-042, left Open by the owner**
-- **Finding:** D-042 fixes the six-field budget group. Whether each field must be supplied is
-  unstated. §30's example contract carries only two of the six, which suggests a contract may
-  legitimately omit budgets — but §30 is an example, so it evidences nothing about obligation. §53's
-  conceptual API is a further hint in the same direction: the user states three constraints there
-  (`minimum_confidence`, `maximum_latency_seconds`, `risk_tolerance`) and **no budgets at all**,
-  implying most budget values would be system-derived rather than user-stated.
-- **Why it is distinct from D-045:** an **optional field on a present contract** and an **absent
-  contract** are different situations with potentially different fallbacks. D-045 asks what happens
-  with no contract; D-065 asks what happens with a contract that omits a field.
-- **Effect while Open:** partially blocks V0.1 — the six field names are settled, their optionality
-  is not.
-- **Needs:** Per-field required/optional, and the fallback when a field is omitted. Under D-009 the
-  natural fallback is the system ceiling, but that has not been decided and must not be assumed.
+- **Status:** Open · **Source:** implied by D-065 · **Split out of D-065, left Open by the owner**
+- **Finding:** Under D-065 an omitted budget falls back to the system ceiling. A contract that omits
+  `max_tokens` and one that explicitly requests exactly the ceiling therefore produce the **same
+  effective limit** and become indistinguishable once the fallback is applied.
+- **Why it may matter:** §19 requires prediction error to be tracked separately from outcomes, and
+  invariant 17 requires estimates to be labelled as such — both of which compare against what was
+  *requested*. §41's Mission Center and Strategy View show the user what they asked for. If the
+  requested value is not retained distinctly from the effective one, neither can tell "the user
+  chose the maximum" from "the user said nothing".
+- **Effect while Open:** none on V0.1 — the field is optional either way. Material at V0.9 telemetry
+  and V1.3 frontend.
+- **Needs:** Owner to decide whether the requested value must be retained alongside the effective
+  one. Note this argues for **storing both**, not for making fields required.
+
+### D-077 — Field optionality for the five contracts where it has never been decided
+
+- **Status:** Open · **Source:** not addressed by the handoff · **Identified during the D-073 analysis; logged at the owner's instruction**
+- **Finding:** Optionality has only ever been decided for three things: `AgentTask` (**D-048** —
+  `agent_id` and `status` required, four A2A fields optional), the `ReliabilityContract` budgets
+  (**D-065** — all six optional), the non-budget contract fields (**D-073** — all three required),
+  and individually `TaskGenome.tenant_id` (**D-019**/**D-033**) and
+  `TaskGenome.reliability_contract` (**D-045**).
+
+  **Never asked** for:
+  - `TaskGenome` — `goal`, `required_capabilities`, `information_dependencies`, `risk_level`,
+    `autonomy_level`, `allowed_actions`
+  - `Plan` — `plan_id`, `mission_id`, `version`, `parent_plan_id`, `replan_reason`, `steps`
+  - `PlanStep` — `step_id`, `kind`, `capability`, `depends_on`
+  - `MissionEvent` — every envelope field
+  - `MissionState` — every field
+
+- **Why it blocks:** every field must be either required or carry a default. Until this is settled
+  these five models cannot be written without **inventing** an answer per field, which the standing
+  rule forbids.
+- **Note on two fields in particular:** `Plan.parent_plan_id` and `Plan.replan_reason` are absent by
+  nature on a v1 plan and present on replans (§15), so they are the clearest candidates for optional
+  — but that is an observation, not a decision, and it is not being taken here.
+- **Effect while Open:** blocks `TaskGenome`, `Plan`, `PlanStep`, `MissionEvent` and `MissionState`.
+- **Needs:** Per-field required/optional for those five models. **Do not infer any of it from
+  D-048, D-065 or D-073**, whose scopes are explicitly limited to their own models.
 
 ### D-043 — Declared plan limits vs actual execution counters
 
@@ -1619,21 +1835,36 @@ one is not.
   measured**, then tuned from telemetry at V0.9+. Per §67 and CLAUDE.md §7 a provisional bound must
   never be presented as a tuned one.
 
-### D-067 — How is `MissionEvent.payload` typed?
+### D-075 — Payload type definitions per event type
 
-- **Status:** Open · **Source:** handoff §10, §33 · **Surfaced in the V0.1 contract specification; logged at the owner's instruction**
-- **Finding:** §33 names thirteen event types whose payloads plainly differ — `PLAN_REJECTED` carries
-  a rejection reason, `MCP_TOOL_CALLED` carries a tool invocation, `MISSION_COMPLETED` carries an
-  outcome. The handoff never describes a payload structure for any of them. CLAUDE.md §8 forbids
-  untyped mappings crossing a module boundary, so "a dict" is not available as an answer.
-  Candidate representations include a discriminated union keyed on `type`, a per-type event class
-  hierarchy, or some other explicitly defined structure — **none of which is stated by the handoff,
-  and none of which is being chosen here.**
-- **Effect while Open:** blocks the payload field of `MissionEvent`. The rest of the model — event
-  identity, ordering, timestamps, type — is settled by **D-011**.
-- **Needs:** An explicit representation decision. Interacts with **D-037** (whether internal and
-  external events share one shape) and with **D-052**/**D-059**, since some payloads carry status
-  reasons.
+- **Status:** Open · **Source:** handoff §33 (types named, payloads never described) · **Split out of D-067, deferred by the owner**
+- **Finding:** D-067 removes the payload field from the V0.1 `MissionEvent`. The thirteen event types
+  §33 names plainly carry different content — `PLAN_REJECTED` a rejection reason, `MCP_TOOL_CALLED` a
+  tool and arguments, `VERIFICATION_FAILED` what failed, `MISSION_COMPLETED` an outcome — and **the
+  handoff describes none of them**.
+- **Intended direction, recorded but not built:** a **typed, discriminated payload representation
+  keyed by event type**, not an untyped mapping. CLAUDE.md §8 forbids untyped dicts crossing a module
+  boundary, so a generic container is not an available fallback.
+- **Effect while Open:** none on V0.1 — no payload field exists and V0.1 emits no events.
+- **Needs:** Per-type payload shapes, defined at the milestone that first emits each type. The types
+  span V0.3 through V0.8, so this resolves incrementally rather than in one decision.
+
+### D-076 — Event-log completeness: what payloads must carry for faithful replay
+
+- **Status:** Open · **Source:** handoff §73; invariant 15; D-010a · **Split out of D-067, deferred by the owner**
+- **Finding:** **D-010a** makes MissionState a materialized view over the event log, which shifts the
+  completeness burden onto the log: *an event that is not recorded is not replayable*. §73 requires
+  replay to consume recorded events **without re-running agents**. Together these impose a real
+  constraint on payload **content** — payloads must carry whatever the reducer needs to reconstruct
+  state — but that constraint cannot be discharged until **D-039** defines the reducer.
+- **Why it is separate from D-075:** D-075 asks what shape a payload has; D-076 asks what it must
+  *contain* for invariant 15 to hold. A well-typed payload that omits something the reducer needs
+  would satisfy D-075 and still break replay.
+- **Effect while Open:** none on V0.1. Deferring payloads also defers the point at which invariant
+  15's completeness obligation becomes **testable** — the obligation is not created here, but the
+  reckoning is postponed.
+- **Needs:** Settle alongside **D-039** (reducer signature) at V0.5, and verify at the milestone
+  where replay is first exercised.
 
 ### D-071 — Will detached or reusable genome representations ever be needed?
 
@@ -1651,24 +1882,111 @@ one is not.
 - **Needs:** Revisit at V1.0 when strategy memory is built. Adding a back-reference then would be
   additive.
 
-### D-069 — Is §30's high-risk approval clause a contract field or a policy rule?
+### D-074 — Is §30's approval wording exactly `autonomy_level >= 3`?
 
-- **Status:** Open · **Source:** handoff §28, §29, §30 · **Surfaced in the V0.1 contract specification; logged at the owner's instruction**
-- **Finding:** §30's example contract ends with `High-risk actions: Require human approval`. Every
-  other clause in that example is a **value** — a threshold or a budget. This one is a **rule**, and
-  **D-042** flagged it as such when fixing the budget group. It could be a contract field (for
-  instance an approval threshold expressed against the task-risk vocabulary), or it could be a
-  later deterministic policy rule belonging to the V1.2 policy engine rather than to the contract's
-  surface.
-- **Why it matters:** invariant 14 requires governance to be deterministic and enforced in code.
-  Whether the rule is data carried per-mission or logic carried by the policy engine changes where
-  that enforcement lives — and interacts with **D-061**, since mission-wide `autonomy_level` level 3
-  already expresses "human approval required".
-- **Effect while Open:** determines whether `ReliabilityContract` carries an approval-related field
-  at all.
-- **Needs:** Owner decision. Note that three mechanisms currently touch approval — this clause,
-  §29's level 3, and the `HUMAN_APPROVAL` step kind — which is the same multiplicity problem
-  **D-061** already records.
+- **Status:** Open · **Source:** handoff §29 vs §30 · **Split out of D-069, left Open by the owner**
+- **Finding:** D-069 removes `High-risk actions: Require human approval` from the contract and routes
+  approval through §29's `autonomy_level`. That presumes the two express the same thing, but the
+  mapping has not been stated. §30's wording is scoped to "**high-risk actions**"; §29's Level 3 is
+  scoped to the **whole mission**. So §30's clause may be *narrower* — approval for some actions
+  rather than for everything — in which case `autonomy_level >= 3` does not reproduce it exactly.
+- **Why it matters:** if the two are not equivalent, D-069 dropped a capability rather than a
+  duplicate. Resolving it requires an action-risk notion, which **D-051** deliberately left untyped
+  and **D-057** leaves undetermined.
+- **Effect while Open:** none on V0.1 — no approval mechanism is implemented and no contract field
+  exists either way.
+- **Needs:** Owner to state whether the two are equivalent. Adjacent to **D-061**, which asks how
+  mission-wide autonomy relates to the per-step `HUMAN_APPROVAL` kind; D-074 adds §30's wording to
+  that same family rather than opening an unrelated question.
+
+### D-078 — Units for the time and token budgets
+
+- **Status:** Open · **Source:** handoff §6 vs §30 vs §53 · **Identified during the D-073 analysis; logged at the owner's instruction**
+- **Finding:** The handoff expresses latency in **three different units**: `"latency_budget_ms":
+  600000` (§6), `"maximum_latency_seconds": 600` (§53's request), `Maximum latency: 8 minutes` (§30),
+  and `"latency_ms": 372000` in §53's result. Nothing states a canonical unit. `max_tokens` has no
+  unit ambiguity but shares the same field-naming question — whether the unit is carried in the name
+  (`max_execution_time_ms`) or left implicit.
+- **Why it blocks:** a numeric field whose unit is undecided is ambiguous at every call site, and
+  **D-046**'s eventual values would be meaningless without it. §67 forbids presenting numbers whose
+  meaning is not established.
+- **Affects:** `ReliabilityContract.max_execution_time` and `max_tokens`; the corresponding
+  `MissionState` budget counters (**D-042**).
+- **Needs:** A canonical unit for duration, and whether units appear in field names.
+
+### D-079 — Is `tenant_id` required-to-supply, or defaulted?
+
+- **Status:** Open · **Source:** **D-019**'s own wording · **Identified during the D-073 analysis; logged at the owner's instruction**
+- **Finding:** D-019 states that `tenant_id` is "present and **required** on V0.1 root models" and
+  that it "carries a single fixed **default** value". In contract terms those two statements
+  conflict: **a field with a default does not need to be supplied**, so it is not required in the
+  constructor sense. The intent was most likely "always has a value, never null" — but which
+  mechanism delivers that was never decided.
+- **Why it blocks:** the five root models cannot declare the field without choosing. It also
+  determines whether **D-032** (the literal default value) is needed at all — if the field must be
+  supplied by the caller, there is no default constant to choose.
+- **Affects:** `TaskGenome`, `ReliabilityContract`, `Plan`, `MissionState`, `MissionEvent` (**D-033**).
+- **Needs:** Owner to state whether callers must supply `tenant_id` or whether the model defaults it.
+  Note that D-019's binding caveat holds either way: **the field carries no security meaning.**
+
+### D-080 — Representation of `capability`
+
+- **Status:** Open · **Source:** handoff §6, §7, §13; **D-049** · **Identified during the D-073 analysis; logged at the owner's instruction**
+- **Finding:** **D-049** established that work steps carry a capability and control steps do not, and
+  **D-007** leaves the vocabulary and matching semantics open. **The field's representation has never
+  been decided.** Candidates include a plain string, a distinct per-kind identifier type in the style
+  of **D-053**, or a closed enumeration once D-007 settles the vocabulary.
+
+  The consolidated V0.1 specification described it as "an opaque identifier". **That was an
+  assumption by Claude Code, not a decision**, and is recorded here so it is not mistaken for one.
+- **Why it blocks:** `PlanStep.capability` and `TaskGenome.required_capabilities` cannot be declared
+  without it.
+- **Affects:** `PlanStep`, `TaskGenome`.
+- **Needs:** A representation. It can be settled independently of **D-007**, since the vocabulary and
+  the carrier are separate questions.
+
+### D-081 — Representation of `AgentTask.status`
+
+- **Status:** Open · **Source:** handoff §8; **D-048**, **D-036** · **Identified during the D-073 analysis; logged at the owner's instruction**
+- **Finding:** **D-048** includes `status` in the V0.1 `AgentTask` and leaves its **semantics** open
+  under **D-036**, with the binding rule that **nothing may branch on its value**. It says nothing
+  about the **type**. A free-form string is a choice rather than a neutral default, and any closed
+  enumeration would pre-empt D-036 by fixing the state set.
+- **Why it blocks:** `AgentTask` cannot be declared without it — the only field of that model still
+  undetermined.
+- **Affects:** `AgentTask`.
+- **Needs:** A representation that does **not** imply a state set, since D-036 owns that.
+
+### D-082 — `MissionState` collection shapes and `Plan.version`
+
+- **Status:** Open · **Source:** handoff §8, §15, §32; **D-010a**, **D-042** · **Identified during the D-073 analysis; logged at the owner's instruction**
+- **Finding:** **D-010a** names the field set in prose — "plan versions and lineage", "remote
+  `AgentTask` records", "budget consumption counters" — without specifying their shapes:
+  - whether plans are an **ordered append-only sequence** and whether ordering is by version;
+  - how `agent_tasks` is **keyed** (by `agent_id`, by `a2a_task_id`, or by a separate task id) —
+    noting §8 gives `AgentTask` no id of its own;
+  - the **types** of the six budget counters, which is entangled with **D-078**.
+
+  Related and equally undetermined: **`Plan.version`** — an integer starting at 1, monotonic per
+  mission, per lineage, or something else. §15 shows `Plan v1 -> Plan v2` without stating the rule.
+- **Why it blocks:** `MissionState` and `Plan` cannot be declared without these.
+- **Affects:** `MissionState`, `Plan`.
+- **Needs:** Concrete shapes. The `agent_tasks` key is the sharpest, since §8's `AgentTask` has no
+  identifier the handoff designates as primary.
+
+### D-083 — Timestamp representation
+
+- **Status:** Open · **Source:** handoff §10, §54; **D-054** · **Identified during the D-073 analysis; logged at the owner's instruction**
+- **Finding:** **D-054** settled *where* timestamps come from — explicit required inputs, never the
+  wall clock. It did not settle **what they are**: whether timezone-aware instants are required,
+  whether naive values are rejected, and what resolution is assumed.
+- **Why it blocks:** every model carrying a timestamp. For `MissionEvent` specifically it is not
+  cosmetic — `occurred_at` comes from a **producer's** clock and `recorded_at` from EIDOS ingestion
+  (**D-011**), and comparing or ordering those across processes at V0.6 requires an unambiguous
+  representation.
+- **Affects:** `MissionEvent`, `MissionState`, and any other model with a timestamp.
+- **Needs:** A representation, and a rule for naive values. Recommend deciding alongside **D-078**,
+  since both concern how time is expressed.
 
 ---
 

@@ -288,6 +288,9 @@ verification; and an ordered variant that front-loads architecture before target
 
 | Id | Question | Blocks |
 |---|---|---|
+| D-077 | Field optionality — never decided for `Plan` or `PlanStep` | **V0.1, all fields** |
+| D-080 | `capability` **representation** on work steps | **V0.1** |
+| D-082 | `Plan.version` — integer from 1? monotonic per mission or per lineage? §15 shows `v1 -> v2` without the rule | **V0.1** |
 | D-055 | Are `VERIFY` and `HUMAN_APPROVAL` work steps rather than control-flow steps? | not V0.1; rework risk if answered after `PlanStep` exists |
 | D-012 | Predicate language for ROUTE / RETRY / REPLAN / TERMINATE | V0.2, V0.3 |
 | D-046 | Numerical bound values | V0.2 |
