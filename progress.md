@@ -7,13 +7,19 @@ Status only. Rules live in [CLAUDE.md](CLAUDE.md). Decisions and open questions 
 
 ## Current state
 
-**Milestone: BOOTSTRAP — complete.**
-**Next milestone: V0.1 Core Contracts — not started. Fully specified; no decision blocks it.**
+**Milestone: V0.1 Core Contracts — implemented and tested.**
 
-No EIDOS runtime behaviour exists. There is no planner, no validator, no compiler, no runtime, no
-agents, no state reducer, no A2A, no MCP, no RAG, no persistence, no telemetry, no API and no
-frontend. The repository contains project rules, the derived documentation set, the decision record,
-two empty package boundaries and four empty test layers.
+All seven V0.1 contracts (`ReliabilityContract`, `TaskGenome`, `Plan`, `PlanStep`, `MissionEvent`,
+`MissionState`, `AgentTask`) are implemented in `src/eidos/contracts/`, immutable, in-memory only
+(D-005), with no I/O, no network, no LLM calls and no vendor/model/SDK reference. 155 unit tests in
+`tests/unit/contracts/` pass, covering construction, rejection of invalid input, immutability, every
+required/optional field, opaque identifier typing, Plan step uniqueness, `depends_on` referential
+integrity, plan lineage/reference consistency, TaskGenome/ReliabilityContract reference consistency,
+and the MissionState cross-object consistency checks (A7). No architecture decision was reopened
+during implementation.
+
+There is still no planner, no validator (V0.2), no compiler, no runtime, no agents, no state reducer,
+no A2A, no MCP, no RAG, no persistence, no telemetry, no API and no frontend.
 
 No measurement of any kind has been taken, so no metric appears anywhere in this repository.
 
@@ -38,8 +44,8 @@ hold, failure cases are covered, documentation matches reality, a git checkpoint
 
 | Milestone | Scope (§50) | Status |
 |---|---|---|
-| **V0.1** Core Contracts | `TaskGenome`, `ReliabilityContract`, `MissionState`, `MissionEvent`, `Plan`, `PlanStep`, `AgentTask`. No real agents, no A2A, no MCP, no frontend. In-memory only (D-005). | Not started — **fully specified, unblocked** |
-| **V0.2** Plan DSL | Schema validation, cycle detection, dependency validation, depth limits, node limits, parallel-branch limits, capability validation, policy validation. | Not started — blocked (D-004 settles the DAG form; D-007, D-009, D-012 still open) |
+| **V0.1** Core Contracts | `TaskGenome`, `ReliabilityContract`, `MissionState`, `MissionEvent`, `Plan`, `PlanStep`, `AgentTask`. No real agents, no A2A, no MCP, no frontend. In-memory only (D-005). | **Implemented — 155 unit tests passing** |
+| **V0.2** Plan DSL | Schema validation, cycle detection, dependency validation, depth limits, node limits, parallel-branch limits, capability validation, policy validation. | Not started — blocked (D-007 capability vocabulary, D-012 predicate language, D-046 bound values still Open; D-009's category split is Accepted) |
 | **V0.3** LangGraph Runtime | Map `SEQUENTIAL`, `PARALLEL`, `ROUTE`, `VERIFY`, `RETRY`, `REPLAN` into runtime nodes. Mock agents. | Not started |
 | **V0.4** Real Local Agents | Research, Analysis, Verification. Baseline workflow end-to-end. | Not started — blocked (D-006) |
 | **V0.5** MissionState + Event Reducer | `MissionEvent`, `MissionState`, `StateReducer`, checkpoints, replay. §50: state handling must be reliable **before** A2A. | Not started — blocked (D-010, D-011) |
@@ -55,22 +61,32 @@ hold, failure cases are covered, documentation matches reality, a git checkpoint
 
 ---
 
-## Next milestone — V0.1 Core Contracts
+## V0.1 Core Contracts — implemented (2026-09-18)
 
 Scope from §50 and §82. In-memory typed contracts, deterministic validation-oriented structures,
 and tests. **No persistence (D-005). No behaviour beyond construction and validation.**
 
-Planned modules under `src/eidos/contracts/`:
+Modules in `src/eidos/contracts/`:
 
-- `TaskGenome` — §6
-- `ReliabilityContract` — §30
-- `MissionState` — §9, §10
-- `MissionEvent` — §10, §33
-- `Plan`, `PlanStep` — §13, as an ID-addressed DAG (D-004)
-- `AgentTask` — §8
+- `_base.py` — shared frozen, extra-forbid, strict-validation base model
+- `_validators.py` — the UTC-timestamp-required validator (D-083)
+- `identifiers.py` — every opaque identifier type (D-053) and `DEFAULT_TENANT_ID` (D-079)
+- `enums.py` — `RiskLevel`, `AutonomyLevel`, `MissionStatus`, `PlanStepKind`, `MissionEventType`
+- `reliability_contract.py` — `ReliabilityContract` — §30
+- `task_genome.py` — `TaskGenome` — §6
+- `plan.py` — `Plan`, `PlanStep` (as `AgentStep`/`ControlStep` discriminated union) — §13, D-004
+- `mission_event.py` — `MissionEvent` — §10, §33
+- `agent_task.py` — `AgentTask` — §8
+- `mission_state.py` — `MissionState` — §9, §10, with the six A7 cross-object validators
 
-Each needs unit tests in `tests/unit/` covering construction, field validation, rejection of invalid
-input, and the failure paths — not only the happy path (§61, CLAUDE.md §6).
+`tests/unit/contracts/` — 155 tests: `conftest.py` (valid-object factories), and one test module per
+contract module above, covering construction, field validation, rejection of invalid input, the
+failure paths (§61, CLAUDE.md §6), immutability, and every cross-object consistency check named in
+A7. `test_mission_state.py` is last, since `MissionState` composes every other contract.
+
+**Next:** V0.2 Plan DSL — schema validation, cycle detection, dependency validation, complexity
+limits, capability validation, policy validation. Blocked on D-007 (capability vocabulary), D-012
+(predicate language), D-046 (bound values).
 
 **The five named blocking decisions are resolved** — D-013, D-019, D-011, D-010a, D-009. The
 structural questions about V0.1 are settled.
@@ -335,6 +351,7 @@ Full detail for each is in [decisions.md](decisions.md).
 
 | Date | Milestone | Outcome |
 |---|---|---|
+| 2026-09-18 | V0.1 Core Contracts — implemented | EXPLORE -> PLAN -> IMPLEMENT -> TEST -> VERIFY per CLAUDE.md §4. Confirmed exact field lists from decisions.md/docs before writing code; presented nine implementation-level ambiguities (A1-A9, none architectural) for approval, then implemented all seven V0.1 contracts exactly as decided plus the approved defaults. `pydantic>=2` and `pytest` installed via `pip install -e ".[dev]"` against the existing pyproject.toml — no dependency change. Fixed one stale doc cross-reference (D-073 mislabelled Open in docs/10) found during EXPLORE. Design choices worth noting: `PlanStep` is a discriminated union (`AgentStep`/`ControlStep`) so the capability required/absent rule is unrepresentable rather than merely rejected, matching docs/05's wording; `tenant_id` defaults to a documented nil-UUID placeholder per D-079, pending D-032; identifiers use `typing.NewType` (static-only distinction) per A2, with runtime consistency carried by the explicit MissionState cross-validators instead; `A2ATaskId`/`A2AContextId` were given NewType wrappers for consistency with every other identifier, which is a small extension beyond D-095's literal wording (a plain `str` would have been an equally faithful reading) — flagged, not hidden. 155 tests pass; full suite green. **No source-code behaviour beyond construction and validation; no cycle detection, runtime, reducer, or predicate language.** No architecture decision reopened. |
 | 2026-09-16 | Bootstrap | Read handoff §1–§84. Created project rules, the twelve §81 documents, the decision record with 22 open items, two docstring-only packages, four test layers, and the initial git checkpoint. No runtime behaviour implemented. Two architectural decisions taken by the human owner and recorded: D-004 (Plan DSL canonical form is an ID-addressed DAG) and D-005 (V0.1 in-memory only). D-029 was found while writing `docs/09`: §24's retrieval loop is the only loop in the handoff with no stated bound. |
 | 2026-09-16 | Risk vocabulary | **D-051 resolved**: task risk is one vocabulary shared by `TaskGenome.risk_level` and `ReliabilityContract.max_risk_level`; §40 action risk and §28 tool risk are separate concepts, untyped in V0.1; §40's five-point scale explicitly declined (experimental per §40 itself, action-shaped, and `medium/high` is not a single value); no replacement invented. Value set deferred as **D-056**. D-051 answered **D-030** by implication, which was raised rather than allowed to close silently; **D-030 ratified explicitly**: assessed and tolerated risk are distinct quantities, one field in each model, with calculation out of scope and logged as **D-057**. `docs/04` and `docs/10` updated. **No source code written.** |
 | 2026-09-16 | PlanStep kind taxonomy | Analysed D-049 and D-050; both **resolved** by the human owner. **D-049 = option B**: a capability-bearing work-step category distinct from control-flow steps, `capability` required on the former and absent from the latter. Option C was eliminated on the handoff's own terms — with no capability-bearing kind, §14's capability-validation stage is vacuous and invariant 11 unenforceable. **D-050 = option D**: `SEQUENTIAL`/`PARALLEL` are not canonical kinds; ordering is the edge structure, and they may return only as authoring-surface sugar normalizing to the same DAG. This is the reading under which D-004 and §13 are both true as written. **D-055** logged Open: whether `VERIFY` and `HUMAN_APPROVAL` are themselves work steps. D-004 and D-047 unmodified. `PlanStep` is now unblocked. **No source code written.** |
