@@ -159,10 +159,12 @@ defines **no predicate or condition language**, and carries **no conditional pay
 even an opaque placeholder, which would be an untyped value crossing a module boundary (CLAUDE.md
 §8) and would invite dependencies on a shape nobody has chosen.
 
-Conditional payloads and predicate semantics arrive at V0.2 with D-012, as an **additive** contract
-change rather than a reinterpretation of an existing field. A V0.1 plan containing a conditional
-kind is structurally valid but semantically incomplete; nothing in V0.1 executes plans, so this is
-inert — but such a plan **must not silently become executable at V0.3** without D-012.
+Conditional payloads and predicate semantics arrive **at V0.3, with D-012**, as an **additive**
+contract change rather than a reinterpretation of an existing field — not at V0.2, since none of
+§14's eight V0.2 pipeline stages reads or checks a condition (D-012 blocks the compiler, not the
+validator). A V0.1 plan containing a conditional kind is structurally valid but semantically
+incomplete; nothing in V0.1 or V0.2 executes plans, so this is inert — but such a plan **must not
+silently become executable at V0.3** without D-012.
 
 ### Field presence — `decisions.md` D-077
 
@@ -315,7 +317,7 @@ verification; and an ordered variant that front-loads architecture before target
 | Id | Question | Blocks |
 |---|---|---|
 | D-055 | Are `VERIFY` and `HUMAN_APPROVAL` work steps rather than control-flow steps? | not V0.1; rework risk if answered after `PlanStep` exists |
-| D-012 | Predicate language for ROUTE / RETRY / REPLAN / TERMINATE | V0.2, V0.3 |
+| D-012 | Predicate language for ROUTE / RETRY / REPLAN / TERMINATE | V0.3 (blocks the compiler; not a V0.2 validator requirement) |
 | D-046 | Numerical bound values | V0.2 |
 | D-043 | Declared plan limits vs actual execution counters | V0.2, V0.3 |
 | D-007 | Capability vocabulary and matching semantics | V0.2 |

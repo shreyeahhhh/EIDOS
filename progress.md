@@ -27,7 +27,7 @@ No measurement of any kind has been taken, so no metric appears anywhere in this
 
 - [x] `CLAUDE.md` — permanent rules, 18 architecture invariants
 - [x] `progress.md` — this file
-- [x] `decisions.md` — 55 Accepted, 44 Open, 3 Deferred (counts current as of the latest decision below)
+- [x] `decisions.md` — 55 Accepted, 46 Open, 3 Deferred (counts current as of the latest decision below)
 - [x] `README.md`, `pyproject.toml`, `.gitignore`
 - [x] `docs/01`–`docs/12` — the twelve documents required by handoff §81
 - [x] `src/eidos/` and `src/eidos/contracts/` — docstring only, no code
@@ -45,7 +45,7 @@ hold, failure cases are covered, documentation matches reality, a git checkpoint
 | Milestone | Scope (§50) | Status |
 |---|---|---|
 | **V0.1** Core Contracts | `TaskGenome`, `ReliabilityContract`, `MissionState`, `MissionEvent`, `Plan`, `PlanStep`, `AgentTask`. No real agents, no A2A, no MCP, no frontend. In-memory only (D-005). | **Implemented — 155 unit tests passing** |
-| **V0.2** Plan DSL | Schema validation, cycle detection, dependency validation, depth limits, node limits, parallel-branch limits, capability validation, policy validation. | Not started — blocked (D-007 capability vocabulary, D-012 predicate language, D-046 bound values still Open; D-009's category split is Accepted) |
+| **V0.2** Plan DSL | Schema validation, cycle detection, dependency validation, depth limits, node limits, parallel-branch limits, capability validation, policy validation. | Not started — blocked (D-007 capability vocabulary, D-046 bound values still Open; D-009's category split is Accepted). **D-012 is not a V0.2 blocker** — it belongs to V0.3 (the compiler); corrected 2026-09-18. |
 | **V0.3** LangGraph Runtime | Map `SEQUENTIAL`, `PARALLEL`, `ROUTE`, `VERIFY`, `RETRY`, `REPLAN` into runtime nodes. Mock agents. | Not started |
 | **V0.4** Real Local Agents | Research, Analysis, Verification. Baseline workflow end-to-end. | Not started — blocked (D-006) |
 | **V0.5** MissionState + Event Reducer | `MissionEvent`, `MissionState`, `StateReducer`, checkpoints, replay. §50: state handling must be reliable **before** A2A. | Not started — blocked (D-010, D-011) |
@@ -85,8 +85,11 @@ failure paths (§61, CLAUDE.md §6), immutability, and every cross-object consis
 A7. `test_mission_state.py` is last, since `MissionState` composes every other contract.
 
 **Next:** V0.2 Plan DSL — schema validation, cycle detection, dependency validation, complexity
-limits, capability validation, policy validation. Blocked on D-007 (capability vocabulary), D-012
-(predicate language), D-046 (bound values).
+limits, capability validation, policy validation. Blocked on D-007 (capability vocabulary) and D-046
+(bound values). D-012 (predicate language) does **not** block V0.2 — none of §14's eight V0.2 stages
+reads a step's condition, since V0.1 carries no conditional payload at all (D-047); D-012 blocks the
+V0.3 compiler instead. Schema validation, dependency validation and cycle detection need **none** of
+the three named decisions and are buildable against the V0.1 contracts as they stand.
 
 **The five named blocking decisions are resolved** — D-013, D-019, D-011, D-010a, D-009. The
 structural questions about V0.1 are settled.
@@ -321,8 +324,10 @@ Highest-impact first.
 | **D-046** numerical bound values | V0.2 | None established in V0.1 by decision; tuned from V0.9 telemetry, never presented as tuned before then. |
 | **D-072** omitted vs explicitly-at-ceiling | V0.9, V1.3 | Argues for retaining the requested value alongside the effective one, not for making fields required. |
 | **D-066** contract user-supplied or synthesised | mission creation | Synthesis needs numbers D-046 defers; adopting it later would not contradict D-045. |
-| **D-012** predicate language for ROUTE/RETRY/REPLAN/TERMINATE | V0.2, V0.3 | Deterministic routing needs a defined, validatable condition form. |
+| **D-012** predicate language for ROUTE/RETRY/REPLAN/TERMINATE | **V0.3** (corrected 2026-09-18; was previously mislabelled V0.2/V0.3) | Deterministic routing needs a defined, validatable condition form. Blocks the compiler, not the V0.2 validator. |
 | **D-007** capability vocabulary and matching | V0.2, V0.4 | §6 and §7 use incompatible capability names. |
+| **D-102** how deep V0.2 capability validation checks | **V0.2** | No agent registry exists until V0.4, so even a fully-specified vocabulary has nothing live to validate against yet. Independent of D-007's substance. |
+| **D-103** seed V0.2 bounds from D-046's two handoff-example numbers? | **V0.2** | `max_execution_time`/`max_tokens` have illustrative handoff examples; the other five bound dimensions have none. |
 | **D-006** MVP agent set: 3 or 5 capabilities | V0.4 | §49 says three; §16/§43 use five. |
 | **D-076** payload completeness for replay | V0.5, with D-039 | D-010a puts the completeness burden on the event log; deferring payloads defers when that becomes testable. |
 | **D-075** per-type payload definitions | V0.3–V0.8 | §33 names thirteen types and describes none. |
@@ -351,6 +356,7 @@ Full detail for each is in [decisions.md](decisions.md).
 
 | Date | Milestone | Outcome |
 |---|---|---|
+| 2026-09-18 | V0.2 scoping analysis | Analysed exactly what V0.2's eight §14 pipeline stages need from D-007, D-012 and D-046, stage by stage, rather than treating "V0.2 is blocked on all three" as one claim. **Found and fixed a self-introduced drift**: D-012 had been called both "a clean V0.2 decision" (decisions.md) and "blocks the compiler" (docs/05) in the same document, and listed as a V0.2 blocker in progress.md — none of V0.2's stages actually reads a step's condition, since V0.1 carries no conditional payload at all (D-047). Corrected across decisions.md, docs/05_plan_dsl.md and progress.md to consistently read V0.3. Schema validation, dependency validation and cycle detection confirmed buildable today with **zero** new decisions, against the V0.1 contracts as they stand. Logged **D-102** (how deep V0.2 capability validation checks, given no agent registry exists until V0.4 — independent of D-007's vocabulary substance) and **D-103** (whether D-046's two handoff-example numbers, `max_execution_time`/`max_tokens`, seed provisional V0.2 values while the other five bound dimensions stay fully open). Neither answered. No source code written. |
 | 2026-09-18 | V0.1 Core Contracts — implemented | EXPLORE -> PLAN -> IMPLEMENT -> TEST -> VERIFY per CLAUDE.md §4. Confirmed exact field lists from decisions.md/docs before writing code; presented nine implementation-level ambiguities (A1-A9, none architectural) for approval, then implemented all seven V0.1 contracts exactly as decided plus the approved defaults. `pydantic>=2` and `pytest` installed via `pip install -e ".[dev]"` against the existing pyproject.toml — no dependency change. Fixed one stale doc cross-reference (D-073 mislabelled Open in docs/10) found during EXPLORE. Design choices worth noting: `PlanStep` is a discriminated union (`AgentStep`/`ControlStep`) so the capability required/absent rule is unrepresentable rather than merely rejected, matching docs/05's wording; `tenant_id` defaults to a documented nil-UUID placeholder per D-079, pending D-032; identifiers use `typing.NewType` (static-only distinction) per A2, with runtime consistency carried by the explicit MissionState cross-validators instead; `A2ATaskId`/`A2AContextId` were given NewType wrappers for consistency with every other identifier, which is a small extension beyond D-095's literal wording (a plain `str` would have been an equally faithful reading) — flagged, not hidden. 155 tests pass; full suite green. **No source-code behaviour beyond construction and validation; no cycle detection, runtime, reducer, or predicate language.** No architecture decision reopened. |
 | 2026-09-16 | Bootstrap | Read handoff §1–§84. Created project rules, the twelve §81 documents, the decision record with 22 open items, two docstring-only packages, four test layers, and the initial git checkpoint. No runtime behaviour implemented. Two architectural decisions taken by the human owner and recorded: D-004 (Plan DSL canonical form is an ID-addressed DAG) and D-005 (V0.1 in-memory only). D-029 was found while writing `docs/09`: §24's retrieval loop is the only loop in the handoff with no stated bound. |
 | 2026-09-16 | Risk vocabulary | **D-051 resolved**: task risk is one vocabulary shared by `TaskGenome.risk_level` and `ReliabilityContract.max_risk_level`; §40 action risk and §28 tool risk are separate concepts, untyped in V0.1; §40's five-point scale explicitly declined (experimental per §40 itself, action-shaped, and `medium/high` is not a single value); no replacement invented. Value set deferred as **D-056**. D-051 answered **D-030** by implication, which was raised rather than allowed to close silently; **D-030 ratified explicitly**: assessed and tolerated risk are distinct quantities, one field in each model, with calculation out of scope and logged as **D-057**. `docs/04` and `docs/10` updated. **No source code written.** |

@@ -395,7 +395,8 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
   - **DAG structure**.
 
   V0.1 does **not** define a predicate or condition language for `ROUTE`, `RETRY`, `REPLAN` or
-  `TERMINATE`. Conditional payloads and predicate semantics are deferred to V0.2 under **D-012**.
+  `TERMINATE`. Conditional payloads and predicate semantics are deferred under **D-012**, to the
+  milestone that actually needs them.
 
 - **Rationale:** An opaque placeholder field would be an untyped value crossing a module boundary,
   which CLAUDE.md §8 forbids, and would invite something to start depending on its shape before the
@@ -406,11 +407,14 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
   - The `PlanStep` contract is complete and typed for V0.1 with no placeholder fields.
   - **D-012 remains Open** and is unaffected. This decision scopes V0.1; it does not choose a
     predicate language.
-  - V0.2 will add conditional payloads to `PlanStep`, which is an additive contract change rather
-    than a reinterpretation of an existing field.
+  - Conditional payloads will be added to `PlanStep` at whichever milestone needs them, as an
+    additive contract change rather than a reinterpretation of an existing field. **Corrected
+    2026-09-18: that milestone is V0.3 (the compiler), not V0.2** — see D-012's own entry. Neither
+    D-047 nor D-004 is modified by this correction; it fixes a forward-looking claim this entry made
+    about a different decision's timing, not this decision's own scope.
   - A V0.1 plan containing a conditional kind is structurally valid but semantically incomplete.
-    Nothing in V0.1 executes plans, so this is inert — but it must not silently become executable at
-    V0.3 without D-012.
+    Nothing in V0.1 or V0.2 executes plans, so this is inert — but it must not silently become
+    executable at V0.3 without D-012.
 
 ### D-048 — `AgentTask` is included in V0.1, minimal and future-compatible
 
@@ -1633,8 +1637,11 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
 These are ambiguities, contradictions and gaps found in the handoff during the bootstrap read. None
 has been resolved. Work that depends on one of them is blocked until the owner decides.
 
-Count: 43. Highest-impact first is **D-015** (how verification confidence is computed), then
-**D-007** (capability vocabulary) and **D-012** (predicate language) for V0.2.
+Count: 46. Highest-impact first is **D-015** (how verification confidence is computed), then
+**D-007** (capability vocabulary) and **D-046** (bound values) for V0.2. **D-012** (predicate
+language) was corrected 2026-09-18 to no longer be listed as a V0.2 item — it blocks the V0.3
+compiler, since none of V0.2's own pipeline stages reads a step's condition. **D-102** and **D-103**,
+logged the same day, narrow D-007 and D-046 respectively to the exact sub-questions blocking V0.2.
 
 **All seven V0.1 contracts are fully specified and constructible** as of 2026-09-18. **No Open item
 blocks V0.1 contract construction.** The remaining Open items concern later milestones, or touch V0.1
@@ -1761,11 +1768,17 @@ one is not.
   them. Without one, either the condition is opaque (breaking determinism and validation) or an
   expression language is invented.
 - **Needs:** How a condition is expressed, what it may read from MissionState, and how it is
-  validated. Blocks the compiler and the ROUTE primitive.
+  validated. **Blocks the compiler (V0.3)** — nothing in the V0.2 validation pipeline (§14's eight
+  stages: schema, dependency, cycle, capability, policy, resource, graph-complexity validation) reads
+  or checks a step's condition, since none exists to check.
 - **V0.1 scope settled by D-047, which does not resolve this item.** V0.1 defines plan *structure*
   only — kinds, step IDs, capability, edges, DAG — and carries **no conditional payload at all**,
-  rather than an opaque placeholder. D-012 therefore remains a clean V0.2 decision rather than a
-  migration away from a guessed shape.
+  rather than an opaque placeholder. D-012 is a clean **V0.3** decision (the compiler is the first
+  thing that needs to interpret a condition), not a migration away from a guessed shape.
+- **Corrected 2026-09-18:** this entry, `docs/05_plan_dsl.md` and `progress.md` previously disagreed
+  on whether D-012 blocks V0.2 or V0.3 — one sentence here called it "a clean V0.2 decision" while
+  the line above it already said "blocks the compiler." That was documentation drift, not a decision;
+  it is fixed to consistently read V0.3 in all three places.
 
 ### D-060 — Is Level 3 an ordinal point, or a gate cutting across the scale?
 
@@ -2253,6 +2266,55 @@ one is not.
 - **Needs:** Owner to state whether the two are equivalent. Adjacent to **D-061**, which asks how
   mission-wide autonomy relates to the per-step `HUMAN_APPROVAL` kind; D-074 adds §30's wording to
   that same family rather than opening an unrelated question.
+
+### D-102 — How deep does V0.2 capability validation actually check?
+
+- **Status:** Open · **Source:** handoff §6 vs §7; V0.2 has no agent registry (that is V0.4) · **Split out of D-007; raised during V0.2 scoping analysis**
+- **Finding:** D-007 asks two things: the matching rule, and whether a canonical capability list
+  exists and who owns it. Neither can be answered from the handoff — §6's genome example and §7's
+  registry example don't even overlap. But there is a narrower question sitting in front of both:
+  **at V0.2, there is no agent registry to check a capability against at all** (`capabilities/` is
+  scoped "V0.2 / V0.4" in docs/03, and the registry itself is V0.4). So even a fully-specified
+  matching rule and vocabulary would have nothing live to validate against yet.
+- **Why this is a separate question from D-007:** D-007 asks what the vocabulary *is*. D-102 asks
+  what "capability validation" *means* at a milestone that has no vocabulary to check against —
+  independent of how D-007 is eventually answered.
+- **Options, none adopted:**
+  1. V0.2's capability-validation stage checks only **well-formedness** (a non-empty `CapabilityId`
+     on every `agent` step — already true by construction under V0.1's types) and defers semantic
+     checking to V0.4.
+  2. V0.2 **omits** capability validation from its own pipeline entirely, documenting it as a stage
+     that has no content until D-007 and a registry both exist.
+  3. V0.2 blocks fully on D-007 being answered first, even though there is nothing to validate
+     against yet.
+- **Effect while Open:** determines whether V0.2's capability-validation stage is a real (if
+  minimal) check, a documented no-op, or entirely deferred.
+- **Needs:** Owner decision on which of the above (or another option) V0.2 implements. Not an
+  invented answer to D-007 itself — D-007's substantive vocabulary/matching question remains
+  untouched by whichever option is chosen here.
+
+### D-103 — Should D-046's two handoff-example numbers seed provisional V0.2 values?
+
+- **Status:** Open · **Source:** handoff §6, §30; D-009 rider 5, D-046 · **Raised during V0.2 scoping analysis**
+- **Finding:** D-009 rider 5 and D-046 both hold that no numerical default may be established without
+  it being invention — five of the seven bound dimensions (`max_nodes`, `max_depth`,
+  `max_parallel_branches`, `max_retries`, `max_replans`, `max_agent_calls`, `max_tool_calls`) have
+  **zero** grounding anywhere in the handoff. Two do not: `max_execution_time` has
+  `latency_budget_ms: 600000` as a genome example (§6), and `max_tokens` has `Maximum tokens: 10,000`
+  as a contract example (§30). Both are stated as illustrative examples, **never as defaults** — but
+  they are the only two numbers in the entire handoff with any textual precedent at all.
+- **Why this is separate from D-046:** D-046 asks for the values themselves and is deliberately left
+  open pending real measurement (§67, CLAUDE.md §7). D-103 asks a narrower, prior question: **should
+  those two specific handoff-sourced numbers be adopted as explicitly-labelled provisional values for
+  V0.2**, while the other five dimensions remain genuinely unset (no comparison possible, or a
+  build-time requirement that a caller supply them) — or should all seven be treated identically as
+  fully open, with no head start from the two examples either?
+- **Effect while Open:** determines whether V0.2's resource-validation stage has two working example
+  ceilings to test against, or seven equally-unset dimensions.
+- **Needs:** Owner decision. If yes: the two values must be recorded as **provisional and
+  handoff-example-derived, not tuned** (per D-046's own requirement), and re-examined once V0.9
+  telemetry exists. If no: V0.2's resource-validation mechanism is built and tested against
+  arbitrary test-only numbers with no production default at all, same as the other five dimensions.
 
 ---
 
