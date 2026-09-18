@@ -164,6 +164,28 @@ change rather than a reinterpretation of an existing field. A V0.1 plan containi
 kind is structurally valid but semantically incomplete; nothing in V0.1 executes plans, so this is
 inert — but such a plan **must not silently become executable at V0.3** without D-012.
 
+### Field presence — `decisions.md` D-077
+
+**`Plan`:** `tenant_id`, `plan_id`, `mission_id`, `version`, `steps` are **required**;
+`parent_plan_id` and `replan_reason` are **optional** — §15 is explicit that `Plan v1` precedes any
+replan, so a v1 plan has no parent and no reason **by construction**.
+
+**`PlanStep`:** `step_id`, `kind` and `depends_on` are **required**. **`depends_on` may be an empty
+collection** — that is how a DAG root is expressed. `capability` is governed by **D-049**: required
+on work steps, absent from control steps.
+
+### Representation — `decisions.md` D-088, D-092, D-093
+
+- **`Plan.mission_id`** stays **required** (**D-088**) — a deliberate asymmetry with D-068, on the
+  ground that a plan is a mission-specific versioned artifact that should self-identify outside
+  MissionState. Consequence: a plan whose `mission_id` differs from its containing state's is
+  representable and must be checked.
+- **`step_id`** is a distinct opaque **`StepId`** string, **unique within a plan version**, and **exempt
+  from D-053's UUID rule** (**D-092**). LLM-authored ids such as `research_1` are valid. This settles
+  the namespace question D-004 left open.
+- **`Plan.steps`** is an **immutable ordered collection** of `PlanStep`, **not** a map keyed by
+  `step_id`; uniqueness is **validated separately** (**D-093**).
+
 ## 4. Validation pipeline
 
 Validation happens **before** execution. No plan executes unvalidated (invariant 5). The order is
@@ -288,7 +310,7 @@ verification; and an ordered variant that front-loads architecture before target
 
 | Id | Question | Blocks |
 |---|---|---|
-| D-077 | Field optionality — never decided for `Plan` or `PlanStep` | **V0.1, all fields** |
+| D-087 | May `Plan.steps` be **empty**? Distinct from presence (D-077). `PlanStep.depends_on` is already settled as may-be-empty for a DAG root | V0.1 or V0.2 |
 | D-080 | `capability` **representation** on work steps | **V0.1** |
 | D-082 | `Plan.version` — integer from 1? monotonic per mission or per lineage? §15 shows `v1 -> v2` without the rule | **V0.1** |
 | D-055 | Are `VERIFY` and `HUMAN_APPROVAL` work steps rather than control-flow steps? | not V0.1; rework risk if answered after `PlanStep` exists |

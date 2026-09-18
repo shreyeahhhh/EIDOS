@@ -188,6 +188,32 @@ redundant — and the second entry is not `task_genome` but its **characteristic
 > a genome is stored apart from its `MissionState` (§21, §25, §33), attribution must come from the
 > storage layer. Adding a back-reference then would be additive.
 
+## 6b. Field presence — `decisions.md` D-077
+
+| Field | Presence | Basis |
+|---|---|---|
+| `tenant_id` | required | D-019 |
+| `goal` | required | present in §6's example |
+| `required_capabilities` | required | present in §6's example |
+| `information_dependencies` | **optional** | **omitted from §6's own example** — D-065's demonstration-of-omission standard |
+| `risk_level` | required | present in §6's example |
+| `autonomy_level` | required | present in §6's example |
+| `allowed_actions` | required | present in §6's example |
+| `reliability_contract` | required | D-045 |
+
+An optional field may be absent. A required collection may still be **empty** — that is a separate
+question, **D-087**, not settled here.
+
+## 6c. Representation — `decisions.md` D-089, D-094, D-099
+
+- **`reliability_contract`** holds a **`ReliabilityContractId`**, not the contract object (**D-089**).
+  ⚠️ The contract object then has no home in MissionState — **D-100**.
+- **`allowed_actions`** is an immutable collection of **opaque string identifiers**; no action
+  vocabulary is invented (**D-094**).
+- **`information_dependencies`** stays optional, but its representation is **deferred** until it has a
+  consumer (**D-099**). An optional field still needs a type, so it must either be excluded from V0.1
+  or given one — not yet decided.
+
 ## 7. Identity fields
 
 §54 states that data models should conceptually include `tenant_id`, `mission_id`, `execution_id`,
@@ -235,7 +261,7 @@ storage layer or re-attached at write time. A V1.0 concern, but a real cost of t
 | D-070 | Is `evidence_requirements` a duplicate of `min_independent_evidence`, or a distinct descriptive requirement — and if distinct, what representation? | V0.4 / V0.8 |
 | D-031 | Is `evidence_requirements` a numeric threshold or a descriptive task requirement? | V0.1, one field |
 | D-071 | Will detached or reusable genome representations ever be needed? | V1.0 strategy memory |
-| D-077 | Field optionality — never decided for this model's fields | **V0.1, all fields** |
+| D-087 | May `required_capabilities` or `allowed_actions` be **empty**? Distinct from presence, which D-077 settled | V0.1 or V0.2 — the allocation is part of the question |
 | D-080 | `capability` **representation** — distinct from D-007's vocabulary question | **V0.1** |
 | D-079 | Is `tenant_id` required-to-supply or defaulted? D-019 says both | **V0.1** |
 | D-007 | Capability vocabulary and matching semantics | V0.2 capability validation |

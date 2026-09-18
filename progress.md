@@ -21,7 +21,7 @@ No measurement of any kind has been taken, so no metric appears anywhere in this
 
 - [x] `CLAUDE.md` — permanent rules, 18 architecture invariants
 - [x] `progress.md` — this file
-- [x] `decisions.md` — 30 Accepted, 51 Open, 3 Deferred (counts current as of the latest decision below)
+- [x] `decisions.md` — 41 Accepted, 57 Open, 3 Deferred (counts current as of the latest decision below)
 - [x] `README.md`, `pyproject.toml`, `.gitignore`
 - [x] `docs/01`–`docs/12` — the twelve documents required by handoff §81
 - [x] `src/eidos/` and `src/eidos/contracts/` — docstring only, no code
@@ -115,6 +115,26 @@ applied to opposite evidence. **`ReliabilityContract` is now fully specified.**
 **Six representation gaps logged as D-078–D-083** (2026-09-17): units for time/token budgets,
 `tenant_id` required-vs-defaulted, `capability` representation, `AgentTask.status` representation,
 `MissionState` collection shapes and `Plan.version`, and timestamp representation.
+
+**D-077 resolved** (2026-09-18, human owner): the required/optional split for `TaskGenome`, `Plan`,
+`PlanStep`, `MissionEvent` and `MissionState`, applying D-065's demonstration-of-omission standard.
+Absence and emptiness are separate; `depends_on` is required and may be empty for a DAG root. Four
+items split out: **D-084**–**D-087**.
+
+**Representation round resolved** (2026-09-18, human owner) — ten decisions, **D-088**–**D-097**:
+`Plan.mission_id` kept required as a deliberate asymmetry with D-068; the genome references its
+contract by `ReliabilityContractId`; `MissionEventType` is exactly §33's thirteen; MissionState's
+collections and six counters are required, immutable, may be empty, counters non-negative integers;
+`StepId` is an opaque string unique per plan version, exempt from D-053's UUID rule; `Plan.steps` is an
+immutable ordered collection; `allowed_actions` are opaque strings; A2A ids are external opaque
+strings, exempt from D-053; `last_event` is `EventId | None`; `sequence` starts at 1 and
+`state_version` tracks the latest applied sequence.
+
+**Three genuine representability gaps surfaced and logged, not decided:** **D-098**
+(`latest_artifact`) and **D-099** (`information_dependencies`) are optional fields whose
+representation is deferred — but an optional field still needs a type, so each must either be excluded
+from V0.1 or given one. **D-100**: by-id reference (D-089) leaves the ReliabilityContract object with
+no home in MissionState, whose D-010a field set never held it.
 
 **All architectural V0.1 decisions are settled; what remains is representation.** None of D-077–D-083
 touches an invariant — but together they mean **no contract is currently constructible without an
@@ -272,7 +292,13 @@ Highest-impact first.
 | **D-036** `AgentTask` lifecycle state machine | V0.6 | §10 mandates deterministic accept/reject "against lifecycle"; §8 never enumerates states or transitions. V0.6 protocol tests cannot be written without it. |
 | **D-043** declared plan limits vs execution counters | V0.2, V0.3 | Five limit names appear in both §14 and §32 while counting different things. Most likely of the bound family to cause a real defect. |
 | **D-046** numerical bound values | V0.2 | None established in V0.1 by decision; tuned from V0.9 telemetry, never presented as tuned before then. |
-| **D-077** field optionality for five contracts | **V0.1, five models** | Never decided for TaskGenome, Plan, PlanStep, MissionEvent, MissionState. Every field must be required or have a default. |
+| **D-084** MissionState before TaskGenome | **V0.1** | §73/§41 show `Mission created` before `Task Genome generated`; D-010a's fold starts at `MISSION_CREATED`. |
+| **D-085** `execution_id` at creation | **V0.1** | Mission-to-execution cardinality unstated. |
+| **D-086** `occurred_at` for internal events | **V0.1** | No separate producer clock for internal events; V0.1 emits only internal events. Tied to D-037. |
+| **D-087** collection emptiness | V0.1 or V0.2 | Narrowed by D-091; still open for `required_capabilities`, `allowed_actions`, `Plan.steps`. |
+| **D-100** where the ReliabilityContract lives | **V0.1** | D-089's by-id reference leaves the contract with no container; D-010a's MissionState never held it. The runtime cannot reach the limits its counters measure against. |
+| **D-098** `latest_artifact` representation | **V0.1** | Deferred until artifacts are defined — but an optional field still needs a type. Exclude from V0.1, or choose one. |
+| **D-099** `information_dependencies` representation | **V0.1** | Same tension as D-098. No example of its content exists anywhere in the handoff. |
 | **D-078** units for time and token budgets | **V0.1** | The handoff uses ms (§6), seconds (§53) and minutes (§30) for latency. D-046's values would be meaningless without a canonical unit. |
 | **D-079** `tenant_id` required vs defaulted | **V0.1, five roots** | D-019 says both "required" and "carries a default"; those conflict. Determines whether D-032 is needed at all. |
 | **D-080** `capability` representation | **V0.1** | D-049 gave work steps a capability; the carrier's type was never decided. "Opaque identifier" was a Claude Code assumption, not a decision. |

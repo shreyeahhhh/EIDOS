@@ -180,6 +180,36 @@ runtime must answer **synchronously**:
 **Detailed per-node runtime execution state does not enter the authoritative MissionState merely
 because LangGraph has such state.**
 
+### Field presence — `decisions.md` D-077
+
+**`MissionState`:** `tenant_id`, `mission_id`, `created_at`, `updated_at`, `state_version`, `status` are
+**required**; `status_reason` and `active_plan_id` are **optional** (§32 shows a reason only on
+`paused`; §73 shows a mission existing before any plan is selected).
+
+**Not decided:** `task_genome` (**D-084**), `execution_id` (**D-085**), and the presence of `plans`,
+`agent_tasks` and the budget counters, which no decision has assigned.
+
+**`MissionEvent`:** `event_id`, `tenant_id`, `mission_id`, `sequence`, `recorded_at`, `type` are
+**required** — §10 says **every** event carries its field set. `occurred_at` is **not decided**
+(**D-086**).
+
+### Representation — `decisions.md` D-090, D-091, D-097, D-100
+
+- **`plans`, `agent_tasks` and the six budget counters are required** (**D-091**). The collections are
+  **immutable** and **may be empty**; the counters are **non-negative integers**, with the
+  execution-time counter using whatever unit **D-078** chooses for `max_execution_time`.
+- **`MissionEventType`** is **exactly the thirteen types in §33** (**D-090**) — including A2A, MCP and
+  RAG types that cannot occur in V0.1. This differs from D-052's exclusion of unreachable *states*;
+  recorded so the difference is visible.
+- **`sequence` starts at 1**; **`state_version`** is a non-negative integer equal to the latest applied
+  mission sequence (**D-097**). Reducer and checkpoint semantics stay deferred to V0.5.
+
+> ⚠️ **D-100 — the contract has no home.** D-089 makes the genome reference its contract **by id**, and
+> this document's field set never held the contract itself — under by-value containment it travelled
+> inside the genome. MissionState therefore holds the budget **counters** but cannot reach the
+> **limits** they are measured against, although D-010a lists "what would count as acceptable" among
+> the questions MissionState must answer synchronously.
+
 ### Why this boundary
 
 §9 asserts MissionState is the *only* authoritative global state; §11 assigns LangGraph management
@@ -312,7 +342,10 @@ see `decisions.md` **D-017**.
 | D-038 | Bounding and persisting the processed-`event_id` set | V0.5+ |
 | D-017 | Is the event log or a state snapshot authoritative for persistence and replay? | V0.5+ |
 | D-033 | Does `tenant_id` propagate to nested models, or stay root-only? | V0.1 |
-| D-077 | Field optionality — never decided for `MissionState` or `MissionEvent` | **V0.1, all fields** |
+| **D-084** | May MissionState exist **before its TaskGenome**? §73 and §41 both show `Mission created` preceding `Task Genome generated`, and D-010a's fold begins at `MISSION_CREATED` | **V0.1, `task_genome` presence** |
+| D-085 | Does `execution_id` exist at creation? Mission-to-execution cardinality is unstated in §54 | **V0.1, `execution_id` presence** |
+| D-086 | `occurred_at` for **internally generated** events, which have no separate producer clock — aligned with D-037 | **V0.1, `occurred_at` presence** |
+| D-087 | Which required collections may be **empty** | V0.1 or V0.2 |
 | D-082 | Collection shapes — plan ordering, `agent_tasks` keying (§8 gives `AgentTask` no id of its own), counter types | **V0.1** |
 | D-083 | Timestamp representation — timezone-aware? naive rejected? Matters for comparing a producer's `occurred_at` with EIDOS's `recorded_at` across processes at V0.6 | **V0.1** |
 | D-079 | Is `tenant_id` required-to-supply or defaulted? | **V0.1** |
