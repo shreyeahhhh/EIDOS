@@ -8,7 +8,7 @@ Status only. Rules live in [CLAUDE.md](CLAUDE.md). Decisions and open questions 
 ## Current state
 
 **Milestone: BOOTSTRAP — complete.**
-**Next milestone: V0.1 Core Contracts — not started, partially blocked (see "Blocked on human owner").**
+**Next milestone: V0.1 Core Contracts — not started. Fully specified; no decision blocks it.**
 
 No EIDOS runtime behaviour exists. There is no planner, no validator, no compiler, no runtime, no
 agents, no state reducer, no A2A, no MCP, no RAG, no persistence, no telemetry, no API and no
@@ -21,7 +21,7 @@ No measurement of any kind has been taken, so no metric appears anywhere in this
 
 - [x] `CLAUDE.md` — permanent rules, 18 architecture invariants
 - [x] `progress.md` — this file
-- [x] `decisions.md` — 41 Accepted, 57 Open, 3 Deferred (counts current as of the latest decision below)
+- [x] `decisions.md` — 55 Accepted, 44 Open, 3 Deferred (counts current as of the latest decision below)
 - [x] `README.md`, `pyproject.toml`, `.gitignore`
 - [x] `docs/01`–`docs/12` — the twelve documents required by handoff §81
 - [x] `src/eidos/` and `src/eidos/contracts/` — docstring only, no code
@@ -38,7 +38,7 @@ hold, failure cases are covered, documentation matches reality, a git checkpoint
 
 | Milestone | Scope (§50) | Status |
 |---|---|---|
-| **V0.1** Core Contracts | `TaskGenome`, `ReliabilityContract`, `MissionState`, `MissionEvent`, `Plan`, `PlanStep`, `AgentTask`. No real agents, no A2A, no MCP, no frontend. In-memory only (D-005). | Not started — partially blocked |
+| **V0.1** Core Contracts | `TaskGenome`, `ReliabilityContract`, `MissionState`, `MissionEvent`, `Plan`, `PlanStep`, `AgentTask`. No real agents, no A2A, no MCP, no frontend. In-memory only (D-005). | Not started — **fully specified, unblocked** |
 | **V0.2** Plan DSL | Schema validation, cycle detection, dependency validation, depth limits, node limits, parallel-branch limits, capability validation, policy validation. | Not started — blocked (D-004 settles the DAG form; D-007, D-009, D-012 still open) |
 | **V0.3** LangGraph Runtime | Map `SEQUENTIAL`, `PARALLEL`, `ROUTE`, `VERIFY`, `RETRY`, `REPLAN` into runtime nodes. Mock agents. | Not started |
 | **V0.4** Real Local Agents | Research, Analysis, Verification. Baseline workflow end-to-end. | Not started — blocked (D-006) |
@@ -136,20 +136,31 @@ representation is deferred — but an optional field still needs a type, so each
 from V0.1 or given one. **D-100**: by-id reference (D-089) leaves the ReliabilityContract object with
 no home in MissionState, whose D-010a field set never held it.
 
-**All architectural V0.1 decisions are settled; what remains is representation.** None of D-077–D-083
-touches an invariant — but together they mean **no contract is currently constructible without an
-invention**, which is a sharper statement than "five of seven are writable" made earlier in this
-session. Per-contract blockers:
+**Representation resolved** (2026-09-18, human owner) — **D-078**–**D-083**, **D-087**, **D-098**–**D-100**:
+milliseconds and token counts; `tenant_id` supplied by the single-tenant context; `CapabilityId` and
+`ActionId`; `AgentTask.status` an opaque string; `Plan.version` from 1 per mission; timezone-aware UTC
+with naive values rejected; empty collections legal; `ArtifactRef | None`; `information_dependencies`
+as opaque strings; and **MissionState holds the authoritative `ReliabilityContract`**.
 
-| Contract | Blocked by |
+**Final V0.1 blockers resolved** (2026-09-18, human owner): **D-101** — the work-step kind is `agent`;
+**D-084** — MissionState is created with its TaskGenome (no §33 event type introduces a genome, so it
+must exist from `MISSION_CREATED`); **D-085** — one immutable `execution_id` per mission in V0.1, kept
+across replans and pause/resume; **D-086** — `occurred_at` is required, preserving the producer's time
+for external events and equal to `recorded_at` for internal ones.
+
+**V0.1 blocking matrix: empty.** All seven contracts — `ReliabilityContract`, `TaskGenome`, `Plan`,
+`PlanStep`, `MissionEvent`, `MissionState`, `AgentTask` — are **fully specified and constructible**.
+
+Open items that **touch V0.1 without blocking it**:
+
+| Id | Why it does not block |
 |---|---|
-| `AgentTask` | D-081 |
-| `ReliabilityContract` | D-078 |
-| `TaskGenome` | D-077, D-078, D-079, D-080 |
-| `Plan` | D-077, D-082 |
-| `PlanStep` | D-077, D-080 |
-| `MissionEvent` | D-077, D-079, D-083 |
-| `MissionState` | D-077, D-078, D-079, D-082, D-083 |
+| D-032 | the literal default `TenantId` belongs to the single-tenant context (D-079), not to any contract |
+| D-036 | `AgentTask.status` is an opaque string, and nothing may branch on it (D-081) |
+| D-007 | `CapabilityId` is opaque; the vocabulary is not needed to declare the field (D-080) |
+| D-055 | `VERIFY` and `HUMAN_APPROVAL` stay control-flow kinds meanwhile — the conservative position |
+| D-037 | D-086 works under a shared event shape; the internal/external split is a V0.6 question |
+| D-012 | V0.1 carries no conditional payload (D-047) |
 
 **The consolidated V0.1 contract specification is the approved design baseline** as of 2026-09-16.
 Three questions it surfaced but which had never been logged are now Open items: D-067, D-068, D-069.
@@ -292,19 +303,6 @@ Highest-impact first.
 | **D-036** `AgentTask` lifecycle state machine | V0.6 | §10 mandates deterministic accept/reject "against lifecycle"; §8 never enumerates states or transitions. V0.6 protocol tests cannot be written without it. |
 | **D-043** declared plan limits vs execution counters | V0.2, V0.3 | Five limit names appear in both §14 and §32 while counting different things. Most likely of the bound family to cause a real defect. |
 | **D-046** numerical bound values | V0.2 | None established in V0.1 by decision; tuned from V0.9 telemetry, never presented as tuned before then. |
-| **D-084** MissionState before TaskGenome | **V0.1** | §73/§41 show `Mission created` before `Task Genome generated`; D-010a's fold starts at `MISSION_CREATED`. |
-| **D-085** `execution_id` at creation | **V0.1** | Mission-to-execution cardinality unstated. |
-| **D-086** `occurred_at` for internal events | **V0.1** | No separate producer clock for internal events; V0.1 emits only internal events. Tied to D-037. |
-| **D-087** collection emptiness | V0.1 or V0.2 | Narrowed by D-091; still open for `required_capabilities`, `allowed_actions`, `Plan.steps`. |
-| **D-100** where the ReliabilityContract lives | **V0.1** | D-089's by-id reference leaves the contract with no container; D-010a's MissionState never held it. The runtime cannot reach the limits its counters measure against. |
-| **D-098** `latest_artifact` representation | **V0.1** | Deferred until artifacts are defined — but an optional field still needs a type. Exclude from V0.1, or choose one. |
-| **D-099** `information_dependencies` representation | **V0.1** | Same tension as D-098. No example of its content exists anywhere in the handoff. |
-| **D-078** units for time and token budgets | **V0.1** | The handoff uses ms (§6), seconds (§53) and minutes (§30) for latency. D-046's values would be meaningless without a canonical unit. |
-| **D-079** `tenant_id` required vs defaulted | **V0.1, five roots** | D-019 says both "required" and "carries a default"; those conflict. Determines whether D-032 is needed at all. |
-| **D-080** `capability` representation | **V0.1** | D-049 gave work steps a capability; the carrier's type was never decided. "Opaque identifier" was a Claude Code assumption, not a decision. |
-| **D-081** `AgentTask.status` representation | **V0.1** | D-048 left semantics open under D-036 but said nothing about type. Any enum would pre-empt D-036. |
-| **D-082** `MissionState` collections and `Plan.version` | **V0.1** | Plan ordering, `agent_tasks` keying (§8 gives AgentTask no id), counter types, and the version rule are all unstated. |
-| **D-083** timestamp representation | **V0.1** | D-054 settled where timestamps come from, not what they are. Matters for cross-process ordering at V0.6. |
 | **D-072** omitted vs explicitly-at-ceiling | V0.9, V1.3 | Argues for retaining the requested value alongside the effective one, not for making fields required. |
 | **D-066** contract user-supplied or synthesised | mission creation | Synthesis needs numbers D-046 defers; adopting it later would not contradict D-045. |
 | **D-012** predicate language for ROUTE/RETRY/REPLAN/TERMINATE | V0.2, V0.3 | Deterministic routing needs a defined, validatable condition form. |

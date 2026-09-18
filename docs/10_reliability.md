@@ -87,8 +87,8 @@ literal reading of the handoff's wording**, and D-045 records it as such.
 
 > **Still open:** **D-066** — whether the contract is always user-supplied or may be synthesised by
 > EIDOS. Synthesis is currently unbuildable because it needs numbers that **D-046** defers to V0.2,
-> and adopting it later would not contradict D-045. **D-073** — optionality of the non-budget
-> fields, which now carries the remaining weight of optionality (budgets are settled by **D-065**).
+> and adopting it later would not contradict D-045. Field optionality is settled: the six budgets
+> are optional (**D-065**) and the three non-budget fields are required (**D-073**).
 
 ## 3. Verification
 
@@ -449,8 +449,6 @@ and must be testable without a UI.
 | D-057 | How either risk value is determined — model-asserted or rule-derived | V0.2 policy validation |
 | D-031 | Is `evidence_requirements` a threshold or a description? | V0.1, one field |
 | D-074 | Is §30's approval wording exactly `autonomy_level >= 3`? §30 scopes to actions, §29 to the mission | V1.2 |
-| D-078 | Units for `max_execution_time` and `max_tokens` — the handoff uses ms, seconds and minutes for latency | **V0.1** |
-| D-079 | Is `tenant_id` required-to-supply or defaulted? | **V0.1** |
 | D-072 | Must "omitted" stay distinguishable from "explicitly at the ceiling"? | V0.9, V1.3 |
 | D-069 | Is §30's `High-risk actions: require human approval` a contract field, or a V1.2 policy rule? | **V0.1, field existence** |
 | D-045 | What applies when no ReliabilityContract is supplied | V0.1, one flag |

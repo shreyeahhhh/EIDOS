@@ -265,6 +265,24 @@ This is **D-011's principle applied consistently**: that decision already requir
 carry `occurred_at` (producer clock) and `recorded_at` (EIDOS ingestion), with the reducer reading
 neither from the clock.
 
+**Identifier exemptions from D-053's UUID rule.** Five identifier kinds are **string-backed** rather
+than UUID-backed, each for a stated reason:
+
+| Type | Why exempt | Decision |
+|---|---|---|
+| `StepId` | authored by the planner inside the Plan DSL; unique only within one plan version | D-092 |
+| `CapabilityId` | §13's own example writes `"capability": "research"`; emitted in the DSL | D-080 |
+| `ActionId` | §6 lists actions as plain names | D-080 |
+| `a2a_task_id`, `a2a_context_id` | assigned by the remote A2A system; EIDOS only mirrors them | D-095 |
+| `ArtifactRef` | produced by remote agents, as D-095 | D-098 |
+
+**Units and time.** Durations are **integer milliseconds** and token budgets are **integer token
+counts**; conversion to minutes or seconds happens at the API or UI boundary, never in a contract
+(**D-078**). Timestamps are **timezone-aware UTC**, and naive values are **rejected** (**D-083**).
+
+**Tenant.** `tenant_id` is always present on root models; in single-tenant V0.1 the value is supplied by
+the single-tenant context rather than by each caller, and it carries **no security meaning** (**D-079**).
+
 ### Dependency rules
 
 - Core layers — `contracts`, `validation`, `compiler`, `runtime`, `state` — must not import agent,

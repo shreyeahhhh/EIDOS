@@ -64,9 +64,10 @@ Per **D-033**, `AgentTask` is a nested model and does **not** carry `tenant_id`.
 exempt from D-053's UUID rule, because the remote A2A system assigns them and EIDOS only mirrors them
 (**D-095**). `last_event` is **`EventId | None`** — a reference, never an embedded event (**D-096**).
 
-> ⚠️ **`latest_artifact` — D-098.** "Artifact" is never defined by the handoff, and no `Artifact` model
-> may be invented. D-048 includes the field as optional, but an optional field still needs a type — so
-> it must either be excluded from V0.1 or given one. Not yet decided.
+`latest_artifact` is **`ArtifactRef | None`**, where `ArtifactRef` is an opaque, string-backed
+reference exempt from D-053, following D-095 since artifacts come from remote agents (**D-098**). **No
+`Artifact` model is created** — the handoff never defines what an artifact contains. `status` is an
+**opaque string**, and nothing may branch on it until D-036 defines the lifecycle (**D-081**).
 
 ## 3. The non-negotiable rules
 
@@ -136,8 +137,6 @@ available, and the duplicate/late-event semantics in §4 above cannot be specifi
 
 | Id | Question |
 |---|---|
-| **D-081** | `AgentTask.status` **representation** — D-048 left semantics to D-036 but said nothing about type; any enum would pre-empt D-036. **Blocks V0.1** |
-| **D-098** | `latest_artifact` **representation** — deferred until artifacts are defined, but an optional field still needs a type. **Blocks V0.1** unless the field is excluded |
 | D-023 | Which A2A SDK, protocol version and transport |
 | D-011 | Event ordering domain and idempotency key — constrains what the wire format must carry |
 | D-010 | MissionState fields and reducer contract |

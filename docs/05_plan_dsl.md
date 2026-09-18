@@ -97,7 +97,7 @@ EIDOS therefore has **two step categories**:
 
 | Category | Carries `capability` | Purpose |
 |---|---|---|
-| **Work step** | **required** | Performs work through a requested capability (invariant 11) |
+| **Work step** — `kind = "agent"` (D-101) | **required** | Performs work through a requested capability (invariant 11) |
 | **Control-flow step** | **absent** | Shapes execution |
 
 A control step carrying a capability, and a work step without one, are both **unrepresentable**
@@ -129,7 +129,7 @@ recorded as refinements of them.
 ### The canonical kind set
 
 ```text
-work step (capability-bearing)
+agent               <- the work step: capability-bearing (D-101)
 ROUTE
 VERIFY              <- pending D-055
 RETRY
@@ -184,7 +184,11 @@ on work steps, absent from control steps.
   from D-053's UUID rule** (**D-092**). LLM-authored ids such as `research_1` are valid. This settles
   the namespace question D-004 left open.
 - **`Plan.steps`** is an **immutable ordered collection** of `PlanStep`, **not** a map keyed by
-  `step_id`; uniqueness is **validated separately** (**D-093**).
+  `step_id`; uniqueness is **validated separately** (**D-093**). Empty is legal in V0.1 (**D-087**).
+- **`Plan.version`** is a **positive integer starting at 1**, increasing monotonically **within a
+  mission** (**D-082**).
+- **`PlanStep.capability`** on work steps is a **`CapabilityId`** — string-backed, exempt from D-053,
+  since §13's own example writes `"capability": "research"` (**D-080**).
 
 ## 4. Validation pipeline
 
@@ -310,9 +314,6 @@ verification; and an ordered variant that front-loads architecture before target
 
 | Id | Question | Blocks |
 |---|---|---|
-| D-087 | May `Plan.steps` be **empty**? Distinct from presence (D-077). `PlanStep.depends_on` is already settled as may-be-empty for a DAG root | V0.1 or V0.2 |
-| D-080 | `capability` **representation** on work steps | **V0.1** |
-| D-082 | `Plan.version` — integer from 1? monotonic per mission or per lineage? §15 shows `v1 -> v2` without the rule | **V0.1** |
 | D-055 | Are `VERIFY` and `HUMAN_APPROVAL` work steps rather than control-flow steps? | not V0.1; rework risk if answered after `PlanStep` exists |
 | D-012 | Predicate language for ROUTE / RETRY / REPLAN / TERMINATE | V0.2, V0.3 |
 | D-046 | Numerical bound values | V0.2 |

@@ -1285,6 +1285,8 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
   - `MissionEvent.occurred_at` — **D-086**, aligned with D-037
   - collection emptiness — **D-087**
 
+  *All four were subsequently resolved on 2026-09-18.*
+
   Also **not assigned** by the D-077 proposal: the presence of `MissionState.plans`,
   `MissionState.agent_tasks` and the budget counters. These were discussed only in connection with
   emptiness and were never given a present/absent verdict, so **none is inferred here.**
@@ -1413,7 +1415,216 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
   - Exact reducer and checkpoint semantics remain **deferred to V0.5** (D-039, D-010b).
 - **Consequences:** a MissionState with no applied event has `state_version = 0`; after the first
   event it equals 1. Whether a MissionState can exist before `MISSION_CREATED` is applied is part of
-  **D-084**, not this decision.
+  **D-084**, not this decision. *(D-084 has since established that MissionState is created with its
+  genome.)*
+
+### D-078 — Budget units: integer milliseconds and integer token counts
+
+- **Status:** Accepted · **Date:** 2026-09-18 · **Decided by:** human owner
+- **Source:** handoff §6 (`latency_budget_ms`), §30 (minutes), §53 (seconds)
+- **Decision:**
+  - `max_execution_time` is **integer milliseconds** internally.
+  - The corresponding MissionState execution-time counter is **milliseconds**.
+  - `max_tokens` is a **non-negative integer token count**.
+  - Conversion between minutes, seconds and milliseconds for the API or UI is **outside the contract
+    model**.
+- **Consequences:** the three units the handoff uses for latency are reconciled at the boundary rather
+  than in the contract. Milliseconds matches §6's `latency_budget_ms` and §53's `latency_ms` result.
+
+### D-079 — `tenant_id` is always present; the single-tenant context supplies it
+
+- **Status:** Accepted · **Date:** 2026-09-18 · **Decided by:** human owner
+- **Source:** D-019's own wording ("required" and "carries a default")
+- **Decision:**
+  - `tenant_id` is **always present and non-null** on root models.
+  - V0.1 is single-tenant, so a **fixed default `TenantId` is supplied by the single-tenant context**.
+  - The default **carries no security meaning**.
+  - "Required" means **every constructed root model has a `tenant_id` value**; it does **not** require
+    every caller to supply the same value by hand.
+- **Consequences:** resolves the conflict within D-019. **D-032** (the literal default value) is no
+  longer a contract-model question — the value belongs to the single-tenant context, not to any model.
+  D-019's binding caveat is restated: no authentication, authorization or isolation meaning.
+
+### D-080 — `CapabilityId` and `ActionId` are distinct opaque identifier types
+
+- **Status:** Accepted · **Date:** 2026-09-18 · **Decided by:** human owner
+- **Source:** handoff §6, §7, §13; D-049, D-094
+- **Decision:**
+  - `CapabilityId` is an **opaque identifier type**, used by `TaskGenome.required_capabilities` and by
+    work-step `PlanStep.capability`.
+  - `ActionId` is a **separate opaque identifier type**, used by `allowed_actions`.
+  - **No capability vocabulary and no action vocabulary is defined yet** (D-007 stays Open).
+- **Consequences:**
+  - Both are **string-backed and exempt from D-053's UUID rule.** Recorded as a consequence rather than a
+    new decision: §13's own example writes `"capability": "research"`, §6 lists capabilities and actions
+    as plain names, **D-094** already made `allowed_actions` opaque strings, and the planner emits
+    capabilities inside the Plan DSL — so a UUID-backed `CapabilityId` would make the handoff's own
+    examples unrepresentable. This follows **D-092**'s treatment of `StepId`.
+  - Refines D-094: `allowed_actions` is now a collection of `ActionId`.
+
+### D-081 — `AgentTask.status` is an opaque string in V0.1
+
+- **Status:** Accepted · **Date:** 2026-09-18 · **Decided by:** human owner
+- **Source:** handoff §8; D-036, D-048
+- **Decision:** `AgentTask.status` is an **opaque string** in V0.1. **No code may branch on its value
+  until D-036 defines the lifecycle.**
+- **Consequences:** does not pre-empt D-036's state set, which a closed enumeration would have done.
+
+### D-082 — Collection shapes, `Plan.version`, and counters
+
+- **Status:** Accepted · **Date:** 2026-09-18 · **Decided by:** human owner
+- **Source:** handoff §8, §15; D-010a, D-042, D-091, D-093
+- **Decision:**
+  - `Plan.version` is a **positive integer starting at 1**, **increasing monotonically within a mission**.
+  - `Plan.steps` is an **immutable ordered collection**.
+  - `MissionState.plans` is an **immutable ordered collection**.
+  - `MissionState.agent_tasks` is an **immutable collection**.
+  - The six budget counters are **non-negative integers**.
+  - **Empty collections are legal in V0.1.**
+  - **No storage-specific collection semantics** are added.
+- **Consequences:** `agent_tasks` is a collection rather than a keyed map, which retires the keying
+  question this item originally raised. Version monotonicity is scoped by mission, consistent with
+  **D-088** keeping `Plan.mission_id`.
+
+### D-083 — Timestamps are timezone-aware UTC; naive values are rejected
+
+- **Status:** Accepted · **Date:** 2026-09-18 · **Decided by:** human owner
+- **Source:** D-011, D-054
+- **Decision:** all timestamps are **explicit timezone-aware UTC datetime values**. **Naive timestamps
+  are rejected.** No contract constructs its own current timestamp (restating **D-054**).
+- **Consequences:** `occurred_at` (producer clock) and `recorded_at` (EIDOS ingestion) are comparable
+  across processes at V0.6 without ambiguity.
+
+### D-087 — Empty collections are legal in V0.1
+
+- **Status:** Accepted · **Date:** 2026-09-18 · **Decided by:** human owner
+- **Source:** the explicit statement "Empty collections are legal in V0.1" in the owner's **D-082**
+  decision
+- **Decision:** every required collection field may legally be empty in V0.1 — including
+  `TaskGenome.required_capabilities`, `TaskGenome.allowed_actions` and `Plan.steps`, which were the
+  parts of this item still open after D-091.
+- **Why recorded here:** D-082's statement answers this item exactly. Leaving D-087 marked Open would
+  have contradicted an accepted rule. **No validation rules are invented in V0.1**, per this item's
+  original constraint; whether an empty collection is *meaningful* is left to later validation.
+
+### D-098 — `AgentTask.latest_artifact` is `ArtifactRef | None`
+
+- **Status:** Accepted · **Date:** 2026-09-18 · **Decided by:** human owner
+- **Source:** handoff §8, §50; D-048
+- **Decision:** `latest_artifact` is **`ArtifactRef | None`**, where `ArtifactRef` is an **opaque
+  identifier/reference**. **No full `Artifact` model is created yet.**
+- **Consequences:** resolves the representability tension recorded earlier — the field now has a type.
+  `ArtifactRef` is **string-backed and exempt from D-053**, recorded as a consequence: artifacts are
+  produced by remote A2A agents, so this follows **D-095**'s treatment of externally assigned protocol
+  identifiers.
+
+### D-099 — `information_dependencies` is an immutable collection of opaque strings
+
+- **Status:** Accepted · **Date:** 2026-09-18 · **Decided by:** human owner
+- **Source:** handoff §6 (field named, never exemplified); D-077
+- **Decision:** `information_dependencies` is an **immutable collection of opaque identifiers/strings**
+  in V0.1. **No richer dependency semantics are invented.** The field remains optional per **D-077**.
+- **Consequences:** resolves the representability tension recorded earlier.
+
+### D-100 — MissionState holds the authoritative ReliabilityContract
+
+- **Status:** Accepted · **Date:** 2026-09-18 · **Decided by:** human owner
+- **Source:** D-010a, D-089; invariant 1
+- **Context:** **D-089** made `TaskGenome` reference its contract by id, which left the contract object
+  with no container: D-010a's MissionState field set never held it, and under by-value containment it
+  had travelled inside the genome.
+- **Decision:** add the authoritative **`reliability_contract: ReliabilityContract`** to MissionState.
+  `TaskGenome` retains **only `reliability_contract_id`**. The full contract is **not** duplicated inside
+  `TaskGenome`.
+- **Rationale (owner's):** MissionState contains the contract because it is the **authoritative global
+  mission state** and must be able to answer the mission's **acceptance constraints synchronously**.
+- **Consequences:**
+  - Amends D-010a's field set by one field. Satisfies invariant 1: the contract lives inside the one
+    authoritative state rather than beside it.
+  - MissionState can now reach both the budget **counters** (D-091) and the **limits** they are measured
+    against, so D-009's `min(system, contract)` rule is computable from state.
+  - The contract id now appears twice — as `TaskGenome.reliability_contract_id` and as
+    `MissionState.reliability_contract.contract_id` — so a mismatch is **representable** and must be
+    checked, as with **D-088**'s `Plan.mission_id`.
+  - Lifecycle interaction noted, not decided: the contract is required on MissionState, while whether
+    MissionState may exist before its genome was **D-084** (since resolved: it is created with its genome),
+    and whether the contract may be synthesised
+    is **D-066**.
+
+### D-101 — The work-step kind is `agent`
+
+- **Status:** Accepted · **Date:** 2026-09-18 · **Decided by:** human owner
+- **Source:** handoff §13's own example (`"type": "agent"`); completes D-049; D-050, D-077
+- **Decision:**
+  - The capability-bearing work-step kind is named **`agent`**.
+  - **`PlanStep.kind = "agent"`** is the V0.1 work-step variant, and it **requires `capability`**.
+  - Control-step kinds **do not carry `capability`**.
+- **Consequences:**
+  - Completes **D-049**, which created the work-step category without naming it.
+  - The canonical V0.1 kind set is `agent`, `ROUTE`, `VERIFY`, `RETRY`, `REPLAN`, `HUMAN_APPROVAL`,
+    `TERMINATE` — with `VERIFY`/`HUMAN_APPROVAL` classification still under **D-055**, where both remain
+    control-flow kinds.
+  - Observation, not an open question: the resulting value set is mixed-case — `agent` follows §13's
+    lowercase example, the control kinds follow §13's uppercase list. The handoff itself mixes the two
+    within §13.
+
+### D-084 — MissionState is created with its TaskGenome
+
+- **Status:** Accepted · **Date:** 2026-09-18 · **Decided by:** human owner
+- **Source:** handoff §33, §41, §73; D-010a, D-077, D-090
+- **Decision:** `MissionState.task_genome` is **required and non-null** in V0.1. **A mission is created
+  with its authoritative TaskGenome.** `MissionStatus.created` does **not** imply the genome is absent.
+- **Consistency with the event model — confirmed, and it supports this decision:** **D-090** defines
+  exactly the thirteen §33 event types, and **none of them introduces a genome**. There is no event after
+  `MISSION_CREATED` that could add one, so under D-010a's fold the genome *must* be established at
+  creation. §73's "Task Genome generated" and §41's `00:02 task genome created` are **replay-narrative
+  steps, not §33 event types**.
+- **Consequences:**
+  - Resolves the tension D-077 surfaced between §73's sequence and D-010a's fold.
+  - Under **D-067**, `MISSION_CREATED` carries no payload in V0.1, so when the V0.5 reducer rebuilds
+    MissionState from the log the genome must come from somewhere in it. That is **D-076**'s existing
+    obligation (payload completeness for replay), not a new question. In V0.1, MissionState is
+    constructed directly.
+  - Together with **D-100**, a MissionState now always carries both its genome and its contract.
+
+### D-085 — One immutable execution identity per mission in V0.1
+
+- **Status:** Accepted · **Date:** 2026-09-18 · **Decided by:** human owner
+- **Source:** handoff §15, §32, §54; D-077, D-082, D-088
+- **Decision:**
+  - `MissionState.execution_id` is **required and immutable** in V0.1.
+  - V0.1 has **exactly one execution identity per mission**.
+  - **Replanning creates a new plan version, not a new execution.**
+  - **Pause/resume retains the same `execution_id`.**
+  - Multiple executions or reruns of a mission are **deferred to a later version**.
+- **Consequences:**
+  - `execution_id` is `ExecutionId`, EIDOS-assigned and UUID-backed per **D-053**.
+  - In V0.1 `execution_id` and `mission_id` are one-to-one, so `execution_id` carries no additional
+    information yet. It exists from the start per invariant 18, so that reruns can be added later without
+    a contract change.
+  - Consistent with **D-082**/**D-088**: plan versions increase within a mission, and a replan stays within
+    one execution.
+
+### D-086 — `MissionEvent.occurred_at` is required
+
+- **Status:** Accepted · **Date:** 2026-09-18 · **Decided by:** human owner
+- **Source:** handoff §10; D-011, D-054, D-083
+- **Decision:**
+  - `MissionEvent.occurred_at` is **required**. It represents the event's **domain occurrence time**.
+  - For **externally produced** events, the **producer's occurrence timestamp is preserved**.
+  - For **EIDOS-internal** events with no separate producer clock, **`occurred_at = recorded_at`**, set at
+    recording/acceptance.
+  - Both timestamps remain explicit **timezone-aware UTC** datetimes (**D-083**).
+  - **The reducer must not invent timestamps.**
+- **Consistency with D-054 — confirmed:** the contract never reads the clock. The acceptance step supplies
+  `recorded_at` explicitly and, for internal events, copies it into `occurred_at`. That clock read belongs
+  to the acceptance step, which D-054 anticipated: "whatever supplies the time becomes an explicit
+  dependency."
+- **Consequences:**
+  - The internal/external rule is applied **at acceptance**; **no contract-level validation rule** is
+    introduced.
+  - Consistent with a **shared** event shape (one field, one rule for internal events), but **does not
+    decide D-037**, which remains open for V0.6.
 
 ---
 
@@ -1425,11 +1636,9 @@ has been resolved. Work that depends on one of them is blocked until the owner d
 Count: 43. Highest-impact first is **D-015** (how verification confidence is computed), then
 **D-007** (capability vocabulary) and **D-012** (predicate language) for V0.2.
 
-**All architectural V0.1 decisions are settled, and field presence is settled for every model** by
-D-048, D-065, D-073 and D-077 — except four fields split out as **D-084**–**D-086** and the presence of
-`MissionState.plans` / `agent_tasks` / budget counters, which no decision has assigned. What remains
-is mostly **representation**: **D-078**–**D-083** and **D-087**. **No contract is currently
-constructible without an invention.** None of the remaining items touches an invariant.
+**All seven V0.1 contracts are fully specified and constructible** as of 2026-09-18. **No Open item
+blocks V0.1 contract construction.** The remaining Open items concern later milestones, or touch V0.1
+without blocking it (see `progress.md`).
 
 **Standing rule for all Open items:** no placeholder enum, type, sentinel or inferred value may be
 invented to make code compile. An Open item blocks the field it touches; it does not license a
@@ -1875,63 +2084,6 @@ one is not.
 - **Needs:** Owner to decide whether the requested value must be retained alongside the effective
   one. Note this argues for **storing both**, not for making fields required.
 
-### D-084 — May MissionState exist before its TaskGenome is generated?
-
-- **Status:** Open · **Source:** handoff §33, §41, §73 vs D-010a · **Split out of D-077 at the owner's instruction**
-- **Finding:** §73's replay sequence is unambiguous: `Mission created -> Task Genome generated -> ...`.
-  §41's timeline agrees: `00:00 mission received`, then `00:02 task genome created`. §33's first
-  event is `MISSION_CREATED`. So **a mission demonstrably exists before its genome does.**
-
-  Under **D-010a**, MissionState is a materialized view folded from the event log, and that fold
-  **begins at `MISSION_CREATED`** — a point at which no genome exists. Either `task_genome` is
-  optional on MissionState, or MissionState does not materialize until the genome arrives, which
-  would leave `MISSION_CREATED` with nothing to fold into.
-- **Why it is not a plain optionality question:** it bears on *when MissionState comes into being*,
-  which is a D-010a-level question about the materialized view, not a field-level one.
-- **Effect while Open:** blocks the presence of `MissionState.task_genome`.
-- **Needs:** Owner decision on whether MissionState may exist without a genome.
-
-### D-085 — Does `execution_id` exist at mission creation, and may a mission have several executions?
-
-- **Status:** Open · **Source:** handoff §54 · **Split out of D-077 at the owner's instruction**
-- **Finding:** §54 lists `execution_id` among identifiers data models should carry, alongside
-  `mission_id`, but never defines the relationship between them. Whether a mission has exactly one
-  execution or several — one per plan version, per replan, or per resumption after a §32 pause — is
-  unstated. That determines whether an `execution_id` exists at the moment of `MISSION_CREATED`.
-- **Effect while Open:** blocks the presence of `MissionState.execution_id`.
-- **Needs:** The mission-to-execution cardinality, and when an execution begins.
-
-### D-086 — `MissionEvent.occurred_at` for internally generated events
-
-- **Status:** Open · **Source:** D-011 · **Split out of D-077 at the owner's instruction; to be kept aligned with D-037**
-- **Finding:** **D-011** defines `occurred_at` as the **producer's** clock, distinct from EIDOS's
-  `recorded_at` at ingestion. For an **internally generated** event there is no separate producer:
-  the two are either the same moment or `occurred_at` does not apply. **V0.1 emits only internal
-  events**, so this is not hypothetical for the first contract written.
-- **Relationship to D-037:** if internal and external events have separate shapes, internal events
-  may simply omit `occurred_at`; if they share one shape, the field needs a rule for internal events.
-  **The two must be decided together.**
-- **Effect while Open:** blocks the presence of `MissionEvent.occurred_at`.
-- **Needs:** Treatment for internal events, aligned with D-037.
-
-### D-087 — Which required collection fields may legally be empty?
-
-- **Status:** Open · **Source:** not addressed by the handoff · **Split out of D-077 at the owner's instruction**
-- **Finding:** D-077 separates **absence** from **emptiness**: a required collection must be present
-  but may still be empty. Which ones may be empty is a distinct question, and the answers plausibly
-  differ per field — a genome with zero `required_capabilities` is arguably meaningless, while
-  `plans` and `agent_tasks` are necessarily empty at mission creation.
-- **Already settled, and therefore outside this item:** `PlanStep.depends_on` — D-077 states it may be
-  empty for a DAG root.
-- **In scope:** `TaskGenome.required_capabilities`, `TaskGenome.allowed_actions`, `Plan.steps`, and
-  `MissionState.plans` / `agent_tasks` subject to whatever their presence turns out to be.
-- **Constraint from the owner:** **no validation rules are to be invented in V0.1.** Whether an empty
-  collection is *valid* may well be V0.2 validation rather than V0.1 contract — that allocation is
-  itself part of what this item decides.
-- **Effect while Open:** determines whether V0.1 contracts reject empty collections at construction.
-- **Narrowed by D-091 (2026-09-18):** `MissionState.plans` and `agent_tasks` **may be empty**.
-  **Still open:** `TaskGenome.required_capabilities`, `TaskGenome.allowed_actions`, `Plan.steps`.
-
 ### D-043 — Declared plan limits vs actual execution counters
 
 - **Status:** Open · **Source:** handoff §14 vs §32 · **Raised by Claude Code; split out of D-009, left Open by the owner**
@@ -2101,137 +2253,6 @@ one is not.
 - **Needs:** Owner to state whether the two are equivalent. Adjacent to **D-061**, which asks how
   mission-wide autonomy relates to the per-step `HUMAN_APPROVAL` kind; D-074 adds §30's wording to
   that same family rather than opening an unrelated question.
-
-### D-078 — Units for the time and token budgets
-
-- **Status:** Open · **Source:** handoff §6 vs §30 vs §53 · **Identified during the D-073 analysis; logged at the owner's instruction**
-- **Finding:** The handoff expresses latency in **three different units**: `"latency_budget_ms":
-  600000` (§6), `"maximum_latency_seconds": 600` (§53's request), `Maximum latency: 8 minutes` (§30),
-  and `"latency_ms": 372000` in §53's result. Nothing states a canonical unit. `max_tokens` has no
-  unit ambiguity but shares the same field-naming question — whether the unit is carried in the name
-  (`max_execution_time_ms`) or left implicit.
-- **Why it blocks:** a numeric field whose unit is undecided is ambiguous at every call site, and
-  **D-046**'s eventual values would be meaningless without it. §67 forbids presenting numbers whose
-  meaning is not established.
-- **Affects:** `ReliabilityContract.max_execution_time` and `max_tokens`; the corresponding
-  `MissionState` budget counters (**D-042**).
-- **Needs:** A canonical unit for duration, and whether units appear in field names.
-
-### D-079 — Is `tenant_id` required-to-supply, or defaulted?
-
-- **Status:** Open · **Source:** **D-019**'s own wording · **Identified during the D-073 analysis; logged at the owner's instruction**
-- **Finding:** D-019 states that `tenant_id` is "present and **required** on V0.1 root models" and
-  that it "carries a single fixed **default** value". In contract terms those two statements
-  conflict: **a field with a default does not need to be supplied**, so it is not required in the
-  constructor sense. The intent was most likely "always has a value, never null" — but which
-  mechanism delivers that was never decided.
-- **Why it blocks:** the five root models cannot declare the field without choosing. It also
-  determines whether **D-032** (the literal default value) is needed at all — if the field must be
-  supplied by the caller, there is no default constant to choose.
-- **Affects:** `TaskGenome`, `ReliabilityContract`, `Plan`, `MissionState`, `MissionEvent` (**D-033**).
-- **Needs:** Owner to state whether callers must supply `tenant_id` or whether the model defaults it.
-  Note that D-019's binding caveat holds either way: **the field carries no security meaning.**
-
-### D-080 — Representation of `capability`
-
-- **Status:** Open · **Source:** handoff §6, §7, §13; **D-049** · **Identified during the D-073 analysis; logged at the owner's instruction**
-- **Finding:** **D-049** established that work steps carry a capability and control steps do not, and
-  **D-007** leaves the vocabulary and matching semantics open. **The field's representation has never
-  been decided.** Candidates include a plain string, a distinct per-kind identifier type in the style
-  of **D-053**, or a closed enumeration once D-007 settles the vocabulary.
-
-  The consolidated V0.1 specification described it as "an opaque identifier". **That was an
-  assumption by Claude Code, not a decision**, and is recorded here so it is not mistaken for one.
-- **Why it blocks:** `PlanStep.capability` and `TaskGenome.required_capabilities` cannot be declared
-  without it.
-- **Affects:** `PlanStep`, `TaskGenome`.
-- **Needs:** A representation. It can be settled independently of **D-007**, since the vocabulary and
-  the carrier are separate questions.
-
-### D-081 — Representation of `AgentTask.status`
-
-- **Status:** Open · **Source:** handoff §8; **D-048**, **D-036** · **Identified during the D-073 analysis; logged at the owner's instruction**
-- **Finding:** **D-048** includes `status` in the V0.1 `AgentTask` and leaves its **semantics** open
-  under **D-036**, with the binding rule that **nothing may branch on its value**. It says nothing
-  about the **type**. A free-form string is a choice rather than a neutral default, and any closed
-  enumeration would pre-empt D-036 by fixing the state set.
-- **Why it blocks:** `AgentTask` cannot be declared without it — the only field of that model still
-  undetermined.
-- **Affects:** `AgentTask`.
-- **Needs:** A representation that does **not** imply a state set, since D-036 owns that.
-
-### D-082 — `MissionState` collection shapes and `Plan.version`
-
-- **Status:** Open · **Source:** handoff §8, §15, §32; **D-010a**, **D-042** · **Identified during the D-073 analysis; logged at the owner's instruction**
-- **Finding:** **D-010a** names the field set in prose — "plan versions and lineage", "remote
-  `AgentTask` records", "budget consumption counters" — without specifying their shapes:
-  - whether plans are an **ordered append-only sequence** and whether ordering is by version;
-  - how `agent_tasks` is **keyed** (by `agent_id`, by `a2a_task_id`, or by a separate task id) —
-    noting §8 gives `AgentTask` no id of its own;
-  - the **types** of the six budget counters, which is entangled with **D-078**.
-
-  Related and equally undetermined: **`Plan.version`** — an integer starting at 1, monotonic per
-  mission, per lineage, or something else. §15 shows `Plan v1 -> Plan v2` without stating the rule.
-- **Why it blocks:** `MissionState` and `Plan` cannot be declared without these.
-- **Affects:** `MissionState`, `Plan`.
-- **Needs:** Concrete shapes. The `agent_tasks` key is the sharpest, since §8's `AgentTask` has no
-  identifier the handoff designates as primary.
-- **Narrowed by D-091 (2026-09-18):** counter types (non-negative integers) and the presence and
-  immutability of `plans` and `agent_tasks` are settled. **Still open:** the `Plan.version` rule and
-  `agent_tasks` keying.
-
-### D-083 — Timestamp representation
-
-- **Status:** Open · **Source:** handoff §10, §54; **D-054** · **Identified during the D-073 analysis; logged at the owner's instruction**
-- **Finding:** **D-054** settled *where* timestamps come from — explicit required inputs, never the
-  wall clock. It did not settle **what they are**: whether timezone-aware instants are required,
-  whether naive values are rejected, and what resolution is assumed.
-- **Why it blocks:** every model carrying a timestamp. For `MissionEvent` specifically it is not
-  cosmetic — `occurred_at` comes from a **producer's** clock and `recorded_at` from EIDOS ingestion
-  (**D-011**), and comparing or ordering those across processes at V0.6 requires an unambiguous
-  representation.
-- **Affects:** `MissionEvent`, `MissionState`, and any other model with a timestamp.
-- **Needs:** A representation, and a rule for naive values. Recommend deciding alongside **D-078**,
-  since both concern how time is expressed.
-
-### D-098 — `AgentTask.latest_artifact` representation (deferred)
-
-- **Status:** Open · **Deferred:** until artifact semantics are defined · **Split out of the representation round at the owner's instruction**
-- **Finding:** "Artifact" is never defined by the handoff. §8 names `latest_artifact` in the `AgentTask`
-  mapping and §50 lists "partial artifact" among V0.6 tests, but no section describes what an artifact
-  contains. **No `Artifact` model may be invented.**
-- ⚠️ **Representability:** **D-048** includes `latest_artifact` as an optional V0.1 field. An optional
-  field still needs a type to be declared, so **a field whose representation is deferred cannot be
-  written.** Either the field is excluded from V0.1 until its representation exists — the pattern
-  D-067 applied to `payload` — or a representation is chosen. Raised, not decided.
-- **Needs:** artifact semantics, which arrive with the A2A work at V0.6.
-
-### D-099 — `TaskGenome.information_dependencies` representation (deferred)
-
-- **Status:** Open · **Deferred:** until the concept has a defined consumer · **Split out of the representation round at the owner's instruction**
-- **Finding:** §6 lists `information_dependencies` as a genome field, and **§6's own example omits
-  it** — there is no example of its content anywhere in the handoff. **No richer dependency schema may
-  be invented in V0.1.** The field remains **optional** per D-077.
-- ⚠️ **Representability:** the same tension as D-098. An optional field still needs a type to be
-  declared. Either the field is excluded from V0.1 until it has a consumer — the pattern D-031 applied
-  to `evidence_requirements` — or a representation is chosen. Raised, not decided.
-- **Needs:** a consumer that defines what an information dependency is.
-
-### D-100 — Where does the ReliabilityContract object live?
-
-- **Status:** Open · **Source:** consequence of D-089 against D-010a; invariant 1 · **Raised by Claude Code as a genuine representability gap**
-- **Finding:** **D-089** has `TaskGenome` reference its contract **by id**. **D-010a**'s MissionState
-  field set contains the genome but **not the contract**. Under by-value containment the contract
-  travelled inside the genome; by-id reference removes that path, so the contract object currently
-  has **no container anywhere in the V0.1 model**.
-- **Why it matters:** D-010a's own rationale lists "what would count as acceptable (§6, §30)" among the
-  questions MissionState must answer **synchronously**. The runtime needs `min_quality`,
-  `max_risk_level` and the six budgets to enforce D-009's `min(system, contract)` rule — and MissionState
-  holds the consumption counters but cannot reach the limits they are measured against. Holding the
-  contract somewhere outside MissionState would also sit awkwardly with **invariant 1**, which makes
-  MissionState the only authoritative global state.
-- **Effect while Open:** the contract can be declared as a model, but nothing can hold it.
-- **Needs:** owner decision on where a mission's contract is held.
 
 ---
 

@@ -201,18 +201,23 @@ redundant — and the second entry is not `task_genome` but its **characteristic
 | `allowed_actions` | required | present in §6's example |
 | `reliability_contract` | required | D-045 |
 
-An optional field may be absent. A required collection may still be **empty** — that is a separate
-question, **D-087**, not settled here.
+An optional field may be absent. A required collection may be **empty** — **D-087** settles that
+empty collections are legal in V0.1.
 
-## 6c. Representation — `decisions.md` D-089, D-094, D-099
+## 6c. Representation — `decisions.md` D-080, D-089, D-094, D-099, D-100
 
-- **`reliability_contract`** holds a **`ReliabilityContractId`**, not the contract object (**D-089**).
-  ⚠️ The contract object then has no home in MissionState — **D-100**.
-- **`allowed_actions`** is an immutable collection of **opaque string identifiers**; no action
-  vocabulary is invented (**D-094**).
-- **`information_dependencies`** stays optional, but its representation is **deferred** until it has a
-  consumer (**D-099**). An optional field still needs a type, so it must either be excluded from V0.1
-  or given one — not yet decided.
+| Field | Representation |
+|---|---|
+| `required_capabilities` | immutable collection of **`CapabilityId`** (D-080) |
+| `allowed_actions` | immutable collection of **`ActionId`** (D-080, refining D-094) |
+| `information_dependencies` | optional immutable collection of opaque strings (D-099) |
+| `reliability_contract_id` | **`ReliabilityContractId`** — a reference, not the contract (D-089, D-100) |
+
+`CapabilityId` and `ActionId` are **string-backed and exempt from D-053's UUID rule**: §13's own example
+writes `"capability": "research"`, and the planner emits capabilities inside the Plan DSL. No capability
+or action vocabulary is defined yet (D-007).
+
+The full `ReliabilityContract` is held by **MissionState**, not by the genome (**D-100**).
 
 ## 7. Identity fields
 
@@ -261,9 +266,6 @@ storage layer or re-attached at write time. A V1.0 concern, but a real cost of t
 | D-070 | Is `evidence_requirements` a duplicate of `min_independent_evidence`, or a distinct descriptive requirement — and if distinct, what representation? | V0.4 / V0.8 |
 | D-031 | Is `evidence_requirements` a numeric threshold or a descriptive task requirement? | V0.1, one field |
 | D-071 | Will detached or reusable genome representations ever be needed? | V1.0 strategy memory |
-| D-087 | May `required_capabilities` or `allowed_actions` be **empty**? Distinct from presence, which D-077 settled | V0.1 or V0.2 — the allocation is part of the question |
-| D-080 | `capability` **representation** — distinct from D-007's vocabulary question | **V0.1** |
-| D-079 | Is `tenant_id` required-to-supply or defaulted? D-019 says both | **V0.1** |
 | D-007 | Capability vocabulary and matching semantics | V0.2 capability validation |
 | D-014 | Does `autonomy_level` use the §29 0–4 scale, and what is §40's concept called instead? | V0.1 |
 | D-015 | How measurable proxies combine into an evaluated quality figure | V0.4, V1.2 |

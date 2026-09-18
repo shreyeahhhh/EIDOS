@@ -173,6 +173,7 @@ runtime must answer **synchronously**:
 - plan versions and lineage
 - active plan
 - remote `AgentTask` records
+- the authoritative `ReliabilityContract` — added by **D-100**
 - budget consumption counters — corresponding to **D-042**'s six contract budgets:
   `max_retries`, `max_replans`, `max_agent_calls`, `max_tool_calls`, `max_execution_time`,
   `max_tokens`
@@ -186,29 +187,35 @@ because LangGraph has such state.**
 **required**; `status_reason` and `active_plan_id` are **optional** (§32 shows a reason only on
 `paused`; §73 shows a mission existing before any plan is selected).
 
-**Not decided:** `task_genome` (**D-084**), `execution_id` (**D-085**), and the presence of `plans`,
-`agent_tasks` and the budget counters, which no decision has assigned.
+`task_genome` is **required** — a mission is created with its genome (**D-084**). No §33 event type
+introduces a genome, so it must exist from `MISSION_CREATED`. `execution_id` is **required and
+immutable**, one per mission in V0.1; replans create plan versions, and pause/resume keeps the same
+execution (**D-085**). `plans`, `agent_tasks` and the six counters are **required** (**D-091**).
 
 **`MissionEvent`:** `event_id`, `tenant_id`, `mission_id`, `sequence`, `recorded_at`, `type` are
-**required** — §10 says **every** event carries its field set. `occurred_at` is **not decided**
-(**D-086**).
+**required** — §10 says **every** event carries its field set. `occurred_at` is also **required**
+(**D-086**): it is the domain occurrence time — the producer's timestamp for external events, and equal
+to `recorded_at` for EIDOS-internal events, set at acceptance. The reducer never invents timestamps.
 
 ### Representation — `decisions.md` D-090, D-091, D-097, D-100
 
 - **`plans`, `agent_tasks` and the six budget counters are required** (**D-091**). The collections are
-  **immutable** and **may be empty**; the counters are **non-negative integers**, with the
-  execution-time counter using whatever unit **D-078** chooses for `max_execution_time`.
+  **immutable** and **may be empty**; the counters are **non-negative integers**. The execution-time
+  counter is in **milliseconds** (**D-078**). `plans` is **ordered**; `agent_tasks` is an unkeyed
+  immutable collection (**D-082**).
+- **Timestamps** are timezone-aware **UTC**; naive values are **rejected** (**D-083**).
 - **`MissionEventType`** is **exactly the thirteen types in §33** (**D-090**) — including A2A, MCP and
   RAG types that cannot occur in V0.1. This differs from D-052's exclusion of unreachable *states*;
   recorded so the difference is visible.
 - **`sequence` starts at 1**; **`state_version`** is a non-negative integer equal to the latest applied
   mission sequence (**D-097**). Reducer and checkpoint semantics stay deferred to V0.5.
 
-> ⚠️ **D-100 — the contract has no home.** D-089 makes the genome reference its contract **by id**, and
-> this document's field set never held the contract itself — under by-value containment it travelled
-> inside the genome. MissionState therefore holds the budget **counters** but cannot reach the
-> **limits** they are measured against, although D-010a lists "what would count as acceptable" among
-> the questions MissionState must answer synchronously.
+**The contract lives here — `decisions.md` D-100.** MissionState holds the authoritative
+**`reliability_contract: ReliabilityContract`**; the genome holds only `reliability_contract_id`. This
+amends D-010a's field set by one field, and it is what lets MissionState answer "what would count as
+acceptable" synchronously — it now reaches both the budget **counters** and the **limits** they are
+measured against, so D-009's `min(system, contract)` rule is computable from state. The contract id
+appears twice (genome reference and contract), so a mismatch is representable and must be checked.
 
 ### Why this boundary
 
@@ -342,14 +349,6 @@ see `decisions.md` **D-017**.
 | D-038 | Bounding and persisting the processed-`event_id` set | V0.5+ |
 | D-017 | Is the event log or a state snapshot authoritative for persistence and replay? | V0.5+ |
 | D-033 | Does `tenant_id` propagate to nested models, or stay root-only? | V0.1 |
-| **D-084** | May MissionState exist **before its TaskGenome**? §73 and §41 both show `Mission created` preceding `Task Genome generated`, and D-010a's fold begins at `MISSION_CREATED` | **V0.1, `task_genome` presence** |
-| D-085 | Does `execution_id` exist at creation? Mission-to-execution cardinality is unstated in §54 | **V0.1, `execution_id` presence** |
-| D-086 | `occurred_at` for **internally generated** events, which have no separate producer clock — aligned with D-037 | **V0.1, `occurred_at` presence** |
-| D-087 | Which required collections may be **empty** | V0.1 or V0.2 |
-| D-082 | Collection shapes — plan ordering, `agent_tasks` keying (§8 gives `AgentTask` no id of its own), counter types | **V0.1** |
-| D-083 | Timestamp representation — timezone-aware? naive rejected? Matters for comparing a producer's `occurred_at` with EIDOS's `recorded_at` across processes at V0.6 | **V0.1** |
-| D-079 | Is `tenant_id` required-to-supply or defaulted? | **V0.1** |
-| D-078 | Units for the budget counters | **V0.1** |
 | D-075 | Per-type payload definitions — §33 names thirteen types and describes none | V0.3–V0.8, incrementally |
 | D-076 | What payloads must carry for faithful replay under invariant 15 | V0.5, with D-039 |
 
