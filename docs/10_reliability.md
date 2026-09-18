@@ -384,13 +384,12 @@ appear at exactly two places in the whole handoff, §14 and §32, and nowhere us
 D-045's rationale is unaffected: the contract is required so acceptance criteria always exist, and
 that weight sits on `min_quality`, `max_risk_level` and `min_independent_evidence`, not on budgets.
 
-> **Still open:** **D-073** (optionality of the **non-budget** fields — deliberately *not* settled by
-> D-065, because those have **no system-ceiling fallback**; an omitted `min_quality` would leave
-> invariant 13 with nothing to check), **D-072** (whether "omitted" and "explicitly at the ceiling"
-> must stay distinguishable for §19 prediction-error tracking and the §41 views), **D-043**
-> (declared plan limits vs actual execution counters), **D-044** (`max_tokens` is in §30 and §63 but
-> in **neither** §14's nor §32's list), **D-066** (user-supplied vs synthesised), **D-046** (the
-> values themselves), **D-029** (the Agentic RAG reformulation bound).
+> **Still open:** **D-072** (whether "omitted" and "explicitly at the ceiling" must stay
+> distinguishable for §19 prediction-error tracking and the §41 views), **D-043** (declared plan
+> limits vs actual execution counters), **D-044** (`max_tokens` is in §30 and §63 but in **neither**
+> §14's nor §32's list), **D-066** (user-supplied vs synthesised), **D-046** (the values themselves),
+> **D-029** (the Agentic RAG reformulation bound). **D-073 (non-budget field optionality) is
+> resolved** — see the "Optionality" paragraph above.
 >
 > **D-043 is the one most likely to cause a real defect.** Five limit names appear in both §14
 > (validation, rejecting a plan) and §32 (execution, pausing a mission), and the shared names count
