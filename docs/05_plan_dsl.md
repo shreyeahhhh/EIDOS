@@ -148,10 +148,19 @@ TERMINATE
 V0.3 maps `SEQUENTIAL`, `PARALLEL`, `ROUTE`, `VERIFY`, `RETRY` and `REPLAN` into runtime nodes
 (§50). `HUMAN_APPROVAL` and `TERMINATE` are not listed in the V0.3 mapping.
 
+> **V0.3 scope — `decisions.md` D-112, decided by the human owner.** The V0.3 compiler compiles **only
+> `agent` and `VERIFY`** (`VERIFY` to a `VerifyNode` — D-124, a V0.3 implementation decision that does
+> not answer D-055). It **rejects at compile time** `ROUTE`, `RETRY`, `REPLAN`, `TERMINATE` and
+> `HUMAN_APPROVAL`, with a typed compile failure and no placeholder node, so these kinds never silently
+> become executable. This narrows §50's mapping list. **D-012 remains Open.** V0.2 still accepts plans
+> containing those kinds (D-047); rejecting them is the compiler's job. Compiler input is a `Plan` plus
+> an accepted `PlanValidationReport` (D-114).
+
 > **Open:** `ROUTE`, `RETRY`, `REPLAN` and `TERMINATE` are all conditional, and routing must be
 > deterministic, but **no predicate or expression language is specified** for any of them. Without
 > one, either the condition is opaque — breaking determinism and validation — or an expression
-> language gets invented. See `decisions.md` **D-012**. This blocks the compiler.
+> language gets invented. See `decisions.md` **D-012**. This blocks compiling these four kinds; V0.3
+> rejects them instead (D-112).
 
 **V0.1 scope — `decisions.md` D-047, decided by the human owner.** V0.1 defines the **eight step
 kinds**, **explicit step IDs**, **capability**, **dependency edges** and **DAG structure**. It
@@ -387,15 +396,15 @@ verification; and an ordered variant that front-loads architecture before target
 
 | Id | Question | Blocks |
 |---|---|---|
-| D-055 | Are `VERIFY` and `HUMAN_APPROVAL` work steps rather than control-flow steps? | not V0.1; rework risk if answered after `PlanStep` exists |
-| D-012 | Predicate language for ROUTE / RETRY / REPLAN / TERMINATE | V0.3 (blocks the compiler; not a V0.2 validator requirement) |
+| D-055 | Are `VERIFY` and `HUMAN_APPROVAL` work steps rather than control-flow steps? | not V0.1; rework risk if answered after `PlanStep` exists. **V0.3 (D-124):** `VERIFY` compiles as a control step, `HUMAN_APPROVAL` is unsupported; the question stays Open |
+| D-012 | Predicate language for ROUTE / RETRY / REPLAN / TERMINATE | Blocks compiling these kinds; V0.3 rejects them (D-112, D-127); not a V0.2 validator requirement |
 | D-046 | Numerical bound values (the mechanism is unblocked; D-103) | V0.2 values, V0.9+ tuning |
 | D-043 | Declared plan limits vs actual execution counters | **V0.3** (corrected 2026-09-18; not a V0.2 blocker) |
 | D-007 | Capability vocabulary and matching semantics | **V0.4** (corrected 2026-09-18; not a V0.2 blocker — see D-102) |
 | D-020 | Strategy vs Plan — one contract or two | V0.2, V1.0 |
 | D-111 | Eight V0.2 implementation details the approved design left unspecified, implemented conservatively — awaiting the owner's confirmation | none blocking |
 | — | Edge encoding (`depends_on` per step vs separate edge list) and step-id namespace — explicitly left open by D-004 | V0.1 |
-| — | Whether `HUMAN_APPROVAL` and `TERMINATE` are compiled at V0.3; §50 omits them from the V0.3 mapping | V0.3 |
+| D-125 | How plan-level `RETRY` relates to a future runtime retry policy | none at V0.3 (`RETRY` is rejected) |
 
 ## Out of scope for this document
 

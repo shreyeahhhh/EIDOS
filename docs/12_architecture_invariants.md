@@ -37,7 +37,7 @@ override MissionState.
 holding only what the runtime must answer synchronously. Detailed per-node runtime execution state
 stays out of it, so LangGraph's execution model never becomes part of the authoritative contract.
 The completeness burden therefore sits on the **event log**: an event that is not recorded is not
-replayable. **D-040** settles the exact split at V0.3.
+replayable. **D-040** settled the exact split at V0.3 (**D-113**): MissionState never enters LangGraph state.
 
 ## 2. Only the state reducer mutates MissionState
 
@@ -274,6 +274,10 @@ is the basis of the telemetry → evaluation → memory loop.
 **Verified by:** V0.5 replay tests reconstructing a mission timeline from its event log alone, with
 no agent invoked.
 
+> **V0.3 status (2026-09-19):** **not exercised.** V0.3 emits no `MissionEvent` (D-123) because the current event
+> vocabulary cannot represent local node lifecycle events (D-126, Open). Nothing in V0.3 verifies this
+> invariant, and no V0.3 document may claim replayability from events.
+
 ## 16. Conclusions are traceable
 
 **Source:** §74
@@ -347,7 +351,7 @@ These come from the handoff and are enforced through `CLAUDE.md` rather than thr
 | Id | Invariant affected | Question |
 |---|---|---|
 | D-015 | 12, 13 | How verification confidence is computed |
-| D-040 | 1 | The exact MissionState / LangGraph execution-state split (V0.3) |
+| D-126 | 15 | The event vocabulary cannot represent local node lifecycle events (V0.5 or later) |
 | D-039 | 2 | Whether the reducer returns an outcome alongside state (V0.5) |
 | D-036 | 8 | The `AgentTask` lifecycle state machine required for deterministic accept/reject |
 | D-046 | 7 | Numerical bound values (V0.2; none established in V0.1 by decision) |

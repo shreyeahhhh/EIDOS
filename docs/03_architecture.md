@@ -115,7 +115,8 @@ depending on the task and policy. This is invariant 9: no model, vendor or SDK n
 contracts, planning, validation, compiler, runtime or state.
 
 > **Open:** which module owns the Model/Agent Interface, and what its interface is. See
-> `decisions.md` D-018.
+> `decisions.md` D-018. **Narrowed at V0.3 (D-122):** only the *execution-side* port interface is
+> defined then, owned by `eidos.runtime`; the model-provider boundary stays Open.
 
 ## 6. Interoperability boundaries
 
@@ -224,8 +225,9 @@ the architectural map; `progress.md` tracks which of these exist.
 | `eidos.capabilities` | Capability vocabulary, agent capability registry | V0.4 (V0.2 needed neither — D-102) | no |
 | `eidos.planning` | Candidate strategy generation, strategy selection | V0.2+ | no |
 | `eidos.validation` | The validation pipeline of §14 — depends only on `eidos.contracts` | V0.2 | **yes** |
-| `eidos.compiler` | Plan DSL → runtime graph, deterministic | V0.3 | no |
-| `eidos.runtime` | LangGraph execution of compiled plans | V0.3 | no |
+| `eidos.compiler` | Validated `Plan` + accepted `PlanValidationReport` → an immutable, backend-neutral compiled form; deterministic; compiles only `agent` and `VERIFY` (D-112, D-114); imports no LangGraph | V0.3 | no |
+| `eidos.runtime` | Backend-neutral execution: level-synchronous semantics, node and run results, synchronous execution ports, frozen `ExecutionContext` (D-113, D-115, D-117, D-118, D-122); imports no LangGraph | V0.3 | no |
+| `eidos.backends.langgraph` | The LangGraph adapter — the **only** package that may import LangGraph (D-115); an optional dependency extra, also in `dev` (D-116) | V0.3 | no |
 | `eidos.agents` | Research, Analysis, Verification | V0.4 | no |
 | `eidos.state` | Reducer, checkpoints, replay | V0.5 | no |
 | `eidos.policy` | Governance, autonomy levels, budgets | V1.2 (V0.2 has only a `NOT_APPLICABLE` stage in `eidos.validation` — D-110) | no |
@@ -293,6 +295,8 @@ the single-tenant context rather than by each caller, and it carries **no securi
 - Deterministic components — validator, compiler, reducer, policy — perform no I/O, no network
   calls, no LLM calls, hold no hidden global state and do not depend on wall-clock time in logic.
 - `contracts` depends on nothing inside `eidos`.
+- **Only `eidos.backends.langgraph` may import LangGraph** (D-115). The compiler, the runtime and every
+  other core layer must not; LangGraph is an execution backend, not the architectural authority.
 
 ---
 

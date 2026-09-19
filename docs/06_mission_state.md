@@ -242,8 +242,9 @@ is the durable artifact and a snapshot is an optimisation. D-017 is *not* resolv
 is recorded so it is visible rather than arriving later as a fait accompli.
 
 > **Still open:** **D-039** (reducer signature — V0.5), **D-010b** (checkpoint semantics — V0.5),
-> **D-040** (the exact MissionState/LangGraph split — V0.3), **D-041** (evidence and final
-> mission-result fields — V0.4 and V0.8). None blocks V0.1.
+> **D-041** (evidence and final mission-result fields — V0.4 and V0.8). None blocks V0.1.
+> **D-040** (the exact MissionState/LangGraph split) is **resolved by D-113**: MissionState never
+> enters LangGraph state, LangGraph state holds only `outcomes`, and V0.3 writes nothing to MissionState.
 
 **Representation — resolved.** **D-053**: identifiers are opaque **UUID-backed** values with distinct
 per-kind types (`TenantId`, `MissionId`, `ExecutionId`, `PlanId`, `EventId`, `AgentId`, …), with
@@ -271,7 +272,7 @@ actual `status` value anywhere (§53) and as §43's display text, and `paused` f
 or suspension **boundary**; the omitted states are precisely the *in-progress* ones. That is
 coherent — the handoff describes missions from the outside, through events, API responses and UI
 displays. In-progress substates are runtime progress information, which **D-010a** excludes from
-authoritative MissionState and **D-040** defers to V0.3. Nothing in V0.1 could reach such a state in
+authoritative MissionState and **D-040** deferred to V0.3 (resolved by **D-113**). Nothing in V0.1 could reach such a state in
 any case, since there is no planner, validator or runtime.
 
 The runtime's real need — distinguishing "can still accept events" from "terminal" from "suspended"
@@ -341,7 +342,7 @@ see `decisions.md` **D-017**.
 | D-058 | Should `paused` later become more specific, or split? | V0.3+ |
 | D-039 | The reducer signature — does it return an outcome alongside state? | V0.5 |
 | D-010b | Checkpoint contents, granularity and trigger | V0.5 |
-| D-040 | The exact MissionState / LangGraph execution-state split | V0.3 |
+| D-126 | `MissionEvent` vocabulary for local node lifecycle events — the thirteen §33 types cannot represent them | V0.5, or wherever local node events are first recorded |
 | D-041 | Evidence and final mission-result fields | V0.4, V0.8 |
 | D-036 | The `AgentTask` lifecycle state machine "validate against lifecycle" presupposes | V0.6 |
 | D-037 | One shared event shape, or separate internal and external shapes? | V0.6 |

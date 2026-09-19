@@ -51,6 +51,8 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
   different floor, changing it costs one line. No LangGraph, FastAPI, Qdrant, Ollama,
   sentence-transformers, Redis, OpenTelemetry or frontend dependency is installed — each arrives at
   its own milestone per §50.
+- **Extended by D-116 (2026-09-19):** LangGraph is declared as an optional extra, also in `dev`, at V0.3 —
+  the milestone this entry anticipated. This entry is not reopened.
 
 ### D-004 — Plan DSL canonical representation is an ID-addressed DAG
 
@@ -1838,6 +1840,308 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
     policy stage as having approved the plan.
   - The stage is filled only by a later decision that resolves the autonomy questions.
 
+### D-112 — V0.3 compiles only `agent` and `VERIFY`
+
+- **Status:** Accepted · **Date:** 2026-09-19 · **Decided by:** human owner
+- **Source:** handoff §13, §50; D-012, D-047, D-049, D-050; V0.3 exploration (A1)
+- **Context:** §50's V0.3 mapping lists `SEQUENTIAL`, `PARALLEL`, `ROUTE`, `VERIFY`, `RETRY` and
+  `REPLAN`, and omits `HUMAN_APPROVAL` and `TERMINATE`. `SEQUENTIAL` and `PARALLEL` are not kinds
+  (D-050): they are edges. `ROUTE`, `RETRY`, `REPLAN` and `TERMINATE` are conditional, and D-012 (the
+  predicate language) is Open. D-047 says a V0.1 plan containing a conditional kind is structurally
+  valid but "must not silently become executable at V0.3 without D-012". V0.2 accepts such plans by
+  design, so the compile boundary is where they must be stopped.
+- **Decision:**
+  1. The V0.3 compiler compiles exactly two step kinds: **`agent`** and **`VERIFY`**.
+  2. It **rejects at compile time**: **`ROUTE`**, **`RETRY`**, **`REPLAN`**, **`TERMINATE`** and
+     **`HUMAN_APPROVAL`**. A rejected kind yields a typed compile failure — no node is emitted, no
+     placeholder behaviour exists, and a plan containing one is never partially compiled.
+  3. **D-012 remains Open.** None of the five kinds gains executable semantics in V0.3.
+  4. These kinds **must never silently become executable.** Supporting any of them later requires its
+     own decision and an additive change.
+- **Rationale:** rejection is the honest behaviour for a kind whose semantics do not exist. A
+  placeholder node would be behaviour nobody decided, and would become accidental architecture.
+- **Consequences:**
+  - This **narrows §50's V0.3 mapping list**. A plan V0.2 accepted can be compile-rejected; that is
+    expected, not a validation defect. V0.2 is unchanged.
+  - The compiled form need represent only the two supported kinds. Its exact shape is an
+    implementation matter.
+  - D-055 is **not** answered by this entry — see D-124.
+  - Semantics for the five kinds are deferred (D-127).
+
+### D-113 — MissionState never enters LangGraph state; V0.3 writes nothing to MissionState
+
+- **Status:** Accepted · **Date:** 2026-09-19 · **Decided by:** human owner · **Resolves D-040**
+- **Source:** handoff §9, §11; invariants 1 and 2; D-010a, D-040; V0.3 exploration (A2)
+- **Context:** §9 makes MissionState the only authoritative global state; §11 makes LangGraph the
+  execution runtime with its own execution state. D-010a set the principle (per-node runtime state does
+  not enter MissionState merely because LangGraph holds it) and deferred the concrete division to V0.3.
+- **Decision:**
+  1. **MissionState never enters LangGraph state.**
+  2. LangGraph state contains **only** `outcomes`: a mapping from `step_id` to node outcome.
+  3. A run receives a **frozen `ExecutionContext`** containing **only the required immutable run
+     snapshot**. It is not part of LangGraph state and is never mutated. Its exact field set is an
+     implementation matter, minimal by rule: a snapshot, not a view onto live state.
+  4. **V0.3 writes nothing to MissionState** — not status, counters, plans, the active plan or agent
+     tasks. Only the reducer mutates MissionState (invariant 2), and it arrives in V0.5.
+  5. Results leave the run **by value**. How they reach MissionState is the reducer's concern, not V0.3's.
+- **Rationale:** it keeps LangGraph subordinate — a scratch space for one run, not a second source of
+  truth — which is the only reading under which invariant 1 and §11 are both true.
+- **Consequences:**
+  - **D-040 is resolved** and moved to Accepted. D-010b, D-039 and D-017 stay Open.
+  - LangGraph's own checkpointing and interrupts are not used at V0.3 (D-127).
+  - Because MissionState is not in the run, nothing about the run is authoritative until the reducer
+    accepts it.
+
+### D-040 — The exact MissionState / LangGraph execution-state boundary
+
+- **Status:** Accepted · **Date:** 2026-09-19 · **Decided by:** human owner · **Resolved by D-113**
+  (originally Open, split out of D-010a and left Open by the owner)
+- **Source:** handoff §9 vs §11
+- **Original finding:** §9 asserts MissionState is the *only* authoritative global state; §11 assigns
+  LangGraph management of *execution state*; §9's own diagram shows the reducer writing into
+  "LangGraph checkpoint/state". Two state stores demonstrably exist. D-010a sets the **principle** —
+  detailed per-node runtime execution state does not enter authoritative MissionState merely because
+  LangGraph holds such state — but the specific split was left as inherited work at V0.3, when a
+  runtime exists.
+- **Resolution:** **D-113.** MissionState never enters LangGraph state; LangGraph state holds only
+  `outcomes`; the run receives a frozen `ExecutionContext`; V0.3 writes nothing to MissionState.
+- **Not resolved by this:** checkpoint contents, granularity and trigger (**D-010b**), the reducer
+  signature (**D-039**) and persistence (**D-017**) all stay Open. V0.3 uses no LangGraph
+  checkpointing or interrupts (D-127).
+
+### D-114 — Compiler input is `(Plan, accepted PlanValidationReport)`; validation and compilation stay separate authorities
+
+- **Status:** Accepted · **Date:** 2026-09-19 · **Decided by:** human owner
+- **Source:** handoff §14; invariant 5; D-102, D-103, D-105, D-110; V0.3 exploration (A3)
+- **Decision:**
+  1. The compiler's input is a **`Plan` together with an accepted `PlanValidationReport`** (one whose
+     `accepted` is true). Anything else is a typed compile failure.
+  2. The compiler **defensively re-checks the structural properties it depends on** rather than
+     trusting the report.
+  3. **Validation and compilation remain separate authorities.** The compiler does not re-run or
+     replace V0.2's stages (capabilities, resources, complexity, policy); V0.2 does not know what the
+     compiler supports.
+  4. Compile failures are a **separate typed family** from validation violations. A plan can be
+     validation-accepted and compile-rejected (D-112).
+- **Rationale:** a `PlanValidationReport` binds to a plan only by `plan_id`, not by content, so it is
+  evidence rather than proof. The compiler's soundness depends on unique step ids, resolved
+  dependencies and acyclicity; checking them is cheap, and a wrong assumption would fail at run time.
+  Re-implementing the semantic stages instead would create two authorities that can drift apart.
+- **Consequences:**
+  - V0.1 and V0.2 are **not modified.**
+  - The exact list of re-checked properties and the compile-failure codes are implementation matters.
+
+### D-115 — Package boundary: `eidos.compiler`, `eidos.runtime`, `eidos.backends.langgraph`
+
+- **Status:** Accepted · **Date:** 2026-09-19 · **Decided by:** human owner
+- **Source:** invariant 9; handoff §11, §36, §50; docs/03 §11; CLAUDE.md §8; V0.3 exploration (A4)
+- **Context:** docs/03's package map named `eidos.runtime` as "LangGraph execution of compiled plans",
+  while invariant 9 (CLAUDE.md) says no model, vendor or SDK name appears in `contracts`, `planning`,
+  `validation`, `compiler`, `runtime` or `state`.
+- **Decision:**
+  1. V0.3 adds three packages: **`eidos.compiler`**, **`eidos.runtime`**, **`eidos.backends.langgraph`**.
+  2. **`eidos.compiler` and `eidos.runtime` — and every other core layer — must not import LangGraph.**
+  3. **Only `eidos.backends.langgraph` may import LangGraph.**
+  4. `eidos.runtime` is the backend-neutral execution layer; the backend package depends on it, never
+     the reverse.
+  5. **docs/03's package mapping is amended accordingly** (`eidos.runtime` is no longer described as
+     LangGraph execution; `eidos.backends.langgraph` is added).
+- **Rationale:** LangGraph is an execution backend, not the architectural authority (§11, §12). With
+  the name confined to one adapter package, invariant 9 holds on its literal reading, so this decision
+  does not have to choose what "SDK" means in that invariant.
+- **Consequences:**
+  - The packages are created when the V0.3 slices that fill them begin (CLAUDE.md §3), not now.
+  - A static guard must enforce that only the backend package imports LangGraph.
+  - **Not decided here:** whether `eidos.runtime` also ships a sequential reference executor. It was
+    proposed in the V0.3 exploration but is not part of A1–A12; to be confirmed before the runtime
+    slice.
+
+### D-116 — LangGraph is an optional dependency extra, also included in `dev`
+
+- **Status:** Accepted · **Date:** 2026-09-19 · **Decided by:** human owner
+- **Source:** D-003; handoff §50, §76; V0.3 exploration (A5)
+- **Decision:** LangGraph is declared as an **optional dependency extra** and is **also included in
+  `dev`**. It is not a base dependency. **Core installation and core tests remain usable without
+  importing LangGraph.**
+- **Consequences:**
+  - This is the milestone that **D-003** said would justify declaring it ("nothing else is declared
+    until a milestone requires it"); D-003 is annotated, not reopened.
+  - **No dependency is changed by this entry.** `pyproject.toml` changes in the slice that introduces
+    the adapter. The extra's name and any version constraint are settled then, against what is actually
+    installed.
+  - LangGraph's transitive dependencies were reported by a secondary source and are unverified until
+    it is installed.
+
+### D-117 — V0.3 execution semantics: level-synchronous waves
+
+- **Status:** Accepted · **Date:** 2026-09-19 · **Decided by:** human owner
+- **Source:** handoff §11, §14, §32; D-050, D-104; V0.3 exploration (A6)
+- **Context:** LangGraph runs parallel nodes in super-steps and its own documentation says updates
+  from a parallel super-step "may not be ordered consistently". If EIDOS left the scheduling model to
+  the backend, which nodes run before a halt would depend on the backend — for example `A→B` beside an
+  independent `C` runs `A, B` under one-at-a-time scheduling but `A, C` under super-steps.
+- **Decision:**
+  1. Execution is **level-synchronous ("waves")**.
+  2. A node's **level is the length of its longest predecessor chain, counted in nodes** (as D-104
+     counts depth): a node with no predecessors is at level 1.
+  3. **Within a level, nodes execute in ascending plan position.**
+  4. A node is **ready** when **all its predecessors are settled**.
+  5. A node **executes only when every predecessor is `SUCCEEDED`**. Otherwise it becomes
+     **`SKIPPED` without dispatch**.
+  6. **Independent branches continue after a failure.** Only descendants of a non-`SUCCEEDED` node are
+     skipped.
+  7. **A halt takes effect after the current level.**
+  8. **No timing or concurrency assumption is part of correctness.**
+- **Rationale:** with these rules the outcome of a run is a function of the node results alone, so a
+  backend may run a level's nodes concurrently or one by one without changing the result. Continuing
+  independent branches (rather than fail-fast) is what makes the set of executed nodes independent of
+  timing.
+- **Consequences:**
+  - Level and plan position are properties of the compiled form and the run, not of LangGraph.
+  - A backend must preserve the level barrier; it may not dispatch a node before its level.
+  - Wasted work on independent branches after a failure is bounded by plan size, which V0.2 bounds.
+  - How a halt is requested (the admission hook) is D-122; its request shape is pinned at implementation.
+
+### D-118 — Node statuses and run outcomes
+
+- **Status:** Accepted · **Date:** 2026-09-19 · **Decided by:** human owner
+- **Source:** invariant 12; D-117; V0.3 exploration (A7)
+- **Decision:**
+  1. **Node statuses** are exactly: `SUCCEEDED`, `FAILED`, `NO_RESULT`, `VERIFICATION_FAILED`,
+     `VERIFICATION_INCONCLUSIVE`, `SKIPPED`, `NOT_REACHED`.
+  2. **Run outcomes** are exactly: `FINISHED`, `FAILED`, `HALTED`.
+  3. **`FINISHED` is not itself equivalent to verified success.** Verification is separate (D-121).
+  4. **`HALTED` takes precedence** over the other outcomes.
+- **Intended meaning (pinned by tests at implementation):** `FAILED` — the node's execution failed;
+  `NO_RESULT` — the node ran and produced no usable result; `SKIPPED` — settled without dispatch
+  because a predecessor was not `SUCCEEDED` (D-117); `NOT_REACHED` — never settled because the run
+  halted, so it can run in a later run (D-120). Run-level: `FINISHED` — not halted and every node
+  `SUCCEEDED`; `FAILED` — not halted and not every node `SUCCEEDED`; `HALTED` — the run halted.
+- **Consequences:**
+  - An empty plan (legal, D-106) finishes vacuously; that behaviour is pinned at implementation.
+  - "Usable" means the execution port reported a produced result. Whether the result is *good* is
+    verification's question, not execution's (invariant 12).
+  - How run outcomes map to `MissionStatus`, including D-059, is not decided here.
+
+### D-119 — No automatic retry and no in-run replan in V0.3
+
+- **Status:** Accepted · **Date:** 2026-09-19 · **Decided by:** human owner
+- **Source:** handoff §15, §32; invariants 6 and 7; D-043, D-082; V0.3 exploration (A8)
+- **Decision:**
+  1. **V0.3 performs no automatic retry** and **no in-run replan.**
+  2. **A retry is not a second invocation of the same node in the same run.** Within one run every
+     node is dispatched at most once.
+  3. **A replan is a caller-supplied new `Plan`**, which is **separately validated, compiled and
+     executed.** The runtime never patches, replaces or re-plans a live plan (invariant 6).
+- **Rationale:** retry needs a failure classification (§32's "classify" is unspecified), accounting that
+  only the reducer can record (V0.5), and reconciliation of D-043. A run in which each node is
+  dispatched at most once is bounded by construction, by the limits V0.2 already enforces.
+- **Consequences:**
+  - Plan lineage is carried by the existing V0.1 fields (`version`, `parent_plan_id`, `replan_reason`);
+    no contract changes.
+  - Version monotonicity and lineage validation across a mission's plans remain the V0.5 reducer's
+    concern (D-082).
+  - **D-043 stays Open** and is dormant at V0.3: no runtime counting is performed (D-127).
+  - The relationship between plan-level `RETRY` and a future runtime retry policy is **D-125 (Open).**
+
+### D-120 — Resume mechanism: prior `SUCCEEDED` outcomes
+
+- **Status:** Accepted · **Date:** 2026-09-19 · **Decided by:** human owner
+- **Source:** handoff §32; D-010b, D-017, D-085, D-113; V0.3 exploration (A9)
+- **Decision:**
+  1. **A later run may receive prior `SUCCEEDED` outcomes.**
+  2. **Settled `SUCCEEDED` nodes are not redispatched.**
+  3. **Invalid prior state produces a typed `RunRejection`.** It is never silently adapted — not
+     dropped, reordered, repaired or partly honoured.
+- **Rationale:** pause and resume must be possible without designing A2A or persistence early. Resume
+  as re-running over recorded outcomes needs no LangGraph checkpointer or interrupt (D-010b and D-017
+  are Open), and avoids the documented behaviour of LangGraph resumption re-running a node from its
+  beginning, which would re-invoke agents.
+- **Consequences:**
+  - A resumed run belongs to the same execution (D-085).
+  - What counts as invalid prior state (for example an outcome for an unknown step, or a `SUCCEEDED`
+    outcome whose predecessor is not `SUCCEEDED`) is pinned by tests at implementation.
+  - Whether and how a re-dispatch in a later run is *accounted* (`retries_used`) is **not decided here**;
+    runtime accounting is deferred (D-127).
+  - Nothing is persisted at V0.3; the source of prior outcomes is the caller.
+
+### D-121 — Verification interface: `PASS | FAIL | INCONCLUSIVE` plus a reason
+
+- **Status:** Accepted · **Date:** 2026-09-19 · **Decided by:** human owner
+- **Source:** handoff §18, §19, §31; invariants 12 and 13; D-015; V0.3 exploration (A10)
+- **Decision:**
+  1. The `Verifier` returns **`PASS`**, **`FAIL`** or **`INCONCLUSIVE`**, **plus a reason.**
+  2. **No scalar quality or confidence score is introduced.**
+  3. A `VERIFY` node maps the verdict to its status: **`PASS` → `SUCCEEDED`**, **`FAIL` →
+     `VERIFICATION_FAILED`**, **`INCONCLUSIVE` → `VERIFICATION_INCONCLUSIVE`.**
+  4. **Verification remains separate from execution completion.**
+- **Rationale:** it lets V0.3 carry a verification result without choosing how one is computed. `INCONCLUSIVE`
+  exists so that "cannot establish success" is never forced into pass or fail (invariant 13).
+- **Consequences:**
+  - **D-015 stays Open.** This fixes only the result shape that crosses the port; it chooses neither a
+    confidence function nor a pass/fail rule set for how a verifier decides.
+  - `INCONCLUSIVE` is never treated as a pass.
+  - Nothing here decides how verification results become mission status or a final result (D-059,
+    D-041 stay Open).
+  - A scalar or evidence field could be added later as an additive change.
+
+### D-122 — V0.3 execution ports are synchronous; the AdmissionGuard is explicit and required; D-018 stays narrow
+
+- **Status:** Accepted · **Date:** 2026-09-19 · **Decided by:** human owner
+- **Source:** D-018, D-103; handoff §36, §50; invariant 7; V0.3 exploration (A11)
+- **Decision:**
+  1. **V0.3's execution ports are synchronous.** Future async and A2A interfaces stay deferred.
+  2. **`AdmissionGuard` is an explicit, required input** to a run. There is **no ambient configuration
+     and no default**, in the spirit of D-103.
+  3. **D-018 is scoped narrowly to the execution-side port interface** — the interface through which the
+     runtime asks for work to be performed, a verification to be judged and a halt to be admitted or
+     refused. The model-provider abstraction boundary is **untouched**, and D-018 stays Open.
+- **Rationale:** V0.3 uses mock agents (§50), so a synchronous port is the smallest thing that works.
+  Requiring the guard means a bounded-execution hook cannot be omitted by accident.
+- **Consequences:**
+  - The `AdmissionGuard` is the hook through which a halt is requested (D-117). Its request shape and
+    purity requirements are pinned at implementation.
+  - No production guard ships: budget, time and token accounting are deferred (D-127); V0.3 tests
+    supply their own guards.
+  - The execution ports are owned by `eidos.runtime` (D-115); implementations depend on them, never the
+    reverse.
+
+### D-123 — V0.3 emits no `MissionEvent` and mutates no `MissionState`; invariant 15 is not exercised
+
+- **Status:** Accepted · **Date:** 2026-09-19 · **Decided by:** human owner
+- **Source:** invariants 2 and 15; handoff §33, §73; D-011, D-067, D-075, D-076, D-090; V0.3 exploration (A12)
+- **Context:** invariant 15 requires every meaningful execution step to emit a structured event so a
+  completed mission is replayable without re-running agents. The current event vocabulary cannot
+  represent a local node's lifecycle: D-090 fixed exactly thirteen types, the only ones describing task
+  execution are the two `A2A_TASK_*` types (remote tasks), and `MissionEvent` has no payload (D-067).
+- **Decision:**
+  1. **V0.3 emits no `MissionEvent` and mutates no `MissionState`.**
+  2. **Invariant 15 is explicitly not exercised in V0.3**, because the current event vocabulary cannot
+     represent local node lifecycle events.
+- **Consequences:**
+  - No V0.3 test verifies replayability from events, and no V0.3 document may claim it.
+  - A run result is **not** an event log. "An event that is not recorded is not replayable" (docs/06)
+    remains an obligation on later milestones.
+  - The gap itself is recorded as **D-126 (Open).**
+
+### D-124 — V0.3 treatment of `VERIFY` and `HUMAN_APPROVAL` (a V0.3 implementation decision; D-055 stays Open)
+
+- **Status:** Accepted · **Date:** 2026-09-19 · **Decided by:** human owner
+- **Source:** D-049, D-055, D-112; V0.3 exploration
+- **Decision:** for **V0.3 only**:
+  1. **`VERIFY` is treated as a control step** and compiles to a **`VerifyNode`**.
+  2. **`HUMAN_APPROVAL` is unsupported in V0.3** and is rejected at compile time (D-112).
+- **This does not answer D-055.** Whether `VERIFY` and `HUMAN_APPROVAL` are work steps rather than
+  control-flow steps, and what capability a human-approval step would request, **remain Open** for
+  future evolution. This entry records how V0.3 is implemented, not how the kinds are classified.
+- **Consequences:**
+  - This is consistent with the conservative position D-049 already takes (both remain control-flow
+    kinds meanwhile).
+  - If D-055 is later resolved differently, `VERIFY`'s compile mapping must be revisited. That cost is
+    accepted.
+  - **D-058 and D-061 are unaffected:** no `HUMAN_APPROVAL` step compiles and no pause-by-approval
+    exists at V0.3.
+
 ---
 
 ## Open — require the human owner
@@ -1948,19 +2252,6 @@ one is not.
 - **Effect while Open:** none on V0.1 — the reducer is V0.5 work; V0.1 needs only the contract.
 - **Needs:** Decide at V0.5, alongside the reducer itself.
 
-### D-040 — The exact MissionState / LangGraph execution-state boundary
-
-- **Status:** Open · **Source:** handoff §9 vs §11 · **Split out of D-010a, left Open by the owner**
-- **Finding:** §9 asserts MissionState is the *only* authoritative global state; §11 assigns
-  LangGraph management of *execution state*; §9's own diagram shows the reducer writing into
-  "LangGraph checkpoint/state". Two state stores demonstrably exist. D-010a sets the **principle** —
-  detailed per-node runtime execution state does not enter authoritative MissionState merely because
-  LangGraph holds such state — but the specific split is inherited work at V0.3 when a runtime
-  exists.
-- **Effect while Open:** none on V0.1. Material at V0.3.
-- **Needs:** The concrete division once the runtime is being built, consistent with D-010a's
-  principle and invariant 1.
-
 ### D-041 — Evidence and final mission-result fields in MissionState
 
 - **Status:** Open · **Source:** handoff §30, §31, §74 · **Split out of D-010a, left Open by the owner**
@@ -1990,6 +2281,9 @@ one is not.
   on whether D-012 blocks V0.2 or V0.3 — one sentence here called it "a clean V0.2 decision" while
   the line above it already said "blocks the compiler." That was documentation drift, not a decision;
   it is fixed to consistently read V0.3 in all three places.
+- **V0.3 note (2026-09-19):** V0.3 does **not** resolve this item. Instead of compiling the four conditional kinds
+  it **rejects** them at compile time (**D-112**), so "blocks the compiler" now means "blocks compiling
+  `ROUTE`, `RETRY`, `REPLAN` and `TERMINATE`". Deferred explicitly (**D-127**).
 
 ### D-060 — Is Level 3 an ordinal point, or a gate cutting across the scale?
 
@@ -2023,6 +2317,8 @@ one is not.
   compiled (§50 omits it from the V0.3 mapping list), and at V1.2 for the policy engine.
 - **Needs:** Owner decision. Interacts with **D-055**, which asks whether `HUMAN_APPROVAL` is a work
   step at all.
+- **V0.3 note (2026-09-19):** not material at V0.3 after all. `HUMAN_APPROVAL` is compile-rejected (D-112), so the
+  question of how it relates to the mission-wide autonomy level does not arise yet. Stays Open.
 
 ### D-062 — Naming and semantics of the §40 Autonomy Budget / Autonomy Debt concept
 
@@ -2105,6 +2401,10 @@ one is not.
 - **Needs:** The owning module and its interface. Invariant 9 forbids vendor names in contracts,
   planning, validation, compiler, runtime and state — so the boundary must be defined before any
   code calls a model.
+- **Scoped narrowly at V0.3 (2026-09-19, D-122):** only the *execution-side* port interface — how the runtime asks
+  for work to be performed and a verification to be judged — is defined at V0.3, and it is owned by
+  `eidos.runtime`. The model-provider abstraction boundary this entry asks about is untouched and
+  remains Open.
 
 ### D-020 — "Strategy" and "Plan" are used interchangeably
 
@@ -2332,6 +2632,8 @@ one is not.
   not V0.2.**
 - **Needs:** Either two distinctly named limits, or one limit with a stated counting rule that both
   enforcement points share. Not required to build V0.2's own declared-count check.
+- **V0.3 note (2026-09-19):** V0.3 performs **no runtime counting** (D-127) and dispatches each node at most once per
+  run (D-119), so this item stays dormant at V0.3. It is **not** resolved and remains Open.
 
 ### D-044 — Does `max_tokens` formally belong to the §14 and §32 bound lists?
 
@@ -2380,6 +2682,9 @@ one is not.
   category. **No reclassification may be made silently while writing the contract.**
 - **Needs:** Owner to decide whether either or both are work steps, and if HUMAN_APPROVAL is a work
   step, what capability it requests.
+- **V0.3 implementation note (2026-09-19, D-124):** for V0.3 only, `VERIFY` is treated as a control step compiling to a
+  `VerifyNode`, and `HUMAN_APPROVAL` is unsupported (compile-rejected). This does **not** answer this
+  item; the broader classification remains Open.
 
 ### D-058 — Should `paused` later become a more specific name?
 
@@ -2394,6 +2699,8 @@ one is not.
   introduces the second reason for pausing.
 - **Needs:** Revisit when `HUMAN_APPROVAL` is implemented (V0.3 per §50's mapping, or later) or when
   the policy engine lands at V1.2.
+- **V0.3 note (2026-09-19):** unaffected. `HUMAN_APPROVAL` is not compiled at V0.3 (D-112, D-124), so it is not
+  implemented there; this item stays Open.
 
 ### D-059 — Is "could not satisfy the reliability contract" `failed` with a reason, or a distinct terminal state?
 
@@ -2531,6 +2838,39 @@ one is not.
   that, in a normal run, only ever arises alongside a `FAILED` stage. Items 5–8 are representation.
 - **Needs:** the owner to confirm each item or replace it; any replacement is a new Accepted entry.
 
+### D-125 — Relationship between plan-level `RETRY` and future runtime retry policy
+
+- **Status:** Open · **Source:** handoff §13, §17, §32; D-012, D-043, D-119; raised in V0.3 exploration
+- **Finding:** retry appears in the handoff in two roles that are never related. §13 lists **`RETRY`
+  as a Plan DSL step kind**. §32 describes a **runtime recovery behaviour** — "agent failure → classify
+  → retry if appropriate → fallback capability → replan if necessary" — bounded by `max_retries`, and
+  §17 names "retry strategy" as a strategy factor. The handoff does not say whether a `RETRY` step *is*
+  the mechanism for the runtime behaviour, a planner-expressed alternative to it, or an independent
+  construct; nor what a `RETRY` step's edges mean (which step it retries, and when), since no predicate
+  language exists (D-012). §32's "classify" is also unspecified. This is the two-mechanisms pattern
+  already seen in D-061 and D-013.
+- **Effect while Open:** none on V0.3. `RETRY` is rejected at compile (D-112) and V0.3 performs no
+  automatic retry (D-119).
+- **Needs:** the owner to state how the plan-level step and any runtime policy relate; what a retry
+  counts against (`max_retries`, and D-043's declared-versus-actual counting); and whether failure
+  classification is part of the runtime or the plan.
+
+### D-126 — `MissionEvent` vocabulary for local node lifecycle events
+
+- **Status:** Open · **Source:** handoff §33; invariant 15; D-067, D-075, D-076, D-090, D-123; raised in V0.3 exploration
+- **Finding:** §33 says every meaningful execution event should be structured, and invariant 15 makes
+  replay from recorded events a requirement. D-090 fixed the vocabulary at exactly the thirteen §33
+  types. None of them represents a **local** node — a work step run by a locally hosted agent, or a
+  `VERIFY` step — being started, completed, failed, skipped or not reached. The `A2A_TASK_*` types
+  describe remote tasks; `VERIFICATION_FAILED` exists but there is no type for a verification that
+  passed or was inconclusive; and `MissionEvent` has no payload (D-067; D-075 and D-076 Open), so the
+  existing types cannot carry the distinction either.
+- **Effect while Open:** V0.3 emits no events (D-123) and invariant 15 is not exercised. Any later claim
+  that local execution is replayable is blocked until this is decided.
+- **Needs:** whether to add event types, to carry lifecycle in typed payloads (D-075), or something
+  else. Any change to the thirteen types supersedes D-090's "exactly thirteen" and needs its own
+  decision. Material at V0.5 (reducer, replay) or wherever local node events are first recorded.
+
 ---
 
 ## Deferred — specified, deliberately not implemented
@@ -2554,3 +2894,28 @@ one is not.
 - **Status:** Deferred · **Source:** handoff §24, §25, §26, §50
 - Documented in `docs/09_rag_architecture.md`. §25 notes the collection schema "should be designed
   later". No Qdrant, embedding model, reranker, dependency or package exists.
+
+### D-127 — V0.3 explicit deferrals
+
+- **Status:** Deferred · **Date:** 2026-09-19 · **Source:** V0.3 exploration and approvals (D-112 to D-126)
+- Recorded so that nothing below can become part of V0.3 by accident. **Items that are Open decisions
+  stay Open; deferral is not resolution.**
+
+  | Deferred item | Governing entry | Not before |
+  |---|---|---|
+  | The predicate language for conditional primitives | **D-012 (stays Open)** | a decision before any conditional kind is supported |
+  | Semantics of `ROUTE`, `RETRY`, `REPLAN`, `TERMINATE`, `HUMAN_APPROVAL` — all compile-rejected | D-112, D-012, D-055, D-058, D-061, D-125 | its own decision |
+  | Automatic retries | D-119, D-125 | not assigned to a milestone |
+  | A planner and the mission driver loop (plan → validate → compile → execute → verify → replan) | D-119, D-020 | not assigned to a milestone |
+  | The MissionState reducer and the event log | D-123, D-126, D-039, D-076 | V0.5 |
+  | LangGraph checkpointing and interrupts | D-113, D-120, D-010b, D-017 | V0.5 |
+  | Runtime budget, time and token accounting, including reconciling declared with actual counts | D-122, D-043, D-046 | not assigned to a milestone |
+  | The capability registry and capability-to-agent binding | D-007, D-018 (narrow, D-122) | V0.4 |
+  | Async execution ports and A2A interfaces | D-122, D-026 | when a milestone needs them (V0.6) |
+  | MCP and RAG | D-027, D-028 | V0.7, V0.8 |
+  | Policy semantics | D-060, D-061, D-074, D-110 | V1.2 |
+
+- **Recorded for visibility, not decided:** V0.2's POLICY stage reports `NOT_APPLICABLE` (D-110), so a
+  plan that V0.3 compiles has had no policy evaluation. At V0.3 only mock agents execute, so nothing
+  ungoverned has any effect. Whether real agents may execute before a policy exists is a V0.4 question
+  for the owner.
