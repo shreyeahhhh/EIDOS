@@ -220,7 +220,7 @@ and never partially executed.
 | Schema validation | The Plan/PlanStep contract (V0.1) |
 | Dependency validation | Explicit edges (D-004) |
 | Cycle detection | Explicit edges (D-004) |
-| Capability validation | The capability vocabulary — **blocked, D-007** |
+| Capability validation | `TaskGenome.required_capabilities` — **resolved, D-102** (mission-scoped; no vocabulary or registry needed at V0.2) |
 | Policy validation | The policy engine and autonomy model (`10_reliability.md`) |
 | Resource validation | Bound values and their source — **blocked, D-009** |
 | Graph complexity limits | Bound values — **blocked, D-009** |
@@ -261,11 +261,19 @@ A mission may **tighten** a system limit but never exceed the system ceiling, an
 above the ceiling is **rejected with an explicit validation reason** — never silently clamped
 (invariant 5). Full rationale in `decisions.md` D-009 and `docs/10_reliability.md` §6.
 
-> **Still open — and blocking V0.2 resource and complexity validation:** **D-046** (the values
-> themselves; none is established in V0.1 by decision), **D-042** (the exact contract budget field
-> list), **D-043** (whether a limit counts declared plan steps or actual invocations — these are
-> different numbers and currently share a name), **D-044** (`max_tokens` in the §14/§32 lists),
-> **D-045** (no contract supplied).
+**Mechanism vs. values — `decisions.md` D-103.** V0.2's resource-validation and graph-complexity
+mechanisms are fully buildable and testable now: production `SystemLimits` carries **no built-in
+numeric defaults**, every field is required at construction, and tests use explicitly labelled
+fixture values. The handoff's two illustrative numbers (`latency_budget_ms: 600000`,
+`Maximum tokens: 10,000`) are **not** copied into shipped defaults.
+
+> **Still open, but not blocking the mechanism:** **D-046** (the actual values themselves — governed
+> entirely separately from whether the mechanism can be built, per D-103), **D-044** (`max_tokens` in
+> the §14/§32 lists — not reinvestigated this round; still recorded as open). **D-042** and **D-045**
+> are **Accepted**, not open, and are removed from this list — corrected 2026-09-18, they had been
+> listed here as blockers after already being decided. **D-043** (declared vs. actual limit counting)
+> is **not a V0.2 blocker** — corrected 2026-09-18; investigation found it only becomes live once the
+> V0.3 runtime exists to reconcile against the V0.2 declared-count check. See D-043's own entry.
 
 ## 6. Immutable versioned plans
 
@@ -318,9 +326,9 @@ verification; and an ordered variant that front-loads architecture before target
 |---|---|---|
 | D-055 | Are `VERIFY` and `HUMAN_APPROVAL` work steps rather than control-flow steps? | not V0.1; rework risk if answered after `PlanStep` exists |
 | D-012 | Predicate language for ROUTE / RETRY / REPLAN / TERMINATE | V0.3 (blocks the compiler; not a V0.2 validator requirement) |
-| D-046 | Numerical bound values | V0.2 |
-| D-043 | Declared plan limits vs actual execution counters | V0.2, V0.3 |
-| D-007 | Capability vocabulary and matching semantics | V0.2 |
+| D-046 | Numerical bound values (the mechanism is unblocked; D-103) | V0.2 values, V0.9+ tuning |
+| D-043 | Declared plan limits vs actual execution counters | **V0.3** (corrected 2026-09-18; not a V0.2 blocker) |
+| D-007 | Capability vocabulary and matching semantics | **V0.4** (corrected 2026-09-18; not a V0.2 blocker — see D-102) |
 | D-020 | Strategy vs Plan — one contract or two | V0.2, V1.0 |
 | — | Edge encoding (`depends_on` per step vs separate edge list) and step-id namespace — explicitly left open by D-004 | V0.1 |
 | — | Whether `HUMAN_APPROVAL` and `TERMINATE` are compiled at V0.3; §50 omits them from the V0.3 mapping | V0.3 |

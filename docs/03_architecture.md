@@ -89,7 +89,10 @@ Plans request **capabilities, not named agents** (invariant 11). Capability-to-a
 at selection/execution time.
 
 > **Open:** the capability vocabulary in §6 and the one in §7 do not match, and the matching
-> semantics (exact / hierarchical / similarity) are unspecified. See `decisions.md` D-007.
+> semantics (exact / hierarchical / similarity) are unspecified. See `decisions.md` D-007. **This no
+> longer blocks V0.2** — `decisions.md` **D-102** scopes V0.2 capability validation to the mission's
+> own `TaskGenome.required_capabilities`, needing no cross-mission vocabulary. D-007 now blocks only
+> V0.4, when a real agent registry needs a real vocabulary to bind against.
 
 ## 5. Model independence
 
@@ -297,7 +300,7 @@ the single-tenant context rather than by each caller, and it carries **no securi
 
 | Id | Question |
 |---|---|
-| D-007 | Capability vocabulary and matching semantics |
+| D-007 | Capability vocabulary and matching semantics — not a V0.2 blocker (D-102) |
 | D-018 | Which module owns the model/agent interface |
 | D-020 | Strategy vs Plan — one object or two |
 | D-009 | Where execution bounds originate |

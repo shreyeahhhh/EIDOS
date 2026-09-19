@@ -164,7 +164,12 @@ governance spine — per D-051, §29 uses no risk scale at all.
 §6 requires `architecture_analysis` and `security_analysis`, and the §7 registry example contains
 neither. A genome written per §6 would not match a registry populated per §7.
 
-See `decisions.md` **D-007**. Capability validation (§14) cannot be written until this is resolved.
+See `decisions.md` **D-007** for the cross-mission vocabulary question, which remains genuinely
+open. **It no longer blocks V0.2**: `decisions.md` **D-102** scopes V0.2 capability validation to a
+check the V0.1 contracts already support without it — every `agent` `PlanStep`'s `capability` must
+appear in this genome's own `required_capabilities`, exact-string, no external vocabulary or
+registry needed. D-007 remains material at V0.4, when a real agent registry needs a real vocabulary
+to bind against.
 
 ## 6a. Mission ownership — `decisions.md` D-068
 
@@ -266,7 +271,7 @@ storage layer or re-attached at write time. A V1.0 concern, but a real cost of t
 | D-070 | Is `evidence_requirements` a duplicate of `min_independent_evidence`, or a distinct descriptive requirement — and if distinct, what representation? | V0.4 / V0.8 |
 | D-031 | Is `evidence_requirements` a numeric threshold or a descriptive task requirement? | V0.1, one field |
 | D-071 | Will detached or reusable genome representations ever be needed? | V1.0 strategy memory |
-| D-007 | Capability vocabulary and matching semantics | V0.2 capability validation |
+| D-007 | Capability vocabulary and matching semantics | V0.4 (not V0.2 — see D-102) |
 | D-014 | Does `autonomy_level` use the §29 0–4 scale, and what is §40's concept called instead? | V0.1 |
 | D-015 | How measurable proxies combine into an evaluated quality figure | V0.4, V1.2 |
 | D-060 | Is §29's level 3 an ordinal point or a gate cutting across the scale? | V1.2 policy engine |

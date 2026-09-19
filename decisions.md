@@ -1630,6 +1630,78 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
   - Consistent with a **shared** event shape (one field, one rule for internal events), but **does not
     decide D-037**, which remains open for V0.6.
 
+### D-102 — V0.2 capability validation is mission-scoped, not registry-scoped
+
+- **Status:** Accepted · **Date:** 2026-09-18 · **Decided by:** human owner
+- **Source:** handoff §6, §7; docs/03's split of `capabilities/` into "V0.2 / V0.4"; follows D-080
+- **Context:** D-007 leaves two things unresolved: the matching rule, and whether a canonical,
+  cross-mission capability list exists and who owns it. Neither is answerable from the handoff.
+  EXPLORE established that capability-to-agent **availability** is unambiguously V0.4 (docs/03's
+  package table), and that the only genuinely open fork was *what does "capability validation" mean
+  at V0.2, when no registry exists to check against?* Three options were logged (well-formedness
+  only; omit the stage; block fully on D-007) — none of them is what was chosen.
+- **Decision:**
+  1. V0.2 capability validation is **mission-scoped, not registry-scoped**.
+  2. Validate that every capability-bearing `agent` `PlanStep` has a valid `CapabilityId`, **and**
+     that the requested capability is present in `TaskGenome.required_capabilities`.
+  3. **No global or static capability vocabulary is required.**
+  4. **No check of whether a live agent currently provides the capability.**
+  5. Capability-to-agent availability and binding remain a **later, V0.4** concern.
+- **Rationale:** this sidesteps D-007's vocabulary-ownership question for V0.2 rather than answering
+  it — the "list" a step's capability is checked against is the **mission's own declared
+  `required_capabilities`**, decided per-mission by whoever writes the `TaskGenome`, not a
+  system-wide vocabulary. Nothing beyond the V0.1 contracts is needed: both fields already exist,
+  both are `CapabilityId`, and the comparison is a plain set-membership check. This was not one of
+  the three options originally logged under this item — it is a fourth, narrower scoping that needs
+  neither a registry nor a vocabulary.
+- **Consequences:**
+  - Membership is **exact-string** (`step.capability in genome.required_capabilities`). Anything
+    hierarchical or similarity-based would invent matching machinery beyond what was asked; exact
+    membership is the only reading that invents nothing, consistent with how D-080 already made
+    `CapabilityId` a plain opaque string.
+  - **D-007's substantive question is untouched.** This decision answers what V0.2 checks, not what
+    the (eventual, cross-mission) capability vocabulary is. D-007 remains Open, and now blocks only
+    V0.4 (the agent registry) rather than V0.2.
+  - The check spans **two** V0.1 contracts (`Plan`/`PlanStep` and `TaskGenome`) at once, so it is a
+    cross-object check in the same family as MissionState's A7 validators, not a Plan-only one. Where
+    exactly it runs (on a `(Plan, TaskGenome)` pair, or once both sit inside a `MissionState`) is an
+    implementation question for whoever writes the V0.2 validator, not decided here.
+
+### D-103 — Production `SystemLimits` carries no built-in numeric defaults
+
+- **Status:** Accepted · **Date:** 2026-09-18 · **Decided by:** human owner
+- **Source:** D-046, D-009 rider 5; handoff §67; CLAUDE.md §7
+- **Context:** D-046 asked whether the two handoff-example numbers (`latency_budget_ms: 600000`,
+  `Maximum tokens: 10,000`) should seed provisional V0.2 values. EXPLORE established that the
+  validation **mechanism** (the comparison logic; `effective = min(system, contract)`; reject-not-
+  clamp) is pure logic, buildable and testable without any real ceiling existing, and that the two
+  handoff numbers carry no authority as defaults — both are stated as illustrative examples, never
+  as defaults, and D-009 rider 5 already says any other value "would be invention presented as
+  engineering."
+- **Decision:**
+  1. **The numeric examples in the handoff are not production defaults.**
+  2. V0.2 validation mechanisms must **accept explicitly supplied system-limit values** — no ambient
+     or implicit configuration.
+  3. **Production `SystemLimits` has no built-in numeric defaults.** Every field is required at
+     construction.
+  4. **Tests may use explicitly labelled fixture values.**
+  5. **The handoff's illustrative numbers are not copied into shipped defaults.**
+  6. **Actual provisional values remain governed by D-046** and must be explicitly provided or
+     configured when needed.
+- **Confirmed not in contradiction with D-046 or D-009:** D-009 rider 5 permissively says bound
+  values "can be defined" at V0.2 — it does not require it. This decision takes the stricter,
+  more conservative path (ship with zero built-in defaults) rather than the permitted-but-not-
+  mandated one, which strengthens rather than weakens §67/CLAUDE.md §7's anti-fabrication rule.
+  D-046's own scope — the actual numbers for all seven bound dimensions — is **entirely unchanged**.
+- **Consequences:**
+  - V0.2's resource-validation and graph-complexity-limits mechanisms are fully buildable and
+    testable now, against test-only injected values, without D-046 resolving.
+  - **D-046's own "Needs" text is narrowed by this decision** — it called for "provisional values at
+    V0.2 ... explicitly marked arbitrary until measured"; this decision goes further and requires
+    **no built-in default at all**, provisional or otherwise. Annotated on D-046's own entry.
+  - A caller that does not explicitly supply `SystemLimits` values simply cannot construct one — this
+    is a deliberate consequence, not an oversight to fix later.
+
 ---
 
 ## Open — require the human owner
@@ -1637,11 +1709,14 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
 These are ambiguities, contradictions and gaps found in the handoff during the bootstrap read. None
 has been resolved. Work that depends on one of them is blocked until the owner decides.
 
-Count: 46. Highest-impact first is **D-015** (how verification confidence is computed), then
-**D-007** (capability vocabulary) and **D-046** (bound values) for V0.2. **D-012** (predicate
-language) was corrected 2026-09-18 to no longer be listed as a V0.2 item — it blocks the V0.3
-compiler, since none of V0.2's own pipeline stages reads a step's condition. **D-102** and **D-103**,
-logged the same day, narrow D-007 and D-046 respectively to the exact sub-questions blocking V0.2.
+Count: 44. Highest-impact first is **D-015** (how verification confidence is computed), then
+**D-007** (now V0.4-only, not V0.2 — see D-102) and **D-046** (bound values, mechanism unaffected —
+see D-103) for later V0.2 work. **D-012** (predicate language) was corrected 2026-09-18 to no longer
+be listed as a V0.2 item — it blocks the V0.3 compiler. **D-102** and **D-103**, logged the same day,
+were **resolved the same day**: V0.2 capability validation is mission-scoped against
+`TaskGenome.required_capabilities` (no registry, no global vocabulary needed), and production
+`SystemLimits` ships with no built-in numeric defaults. **D-043** was investigated and corrected the
+same day: it is a V0.3 (runtime reconciliation) concern, not a V0.2 blocker.
 
 **All seven V0.1 contracts are fully specified and constructible** as of 2026-09-18. **No Open item
 blocks V0.1 contract construction.** The remaining Open items concern later milestones, or touch V0.1
@@ -2108,9 +2183,19 @@ one is not.
   same number.
 - **Why it matters:** this is the item in the D-009 family most likely to produce a real defect.
   Two limits sharing a name while counting different things passes review and fails in production.
-- **Effect while Open:** none on V0.1. Material at V0.2 (validation) and V0.3 (runtime counters).
+- **Effect while Open:** none on V0.1, and **none on V0.2's declared-step-count check either** —
+  corrected 2026-09-18. Investigated during V0.2 scoping: V0.2's resource-validation and
+  graph-complexity-limits stages operate on a *static* Plan, before anything executes, so they can
+  only ever count **declared** steps — there is no runtime yet to count actual invocations against.
+  V0.2 can therefore implement "declared step count for kind X <= max_X" as a complete, well-defined
+  check with zero ambiguity, **provided it is documented as counting declared steps only** and does
+  not claim to bound total actual execution calls. The genuine ambiguity this item names — whether a
+  contract field bounds the same number at validation time and at execution time — only becomes a
+  live problem once the **V0.3 runtime** (and later the V0.5 reducer incrementing MissionState's
+  budget counters, D-091) exists and needs reconciling against the V0.2 check. **Material at V0.3,
+  not V0.2.**
 - **Needs:** Either two distinctly named limits, or one limit with a stated counting rule that both
-  enforcement points share.
+  enforcement points share. Not required to build V0.2's own declared-count check.
 
 ### D-044 — Does `max_tokens` formally belong to the §14 and §32 bound lists?
 
@@ -2202,6 +2287,10 @@ one is not.
 - **Needs:** Provisional values at V0.2 when validation exists, **explicitly marked arbitrary until
   measured**, then tuned from telemetry at V0.9+. Per §67 and CLAUDE.md §7 a provisional bound must
   never be presented as a tuned one.
+- **Narrowed by D-103 (2026-09-18):** production `SystemLimits` ships with **no built-in default at
+  all**, provisional or otherwise — stricter than this item's original "provisional values at V0.2."
+  D-103 governs the mechanism's posture toward absent values; the actual numbers for all seven bound
+  dimensions remain entirely this item's question, unresolved.
 
 ### D-075 — Payload type definitions per event type
 
@@ -2266,55 +2355,6 @@ one is not.
 - **Needs:** Owner to state whether the two are equivalent. Adjacent to **D-061**, which asks how
   mission-wide autonomy relates to the per-step `HUMAN_APPROVAL` kind; D-074 adds §30's wording to
   that same family rather than opening an unrelated question.
-
-### D-102 — How deep does V0.2 capability validation actually check?
-
-- **Status:** Open · **Source:** handoff §6 vs §7; V0.2 has no agent registry (that is V0.4) · **Split out of D-007; raised during V0.2 scoping analysis**
-- **Finding:** D-007 asks two things: the matching rule, and whether a canonical capability list
-  exists and who owns it. Neither can be answered from the handoff — §6's genome example and §7's
-  registry example don't even overlap. But there is a narrower question sitting in front of both:
-  **at V0.2, there is no agent registry to check a capability against at all** (`capabilities/` is
-  scoped "V0.2 / V0.4" in docs/03, and the registry itself is V0.4). So even a fully-specified
-  matching rule and vocabulary would have nothing live to validate against yet.
-- **Why this is a separate question from D-007:** D-007 asks what the vocabulary *is*. D-102 asks
-  what "capability validation" *means* at a milestone that has no vocabulary to check against —
-  independent of how D-007 is eventually answered.
-- **Options, none adopted:**
-  1. V0.2's capability-validation stage checks only **well-formedness** (a non-empty `CapabilityId`
-     on every `agent` step — already true by construction under V0.1's types) and defers semantic
-     checking to V0.4.
-  2. V0.2 **omits** capability validation from its own pipeline entirely, documenting it as a stage
-     that has no content until D-007 and a registry both exist.
-  3. V0.2 blocks fully on D-007 being answered first, even though there is nothing to validate
-     against yet.
-- **Effect while Open:** determines whether V0.2's capability-validation stage is a real (if
-  minimal) check, a documented no-op, or entirely deferred.
-- **Needs:** Owner decision on which of the above (or another option) V0.2 implements. Not an
-  invented answer to D-007 itself — D-007's substantive vocabulary/matching question remains
-  untouched by whichever option is chosen here.
-
-### D-103 — Should D-046's two handoff-example numbers seed provisional V0.2 values?
-
-- **Status:** Open · **Source:** handoff §6, §30; D-009 rider 5, D-046 · **Raised during V0.2 scoping analysis**
-- **Finding:** D-009 rider 5 and D-046 both hold that no numerical default may be established without
-  it being invention — five of the seven bound dimensions (`max_nodes`, `max_depth`,
-  `max_parallel_branches`, `max_retries`, `max_replans`, `max_agent_calls`, `max_tool_calls`) have
-  **zero** grounding anywhere in the handoff. Two do not: `max_execution_time` has
-  `latency_budget_ms: 600000` as a genome example (§6), and `max_tokens` has `Maximum tokens: 10,000`
-  as a contract example (§30). Both are stated as illustrative examples, **never as defaults** — but
-  they are the only two numbers in the entire handoff with any textual precedent at all.
-- **Why this is separate from D-046:** D-046 asks for the values themselves and is deliberately left
-  open pending real measurement (§67, CLAUDE.md §7). D-103 asks a narrower, prior question: **should
-  those two specific handoff-sourced numbers be adopted as explicitly-labelled provisional values for
-  V0.2**, while the other five dimensions remain genuinely unset (no comparison possible, or a
-  build-time requirement that a caller supply them) — or should all seven be treated identically as
-  fully open, with no head start from the two examples either?
-- **Effect while Open:** determines whether V0.2's resource-validation stage has two working example
-  ceilings to test against, or seven equally-unset dimensions.
-- **Needs:** Owner decision. If yes: the two values must be recorded as **provisional and
-  handoff-example-derived, not tuned** (per D-046's own requirement), and re-examined once V0.9
-  telemetry exists. If no: V0.2's resource-validation mechanism is built and tested against
-  arbitrary test-only numbers with no production default at all, same as the other five dimensions.
 
 ---
 
