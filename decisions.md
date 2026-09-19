@@ -529,7 +529,8 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
     pending **D-055**.
   - §14's limits remain computable and are now unambiguous: `max_depth` is the **longest path** and
     `max_parallel_branches` is the **maximum antichain width** of the DAG. This sharpens **D-046**,
-    which must set values against those definitions.
+    which must set values against those definitions. *(Path length is counted in **nodes**, not
+    edges — recorded in D-104, 2026-09-19.)*
   - §50's V0.3 instruction to "map SEQUENTIAL, PARALLEL … into runtime nodes" is satisfied by mapping
     the graph's structure onto LangGraph's sequential and concurrent execution. LangGraph has no
     "parallel node" — it has edges and concurrent branches.
@@ -1701,6 +1702,141 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
     **no built-in default at all**, provisional or otherwise. Annotated on D-046's own entry.
   - A caller that does not explicitly supply `SystemLimits` values simply cannot construct one — this
     is a deliberate consequence, not an oversight to fix later.
+
+### D-104 — `max_depth` counts nodes: a single-node plan has depth 1
+
+- **Status:** Accepted · **Date:** 2026-09-19 · **Decided by:** human owner
+- **Source:** V0.2 EXPLORE finding G1; refines D-050; handoff §14
+- **Context:** D-050 defines `max_depth` as the **longest path** of the plan DAG but does not say
+  whether a path's length is counted in nodes or in edges. The two differ by exactly one for every
+  non-empty plan, and the difference changes which plans a given `max_depth` accepts or rejects.
+  Left unstated, an implementation would pick one silently.
+- **Decision:**
+  1. `max_depth` is the number of **nodes** on the longest dependency path.
+  2. A single-node plan has depth **1**. An empty plan has depth **0** (see D-106).
+  3. A plan is within the limit when `depth <= max_depth`; `depth == max_depth` passes and
+     `depth == max_depth + 1` is rejected.
+- **Rationale:** "depth" as a budget on how many sequential steps a plan may chain is naturally a
+  count of steps. Counting nodes also makes `max_depth` and `max_nodes` directly comparable — a
+  strictly sequential plan of N steps has both `depth == N` and `node count == N` — and makes the
+  smallest legal non-empty plan depth 1 rather than 0.
+- **Consequences:**
+  - D-050's definition is unchanged; this only fixes its unit. D-050 carries a pointer here.
+  - **D-046** (actual numbers) must set `max_depth` values in nodes.
+  - Implemented in `eidos.validation` (V0.2) as `longest chain in nodes`.
+
+### D-105 — V0.2 checks only declared `max_agent_calls`; other budgets are contract-vs-ceiling only
+
+- **Status:** Accepted · **Date:** 2026-09-19 · **Decided by:** human owner
+- **Source:** V0.2 EXPLORE finding G2; D-009, D-042, D-043, D-065, D-103; handoff §14
+- **Context:** The six mission budgets in `ReliabilityContract` (D-042) are `max_retries`,
+  `max_replans`, `max_agent_calls`, `max_tool_calls`, `max_execution_time` and `max_tokens`. A static
+  plan can reveal how many agent steps it *declares*, but nothing in it reveals how many retries,
+  replans, tool calls, milliseconds or tokens its execution will consume. Treating a declared count
+  as a prediction of actual consumption is the ambiguity **D-043** already tracks for V0.3.
+- **Decision:**
+  1. The **only** budget V0.2 checks against plan *structure* is **declared `max_agent_calls`**: the
+     number of `agent`-kind steps in the plan must not exceed the effective limit,
+     `min(system ceiling, contract value)`, where an omitted contract value (D-065) means the system
+     ceiling alone.
+  2. Retries, replans, tool calls, execution time and tokens are **not inferred from plan
+     structure**. In V0.2 they are checked **only** as **contract-vs-system-ceiling**: the
+     contract's value, if present, must not exceed the system ceiling. Violations **reject**; the
+     value is never clamped (D-009).
+  3. Violation messages for the agent-call check say **"declared"** so they are not mistaken for a
+     statement about actual invocations.
+- **Rationale:** it is the largest check that is fully determined by the plan alone, and it
+  introduces no runtime semantics. Everything beyond it would be guesswork presented as validation.
+- **Consequences:**
+  - Reconciling declared counts with actual execution counters remains **D-043 (V0.3, Open)**. This
+    decision does not resolve it and does not pre-empt it.
+  - No runtime retry / replan / tool-call / time / token accounting is introduced.
+
+### D-106 — Empty plans are legal in V0.2
+
+- **Status:** Accepted · **Date:** 2026-09-19 · **Decided by:** human owner
+- **Source:** V0.2 EXPLORE finding G3; V0.1 `Plan` contract (D-092/D-093)
+- **Context:** The V0.1 `Plan` contract accepts `steps=()`. Whether the V0.2 pipeline should
+  additionally *reject* an empty plan (nothing to execute) was not stated anywhere.
+- **Decision:** an empty plan **passes** V0.2 validation. Every stage handles it as a vacuous pass:
+  no cycles, no agent steps to bind to a capability, `node count = 0`, `depth = 0`, `width = 0`.
+- **Rationale:** rejecting it would add a rule nothing in the specification or the contracts asks
+  for. Whether an empty plan is *useful* is a planning or runtime concern, not a validity one.
+- **Consequences:** if the human owner later wants empty plans rejected, that is a new, explicit rule
+  and a new decision.
+
+### D-107 — Plan ingress is JSON text; V0.1 gains two typed `ValueError` subclasses
+
+- **Status:** Accepted · **Date:** 2026-09-19 · **Decided by:** human owner
+- **Source:** V0.2 EXPLORE design choice A; invariants 3, 4, 5; `eidos.contracts.plan`
+- **Context:** the LLM emits a Plan DSL **document** (invariant 3), so the untrusted ingress to the
+  validator is **JSON text**, parsed with `Plan.model_validate_json`. The `Plan` contract already
+  enforces duplicate-`step_id` and unknown-`depends_on` failures inside two model validators, both
+  raising a bare `ValueError`. Pydantic wraps those, so a caller cannot tell a dependency failure
+  from any other value error except by matching message strings — which is fragile.
+- **Decision:**
+  1. The untrusted ingress to V0.2 validation is **JSON text**, exposed as
+     `validate_plan_json(text, state, limits)`. A second entry point,
+     `validate_plan(plan, state, limits)`, accepts an already-constructed `Plan`.
+  2. Two small, typed `ValueError` subclasses are added to `eidos.contracts.plan`, one for
+     duplicate-`step_id` and one for unknown-dependency failures. The existing checks raise them
+     instead of bare `ValueError`.
+  3. **Existing behaviour and message text are preserved exactly.** They are still `ValueError`s,
+     still raised from the same validators under the same conditions.
+- **Rationale:** a typed failure is the smallest change that makes the failure classes
+  distinguishable without parsing messages. Subclassing `ValueError` keeps every existing
+  `pytest.raises(ValueError)` and pydantic's error wrapping working unchanged.
+- **Consequences:**
+  - The V0.1 `test_self_dependency_is_not_rejected_in_v01` remains valid: V0.1 still does not reject
+    cycles. The V0.2 cycle stage does.
+  - Both exception types are V0.1-layer additions; the V0.1 155-test baseline must stay green.
+
+### D-108 — `EidosModel` is exported from `eidos.contracts`
+
+- **Status:** Accepted · **Date:** 2026-09-19 · **Decided by:** human owner
+- **Source:** V0.2 EXPLORE design choice B; CLAUDE.md §8
+- **Context:** V0.2's report and limit models are Pydantic contracts and should carry the same
+  strict, frozen, `extra="forbid"` configuration as every V0.1 contract (CLAUDE.md §8: typed,
+  validated). `EidosModel` lives in the private `eidos.contracts._base` and is not part of the
+  package's public surface, so `eidos.validation` would otherwise reach into a private module.
+- **Decision:** export `EidosModel` from `eidos.contracts` (added to `__all__`). This is a purely
+  additive API change.
+- **Consequences:** `eidos.validation` depends only on `eidos.contracts`'s public surface.
+  `eidos.contracts` still depends on nothing else inside `eidos`.
+
+### D-109 — Shared test factories live in a uniquely named shared module
+
+- **Status:** Accepted · **Date:** 2026-09-19 · **Decided by:** human owner
+- **Source:** V0.2 EXPLORE design choice C; CLAUDE.md §6
+- **Context:** V0.1's factories live in `tests/unit/contracts/conftest.py` and are imported with
+  `from conftest import ...`. That resolves only while exactly one non-package `conftest.py`
+  directory is on the import path. V0.2 adds a second test directory needing the same factories;
+  with two, resolution depends on collection order (verified: the reverse order fails at
+  collection).
+- **Decision:** move the shared factories into one **uniquely named** shared test module and
+  configure pytest (`pythonpath`) so tests import it directly, independent of `conftest.py`
+  resolution. Done as its **own commit**, with the **155-test V0.1 baseline unchanged**.
+- **Consequences:** test-infrastructure only. No test is weakened, deleted or skipped; no runtime
+  dependency is added; `conftest.py` files remain free to hold fixtures.
+
+### D-110 — The POLICY stage exists in the V0.2 pipeline and reports `NOT_APPLICABLE`
+
+- **Status:** Accepted · **Date:** 2026-09-19 · **Decided by:** human owner
+- **Source:** V0.2 EXPLORE design choice D; invariants 5 and 14; D-060, D-061, D-074
+- **Context:** invariant 5 fixes the validation order (`schema -> dependencies -> cycles ->
+  capabilities -> policy -> resources -> complexity limits -> compile`), and invariant 14 says
+  governance is deterministic and enforced in code. But what a policy check would *evaluate* — the
+  autonomy-level semantics — is blocked on **D-060/D-061/D-074** (Open). Inventing policy rules, or
+  a mechanism for injecting them, to fill the stage would be a silent decision.
+- **Decision:** the POLICY stage is present in the pipeline, in its invariant-5 position, and
+  reports **`NOT_APPLICABLE`**. No policy semantics are invented and **no policy-injection
+  mechanism** is built.
+- **Rationale:** it keeps the pipeline's shape and ordering faithful to invariant 5 without
+  fabricating governance that the owner has not decided.
+- **Consequences:**
+  - `NOT_APPLICABLE` is an honest, distinct outcome — not `PASSED`. A report must not present the
+    policy stage as having approved the plan.
+  - The stage is filled only by a later decision that resolves the autonomy questions.
 
 ---
 
