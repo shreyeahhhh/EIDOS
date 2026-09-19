@@ -7,11 +7,12 @@
 
 ## Status
 
-**Bootstrap — architecture only. No EIDOS runtime behaviour is implemented yet.**
+**V0.2 — typed contracts and deterministic plan validation. No orchestration runtime exists yet.**
 
-This repository currently contains the project rules, the architecture knowledge base, the decision
-record, and empty package boundaries. There is no planner, no validator, no compiler, no runtime,
-no agents, no A2A, no MCP, no RAG, no persistence and no frontend.
+This repository contains the project rules, the architecture knowledge base, the decision record,
+the V0.1 typed contracts (`eidos.contracts`) and the V0.2 plan validator (`eidos.validation`). There
+is no planner, no compiler, no runtime, no agents, no A2A, no MCP, no RAG, no persistence and no
+frontend.
 
 Current status and the milestone ladder: [progress.md](progress.md).
 Decisions and unresolved questions: [decisions.md](decisions.md).

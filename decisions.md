@@ -2492,6 +2492,45 @@ one is not.
   mission-wide autonomy relates to the per-step `HUMAN_APPROVAL` kind; D-074 adds §30's wording to
   that same family rather than opening an unrelated question.
 
+
+### D-111 — V0.2 implementation details the approved design left unspecified
+
+- **Status:** Open · **Source:** V0.2 implementation (2026-09-19); CLAUDE.md §7 (no silent defaults)
+- **Finding:** The approved V0.2 design fixed the stage list, the result model, the limits and the
+  rulings D-104..D-110. While implementing it, eight small behaviours were **not** specified. Each
+  had to be written one way or another, so each was written the most conservative way and is
+  recorded here for the human owner to confirm or change. **None is a claim that the choice is
+  right; all are cheap to reverse and none weakens an invariant.**
+  1. **Identity mismatch is reported under the SCHEMA stage.** A plan whose `mission_id` or
+     `tenant_id` differs from the `MissionState` it is validated against gets
+     `PLAN_MISSION_MISMATCH` / `PLAN_TENANT_MISMATCH` under SCHEMA, because invariant 5's stage order
+     has no earlier or better-fitting home. CAPABILITY and RESOURCE (the two stages that read the
+     state) are then SKIPPED; the structural stages still run.
+  2. **`accepted` is stricter than "no stage FAILED".** A report is accepted only if every stage is
+     `PASSED` or `NOT_APPLICABLE`; a `SKIPPED` stage is never accepted (invariants 5, 13).
+  3. **The DEPENDENCY stage re-checks a constructed `Plan`.** `Plan` enforces uniqueness and
+     reference resolution at construction, but `model_copy(update=...)` / `model_construct` bypass
+     that. `validate_plan` re-verifies both so a `PASSED` reflects a check that ran on this plan and
+     the graph stages never receive an undefined graph; if it fails, CYCLE and COMPLEXITY are SKIPPED.
+  4. **COMPLEXITY skip semantics.** A cyclic plan within `max_nodes` is `SKIPPED` (depth and width
+     are undefined), never `PASSED`. A plan over `max_nodes` is rejected **without computing the
+     width**, whose cost is up to quadratic in the step count; `max_depth` (linear) is still checked.
+  5. **`SystemLimits` numeric range.** Every field is an integer `>= 0` with no upper bound and no
+     default; `0` is a legal limit, not "unset".
+  6. **Violation ordering.** Stage order; within a stage, `plan.steps` order (cycles by earliest
+     member), the fixed six-budget order for contract-versus-ceiling, and mission-before-tenant for
+     identity. The order is asserted byte-identical across process hash seeds.
+  7. **Two exception types exported from `eidos.contracts`.** D-108 authorised exporting
+     `EidosModel`; `DuplicateStepIdError` and `UnknownDependencyError` (D-107) were exported
+     alongside it so `eidos.validation` need not import a submodule path.
+  8. **The report carries `plan_id` only** (`None` when the document could not be parsed) — no
+     `tenant_id` or `mission_id`. The report is derived output, not persisted state; invariant 18's
+     identifier rule was read as applying to state and event records.
+- **Effect while Open:** none blocking. Items 1, 3 and 4 change which stage or status a situation
+  is reported under. Item 2 fixes that a report with a `SKIPPED` stage is never accepted — a state
+  that, in a normal run, only ever arises alongside a `FAILED` stage. Items 5–8 are representation.
+- **Needs:** the owner to confirm each item or replace it; any replacement is a new Accepted entry.
+
 ---
 
 ## Deferred — specified, deliberately not implemented

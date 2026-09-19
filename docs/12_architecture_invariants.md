@@ -95,6 +95,10 @@ never partially executed.
 maximum nodes, maximum parallel branches, unknown capabilities, invalid operations, policy
 violations, resource violations (§58).
 
+> **V0.2 status (2026-09-19):** implemented for every stage except policy, which reports
+> `NOT_APPLICABLE` (D-110). "Invalid operations" is covered by schema validation — an unknown step
+> `kind` is a schema violation. See `docs/05_plan_dsl.md` §4.
+
 ## 6. Plans are immutable and versioned
 
 **Source:** §15
@@ -249,6 +253,11 @@ approval, deletion of a critical resource is blocked.
 
 **Verified by:** V0.2 policy-validation tests rejecting plans containing disallowed actions; V0.7
 unauthorized-call tests at the MCP boundary; scenario tests for policy violation.
+
+> **V0.2 status (2026-09-19):** the POLICY stage exists in the pipeline and reports `NOT_APPLICABLE`
+> (`decisions.md` D-110): no policy check is defined yet, because the autonomy semantics it would
+> enforce are unresolved (D-060, D-061, D-074). Rejecting disallowed actions therefore remains future
+> work; nothing in V0.2 verifies this invariant.
 
 **Note:** the `autonomy_level` scale and its collision with §40's separate budget concept are
 unresolved — `decisions.md` D-014.

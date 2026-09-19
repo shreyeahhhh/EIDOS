@@ -451,7 +451,7 @@ and must be testable without a UI.
 | D-072 | Must "omitted" stay distinguishable from "explicitly at the ceiling"? | V0.9, V1.3 |
 | D-069 | Is §30's `High-risk actions: require human approval` a contract field, or a V1.2 policy rule? | **V0.1, field existence** |
 | D-045 | What applies when no ReliabilityContract is supplied | V0.1, one flag |
-| D-043 | Declared plan limits vs actual execution counters | V0.2, V0.3 |
+| D-043 | Declared plan limits vs actual execution counters | **V0.3** (V0.2 checks declared steps only — D-105) |
 | D-044 | Does `max_tokens` formally belong to the §14/§32 bound lists? | V0.2, V1.2 |
 | D-046 | Numerical bound values | V0.2, tuned from V0.9 telemetry |
 | D-060 | Is §29's level 3 ordinal, or a gate cutting across the scale? | V1.2 |

@@ -7,19 +7,24 @@ Status only. Rules live in [CLAUDE.md](CLAUDE.md). Decisions and open questions 
 
 ## Current state
 
-**Milestone: V0.1 Core Contracts — implemented and tested.**
+**Milestone: V0.2 Plan Validation — implemented and tested (on top of V0.1 Core Contracts).**
 
 All seven V0.1 contracts (`ReliabilityContract`, `TaskGenome`, `Plan`, `PlanStep`, `MissionEvent`,
 `MissionState`, `AgentTask`) are implemented in `src/eidos/contracts/`, immutable, in-memory only
-(D-005), with no I/O, no network, no LLM calls and no vendor/model/SDK reference. 155 unit tests in
-`tests/unit/contracts/` pass, covering construction, rejection of invalid input, immutability, every
+(D-005), with no I/O, no network, no LLM calls and no vendor/model/SDK reference. 165 unit tests in
+`tests/unit/contracts/` pass (155 at implementation, +10 for D-107/D-108), covering construction, rejection of invalid input, immutability, every
 required/optional field, opaque identifier typing, Plan step uniqueness, `depends_on` referential
 integrity, plan lineage/reference consistency, TaskGenome/ReliabilityContract reference consistency,
 and the MissionState cross-object consistency checks (A7). No architecture decision was reopened
 during implementation.
 
-There is still no planner, no validator (V0.2), no compiler, no runtime, no agents, no state reducer,
-no A2A, no MCP, no RAG, no persistence, no telemetry, no API and no frontend.
+V0.2 (`src/eidos/validation/`) adds a deterministic, seven-stage plan-validation pipeline with two entry
+points — `validate_plan_json(text, state, limits)` and `validate_plan(plan, state, limits)` — that returns a
+typed report and never raises for an invalid plan. See "V0.2 Plan Validation" below. **574 tests pass**
+(165 in `tests/unit/contracts/`, 409 in `tests/unit/validation/`).
+
+There is still no planner, no compiler, no runtime, no agents, no state reducer, no A2A, no MCP, no RAG,
+no persistence, no telemetry, no API and no frontend.
 
 No measurement of any kind has been taken, so no metric appears anywhere in this repository.
 
@@ -27,7 +32,7 @@ No measurement of any kind has been taken, so no metric appears anywhere in this
 
 - [x] `CLAUDE.md` — permanent rules, 18 architecture invariants
 - [x] `progress.md` — this file
-- [x] `decisions.md` — 64 Accepted, 44 Open, 3 Deferred (counts current as of the latest decision below)
+- [x] `decisions.md` — 64 Accepted, 45 Open, 3 Deferred (counts current as of the latest decision below)
 - [x] `README.md`, `pyproject.toml`, `.gitignore`
 - [x] `docs/01`–`docs/12` — the twelve documents required by handoff §81
 - [x] `src/eidos/` and `src/eidos/contracts/` — docstring only, no code
@@ -44,8 +49,8 @@ hold, failure cases are covered, documentation matches reality, a git checkpoint
 
 | Milestone | Scope (§50) | Status |
 |---|---|---|
-| **V0.1** Core Contracts | `TaskGenome`, `ReliabilityContract`, `MissionState`, `MissionEvent`, `Plan`, `PlanStep`, `AgentTask`. No real agents, no A2A, no MCP, no frontend. In-memory only (D-005). | **Implemented — 155 unit tests passing** |
-| **V0.2** Plan DSL | Schema validation, cycle detection, dependency validation, depth limits, node limits, parallel-branch limits, capability validation, policy validation. | **In progress (2026-09-19) — rulings recorded (D-104..D-110), implementation under way; nothing below is built until this row says so.** No decision blocks the mechanism. Capability validation is mission-scoped (D-102); `SystemLimits` ships with no built-in numeric defaults (D-103). D-046 (actual values) stays Open but blocks only running against a real mission. D-007, D-012 and D-043 are **not** V0.2 blockers. |
+| **V0.1** Core Contracts | `TaskGenome`, `ReliabilityContract`, `MissionState`, `MissionEvent`, `Plan`, `PlanStep`, `AgentTask`. No real agents, no A2A, no MCP, no frontend. In-memory only (D-005). | **Implemented — 165 unit tests passing** (155 at implementation, +10 for D-107/D-108) |
+| **V0.2** Plan DSL | Schema validation, cycle detection, dependency validation, depth limits, node limits, parallel-branch limits, capability validation, policy validation. | **Implemented — 409 unit tests passing** (2026-09-19). Every stage is implemented **except policy validation, which reports `NOT_APPLICABLE`** (D-110): no policy rule exists to check, and none was invented. D-046 (the actual limit values) stays Open — no limits object ships (D-103). D-111 (eight implementation details, Open) awaits the owner. |
 | **V0.3** LangGraph Runtime | Map `SEQUENTIAL`, `PARALLEL`, `ROUTE`, `VERIFY`, `RETRY`, `REPLAN` into runtime nodes. Mock agents. | Not started |
 | **V0.4** Real Local Agents | Research, Analysis, Verification. Baseline workflow end-to-end. | Not started — blocked (D-006) |
 | **V0.5** MissionState + Event Reducer | `MissionEvent`, `MissionState`, `StateReducer`, checkpoints, replay. §50: state handling must be reliable **before** A2A. | Not started — blocked (D-010, D-011) |
@@ -79,32 +84,14 @@ Modules in `src/eidos/contracts/`:
 - `agent_task.py` — `AgentTask` — §8
 - `mission_state.py` — `MissionState` — §9, §10, with the six A7 cross-object validators
 
-`tests/unit/contracts/` — 155 tests: valid-object factories in `tests/support/eidos_factories.py` (shared; D-109), and one test module per
+`tests/unit/contracts/` — 165 tests (155 at implementation, +10 for D-107/D-108): valid-object factories in `tests/support/eidos_factories.py` (shared; D-109), and one test module per
 contract module above, covering construction, field validation, rejection of invalid input, the
 failure paths (§61, CLAUDE.md §6), immutability, and every cross-object consistency check named in
 A7. `test_mission_state.py` is last, since `MissionState` composes every other contract.
 
-**Next:** V0.2 Plan DSL — schema validation, cycle detection, dependency validation, complexity
-limits, capability validation, policy validation.
-
-**V0.2 blocker matrix (recomputed 2026-09-19):**
-
-| Stage | Blocked? | Basis |
-|---|---|---|
-| Schema validation | No | V0.1 contracts already do this |
-| Dependency validation | No | already implemented at `Plan` level in V0.1 |
-| Cycle detection | No | pure graph traversal over `step_id`/`depends_on` |
-| Capability validation | **No** | **D-102**: mission-scoped — every `agent` step's `capability` must be in `TaskGenome.required_capabilities` (exact-string); no vocabulary, no registry |
-| Policy validation | Own blockers only | D-060/D-061/D-074 (autonomy semantics); unrelated to capability or bounds |
-| Resource validation | Mechanism: **No** · real values: yes | **D-103**: `SystemLimits` has no built-in defaults; values explicitly supplied; D-046 owns the numbers |
-| Graph-complexity limits | Mechanism: **No** · real values: yes | same |
-| Compile | Not V0.2 | `eidos.compiler` is a V0.3 package; D-012 blocks it there |
-
-**Genuine V0.2 blockers: none for the mechanism.** D-046 blocks only *running the finished validator
-against a real mission* — a configuration gap, not an implementation one. D-012, D-043 and D-007 are
-**not** V0.2 blockers: D-012 blocks the V0.3 compiler; D-043 only becomes live once the V0.3 runtime
-exists to reconcile against V0.2's declared-step-count check; D-007's cross-mission vocabulary
-question now blocks only V0.4.
+**Next:** V0.2 followed — see "V0.2 Plan Validation" below. The pre-implementation blocker analysis
+(which of the eight stages needed which decision) is recorded in `decisions.md` D-102, D-103 and D-104..D-110
+and in the session log; it found no blocker for the mechanism, and none arose.
 
 **The five named blocking decisions are resolved** — D-013, D-019, D-011, D-010a, D-009. The
 structural questions about V0.1 are settled.
@@ -293,6 +280,59 @@ root-only), **D-047** (V0.1 Plan DSL defines structure but no predicate language
 
 ---
 
+## V0.2 Plan Validation — implemented (2026-09-19)
+
+`src/eidos/validation/` — depends only on the public surface of `eidos.contracts`. Design rulings:
+D-104 (`max_depth` counts nodes), D-105 (only *declared* agent calls are checked structurally), D-106
+(empty plans are legal), D-107 (JSON text is the untrusted ingress; typed `ValueError` subclasses),
+D-108 (`EidosModel` exported), D-109 (shared test factories), D-110 (POLICY is `NOT_APPLICABLE`), plus
+D-102 and D-103 from the scoping phase. Engineering contract: `docs/05_plan_dsl.md` §4.
+
+| Module | Role | Tests (file) |
+|---|---|---|
+| `limits.py` | `SystemLimits` (nine required non-negative ints, **no defaults**), `LimitName`, fixed budget order | 44 (`test_validation_limits.py`) |
+| `results.py` | `ValidationStage`, `StageStatus`, `ViolationCode`, `Violation`, `StageResult`, `PlanValidationReport` — model validators make a mislabelled report unconstructible | 54 (`test_validation_results.py`) |
+| `graph.py` | Pure iterative algorithms: Tarjan SCC cycles, Kahn topological order, longest chain in nodes, **exact** maximum antichain width (Dilworth / Hopcroft–Karp) | 119 (`test_validation_graph.py`) |
+| `stages.py` | `check_dependencies`, `check_cycles`, `check_capabilities`, `check_policy`, `check_resources`, `check_complexity`, `identity_violations` | 79 (`test_validation_stages.py`) |
+| `pipeline.py` | `validate_plan_json`, `validate_plan`; stage ordering, skip rules, construction-failure attribution | 62 (`test_validation_pipeline.py`) |
+| — | Static guards over the package source | 51 (`test_validation_guards.py`) |
+
+V0.1 additions (D-107, D-108): `DuplicateStepIdError` and `UnknownDependencyError` (both `ValueError`
+subclasses, messages unchanged) and the `EidosModel` export; 10 tests. Test infrastructure (D-109): the
+shared factories moved from `tests/unit/contracts/conftest.py` to `tests/support/eidos_factories.py`, and
+`tests/support` joined pytest's `pythonpath`; the 155 V0.1 tests were unchanged apart from a changed import line.
+
+**What the evidence is.** Every count above was measured by running the suite, not estimated. Graph
+algorithms are cross-checked against independent brute-force implementations on 80 seeded random graphs,
+including the level-width counterexample (widest level 2, true width 3). 20,000-step chains run under the
+default recursion limit. Reports and graph outputs are asserted identical across `PYTHONHASHSEED` values.
+The guard tests were mutation-checked: adding a forbidden import, a `600000` literal, a numeric limit
+literal, a module-level `SystemLimits`, mutable module state and a self-recursive function each made the
+matching guard fail.
+
+**Invariants, honestly.** 4 (ID-addressed DAG, no SEQUENTIAL/PARALLEL kinds), 5 (fixed stage order; a
+skipped stage is never accepted), 9 (no model/vendor/SDK name in the package) and 11 (plans checked against
+capabilities, never agent names) hold, and are exercised by tests. 7 is enforced **only** for what a static
+plan can show — node count, depth, width, declared agent-call count, and contract-versus-ceiling; runtime
+exhaustion and pausing for human review are V0.3+. **14 is not exercised**: the POLICY stage reports
+`NOT_APPLICABLE` (D-110), so no governance check exists to verify. The determinism half of invariant 14
+holds for what does exist (no prompt, model or I/O anywhere in the package).
+
+**No performance figure is recorded.** Two tests assert that a 300-step width computation finishes inside a
+deliberately generous 10-second bound; that is a regression tripwire, not a measurement, and no timing is
+reported.
+
+**Not built, by decision.** The compiler (V0.3); capability-to-agent availability (V0.4); any policy rule or
+policy-injection mechanism (D-110); runtime retry / replan / tool-call / time / token accounting (D-105, D-043);
+a capability vocabulary or registry (D-102); a predicate language (D-012, V0.3); LangGraph; a graph library.
+
+**Tracked gaps (not V0.2's to close).** Plan lineage, `plan_id` uniqueness across a mission's plans and
+version monotonicity (D-082) belong to the V0.5 reducer — a `Plan` alone cannot be checked for them. The
+`risk_level <= max_risk_level` comparison was excluded (D-030, D-057 Open). **D-111** records eight
+behaviours the approved design did not specify; each was implemented conservatively and awaits the owner.
+
+---
+
 ## Intentionally not built yet
 
 Per CLAUDE.md §3, a package is created only when the milestone that fills it begins. These
@@ -300,14 +340,13 @@ architectural components are **documented in `docs/03_architecture.md` but not s
 
 | Component | Arrives at |
 |---|---|
-| `capabilities/` — capability vocabulary and agent registry | V0.2 / V0.4 |
+| `capabilities/` — capability vocabulary and agent registry | V0.4 (V0.2 needed neither — D-102) |
 | `planning/` — candidate strategy generation | V0.2+ |
-| `validation/` — plan validation pipeline | V0.2 |
 | `compiler/` — Plan DSL → runtime graph | V0.3 |
 | `runtime/` — LangGraph execution | V0.3 |
 | `agents/` — Research, Analysis, Verification | V0.4 |
 | `state/` — reducer, checkpoints, replay | V0.5 |
-| `policy/` — governance, autonomy, budgets | V0.2 hooks / V1.2 engine |
+| `policy/` — governance, autonomy, budgets | V1.2 engine (V0.2 has only a `NOT_APPLICABLE` stage in `validation/` — D-110) |
 | `telemetry/` — structured events, metrics | V0.9 |
 | `memory/` — strategy and execution memory | V1.0 |
 | `evaluation/` — evaluation harness, experiments | V1.1 |
@@ -337,6 +376,7 @@ Highest-impact first.
 | **D-036** `AgentTask` lifecycle state machine | V0.6 | §10 mandates deterministic accept/reject "against lifecycle"; §8 never enumerates states or transitions. V0.6 protocol tests cannot be written without it. |
 | **D-043** declared plan limits vs execution counters | **V0.3** (corrected 2026-09-19; was mislabelled V0.2/V0.3) | V0.2 can only count *declared* steps on a static plan, so it needs no reconciliation. The ambiguity becomes live once the V0.3 runtime exists to count actual invocations. Most likely of the bound family to cause a real defect *then*. |
 | **D-046** numerical bound values | V0.2 values, V0.9+ tuning | Mechanism is unblocked (D-103). Governs only the actual numbers for all seven bound dimensions; never presented as tuned before V0.9 telemetry. |
+| **D-111** V0.2 implementation details left unspecified | none blocking | Eight small behaviours implemented conservatively (identity mismatch under SCHEMA; strict `accepted`; dependency re-check; complexity skip rules; limits range; violation order; two exception exports; report carries `plan_id` only). Cheap to reverse; awaiting confirmation. |
 | **D-072** omitted vs explicitly-at-ceiling | V0.9, V1.3 | Argues for retaining the requested value alongside the effective one, not for making fields required. |
 | **D-066** contract user-supplied or synthesised | mission creation | Synthesis needs numbers D-046 defers; adopting it later would not contradict D-045. |
 | **D-012** predicate language for ROUTE/RETRY/REPLAN/TERMINATE | **V0.3** (corrected 2026-09-18; was previously mislabelled V0.2/V0.3) | Deterministic routing needs a defined, validatable condition form. Blocks the compiler, not the V0.2 validator. |
@@ -369,6 +409,7 @@ Full detail for each is in [decisions.md](decisions.md).
 
 | Date | Milestone | Outcome |
 |---|---|---|
+| 2026-09-19 | **V0.2 Plan Validation implemented** | Ruled and recorded D-104..D-110, then implemented in the owner's order, one logical slice per commit: shared test factories moved to `tests/support` (155 tests unchanged); typed `DuplicateStepIdError` / `UnknownDependencyError` and the `EidosModel` export (+10 tests); `validation/limits.py`; `results.py`; iterative `graph.py` with exact antichain width; `stages.py` (incl. a dependency re-check for plans built without validation); `pipeline.py` with `validate_plan_json` / `validate_plan`; static guard tests. **574 tests pass (165 contracts + 409 validation).** POLICY reports `NOT_APPLICABLE`. Logged **D-111** (Open): eight implementation details the approved design left unspecified, implemented conservatively for the owner to confirm. docs/03, 05, 10, 12, README.md (its status line still said "no validator", stale since V0.1) and tests/unit/README updated; docs/10 D-043 row corrected to V0.3 (a missed remnant of the earlier D-043 correction). Nothing pushed. |
 | 2026-09-19 | V0.2 rulings recorded | Human owner ruled on the V0.2 design exploration. **D-104**: `max_depth` counts *nodes* (single-node plan = depth 1). **D-105**: V0.2 statically checks only *declared* `max_agent_calls`; the other five budgets are checked only as contract-vs-system-ceiling; nothing is inferred from plan structure. **D-106**: empty plans are legal. **D-107**: JSON text is the untrusted ingress; two typed `ValueError` subclasses are added to V0.1 plan construction. **D-108**: `EidosModel` exported from `eidos.contracts`. **D-109**: shared test factories move to a uniquely named module, own commit, 155-test baseline kept. **D-110**: POLICY stage exists and reports `NOT_APPLICABLE` — no policy semantics, no injection mechanism. D-050 annotated with a pointer to D-104. No source code changed by this entry. |
 | 2026-09-19 | V0.2 scoping decisions | **D-102 resolved** by the human owner: V0.2 capability validation is mission-scoped — every `agent` step's `capability` must appear in `TaskGenome.required_capabilities`, exact-string; no global vocabulary, no live-agent check (V0.4). This was a fourth option, not one of the three originally logged. **D-103 resolved**: production `SystemLimits` carries no built-in numeric defaults, values must be explicitly supplied, tests may use labelled fixtures, the handoff's illustrative numbers are not shipped as defaults; confirmed not to contradict D-046/D-009 (it is the stricter of two permitted readings of D-009 rider 5) and D-046's own "Needs" text is annotated as narrowed. **D-043 investigated**: V0.2 only ever validates a static plan, so it can only count *declared* steps; the declared-vs-actual ambiguity only becomes live at V0.3 when a runtime exists. Corrected in decisions.md, docs/05 and here; left Open. Also removed D-042 and D-045 from docs/05's "still open, blocking V0.2" list — both were already Accepted. D-012 confirmed V0.3, not reopened. No source code written. |
 | 2026-09-18 | V0.2 scoping analysis | Analysed exactly what V0.2's eight §14 pipeline stages need from D-007, D-012 and D-046, stage by stage, rather than treating "V0.2 is blocked on all three" as one claim. **Found and fixed a self-introduced drift**: D-012 had been called both "a clean V0.2 decision" (decisions.md) and "blocks the compiler" (docs/05) in the same document, and listed as a V0.2 blocker in progress.md — none of V0.2's stages actually reads a step's condition, since V0.1 carries no conditional payload at all (D-047). Corrected across decisions.md, docs/05_plan_dsl.md and progress.md to consistently read V0.3. Schema validation, dependency validation and cycle detection confirmed buildable today with **zero** new decisions, against the V0.1 contracts as they stand. Logged **D-102** (how deep V0.2 capability validation checks, given no agent registry exists until V0.4 — independent of D-007's vocabulary substance) and **D-103** (whether D-046's two handoff-example numbers, `max_execution_time`/`max_tokens`, seed provisional V0.2 values while the other five bound dimensions stay fully open). Neither answered. No source code written. |

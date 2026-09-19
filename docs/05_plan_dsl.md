@@ -215,15 +215,78 @@ and never partially executed.
 
 ### Stage notes
 
-| Stage | Depends on |
+| Stage | Depends on | V0.2 |
+|---|---|---|
+| Schema validation | The Plan/PlanStep contract (V0.1) | implemented |
+| Dependency validation | Explicit edges (D-004) | implemented |
+| Cycle detection | Explicit edges (D-004) | implemented |
+| Capability validation | `TaskGenome.required_capabilities` — **resolved, D-102** (mission-scoped; no vocabulary or registry needed at V0.2) | implemented |
+| Policy validation | The policy engine and autonomy model (`10_reliability.md`) — unresolved (D-060/D-061/D-074) | **`NOT_APPLICABLE`** (D-110); nothing is checked and nothing is invented |
+| Resource validation | Bound values supplied by the caller (D-009, D-103) | implemented |
+| Graph complexity limits | Bound values supplied by the caller (D-009, D-103) | implemented |
+
+### V0.2 implementation — `eidos.validation`
+
+Two entry points, both returning a `PlanValidationReport` and **never raising for an invalid plan**:
+
+```text
+validate_plan_json(text, state, limits)   # untrusted ingress: a JSON document (D-107)
+validate_plan(plan, state, limits)        # an already-constructed Plan
+```
+
+`limits` is a **required** argument (`SystemLimits`, D-103): every field is required, none has a
+default, and no limits object is defined in the package. Values are always supplied by the caller;
+the actual numbers remain D-046 (Open).
+
+**The report.** Exactly one `StageResult` per stage, always in the fixed order above (COMPILE is V0.3
+and not a validation stage). Each has one of four statuses:
+
+| Status | Meaning |
 |---|---|
-| Schema validation | The Plan/PlanStep contract (V0.1) |
-| Dependency validation | Explicit edges (D-004) |
-| Cycle detection | Explicit edges (D-004) |
-| Capability validation | `TaskGenome.required_capabilities` — **resolved, D-102** (mission-scoped; no vocabulary or registry needed at V0.2) |
-| Policy validation | The policy engine and autonomy model (`10_reliability.md`) |
-| Resource validation | Bound values and their source — **blocked, D-009** |
-| Graph complexity limits | Bound values — **blocked, D-009** |
+| `PASSED` | the check ran and found nothing |
+| `FAILED` | the check ran and found at least one `Violation` |
+| `SKIPPED` | the check could not run, and the `detail` says why — **never** counted as a pass |
+| `NOT_APPLICABLE` | no check is defined (POLICY, D-110) — **not** a pass either |
+
+`report.accepted` is true only if every stage is `PASSED` or `NOT_APPLICABLE`; `report.fully_evaluated`
+is true if none is `SKIPPED`. A report with `NOT_APPLICABLE` policy is accepted **without** the policy
+stage having approved anything; the stage's `detail` says so.
+
+**What each stage checks.**
+
+| Stage | Rule |
+|---|---|
+| Schema | JSON syntax; the `Plan` contract's strict field validation; and that `plan.mission_id` / `plan.tenant_id` match the `MissionState` (mismatch is reported here — D-111 item 1) |
+| Dependency | `step_id` unique within the plan; every `depends_on` resolves. Re-verified on constructed plans (D-111 item 3) |
+| Cycle | Every dependency cycle, including a step that depends on itself — the plan V0.1 accepts and V0.2 rejects. Each cycle is reported (strongly connected component), members in plan order |
+| Capability | Every `agent` step's `capability` is **exactly** (string equality — no case-folding, no trimming) one of `TaskGenome.required_capabilities` (D-102). The converse is not required. Control steps are ignored |
+| Policy | `NOT_APPLICABLE` (D-110) |
+| Resource | Each of the six contract budgets, if set, must not exceed the system ceiling — **rejected, never clamped** (D-009). The number of `agent` steps the plan **declares** must not exceed the effective `max_agent_calls`, `min(system ceiling, contract value)`, or the ceiling alone if the contract omits it (D-065). Retries, replans, tool calls, time and tokens are **not** inferred from plan structure (D-105); "declared" is not "actual" (D-043, V0.3) |
+| Complexity | `max_nodes`; `max_depth` = longest dependency path **counted in nodes** (D-104: a single step has depth 1); `max_parallel_branches` = **exact maximum antichain width** (D-050) |
+
+**Antichain width is exact, not a level count.** The widest level of a DAG is only a lower bound: for
+steps `s→q`, `s→t`, `t→r` and an isolated `p`, the widest level holds 2 steps but `{p, q, t}` is an
+antichain of 3. Width is computed by Dilworth's theorem — steps minus a maximum matching on the
+transitive closure — with an iterative Hopcroft–Karp. Its cost grows with the number of comparable
+pairs, so a plan over `max_nodes` is rejected **before** width is computed.
+
+**Stage dependencies, reported rather than hidden.** Text that does not become a `Plan`: every stage
+after the failing one is `SKIPPED`. A plan of another mission or tenant: CAPABILITY and RESOURCE are
+`SKIPPED` rather than run against the wrong mission's genome and contract. Invalid step ids or
+dependencies: CYCLE and COMPLEXITY are `SKIPPED`, the graph being undefined. A cyclic plan within
+`max_nodes`: COMPLEXITY is `SKIPPED`. An empty plan is legal and passes (D-106).
+
+**Determinism.** No I/O, network, LLM, clock, randomness or hidden state; the graph algorithms are
+iterative (a 20,000-step chain does not reach the recursion limit); every ordering derives from
+`plan.steps` order, never from set or hash iteration. Reports are asserted byte-identical across
+process hash seeds. `tests/unit/validation/test_validation_guards.py` reads the package source and
+fails on forbidden imports, vendor names, the handoff's illustrative `600000` / `10,000`, numeric
+limit literals and self-recursion.
+
+**Not in V0.2.** The compiler (V0.3); capability-to-agent availability (V0.4); any policy rule; any
+runtime counting of retries, replans, tool calls, time or tokens; plan lineage, `plan_id` uniqueness
+and version monotonicity across a mission's plans (D-082 — a V0.5 reducer concern); the
+`risk_level` versus `max_risk_level` comparison (D-030 / D-057, Open).
 
 ## 5. Bounds
 
@@ -330,6 +393,7 @@ verification; and an ordered variant that front-loads architecture before target
 | D-043 | Declared plan limits vs actual execution counters | **V0.3** (corrected 2026-09-18; not a V0.2 blocker) |
 | D-007 | Capability vocabulary and matching semantics | **V0.4** (corrected 2026-09-18; not a V0.2 blocker — see D-102) |
 | D-020 | Strategy vs Plan — one contract or two | V0.2, V1.0 |
+| D-111 | Eight V0.2 implementation details the approved design left unspecified, implemented conservatively — awaiting the owner's confirmation | none blocking |
 | — | Edge encoding (`depends_on` per step vs separate edge list) and step-id namespace — explicitly left open by D-004 | V0.1 |
 | — | Whether `HUMAN_APPROVAL` and `TERMINATE` are compiled at V0.3; §50 omits them from the V0.3 mapping | V0.3 |
 

@@ -220,15 +220,15 @@ the architectural map; `progress.md` tracks which of these exist.
 
 | Package | Responsibility | Milestone | Exists |
 |---|---|---|---|
-| `eidos.contracts` | Typed contracts: TaskGenome, ReliabilityContract, MissionState, MissionEvent, Plan, PlanStep, AgentTask | V0.1 | **yes** (empty) |
-| `eidos.capabilities` | Capability vocabulary, agent capability registry | V0.2 / V0.4 | no |
+| `eidos.contracts` | Typed contracts: TaskGenome, ReliabilityContract, MissionState, MissionEvent, Plan, PlanStep, AgentTask | V0.1 | **yes** |
+| `eidos.capabilities` | Capability vocabulary, agent capability registry | V0.4 (V0.2 needed neither — D-102) | no |
 | `eidos.planning` | Candidate strategy generation, strategy selection | V0.2+ | no |
-| `eidos.validation` | The validation pipeline of §14 | V0.2 | no |
+| `eidos.validation` | The validation pipeline of §14 — depends only on `eidos.contracts` | V0.2 | **yes** |
 | `eidos.compiler` | Plan DSL → runtime graph, deterministic | V0.3 | no |
 | `eidos.runtime` | LangGraph execution of compiled plans | V0.3 | no |
 | `eidos.agents` | Research, Analysis, Verification | V0.4 | no |
 | `eidos.state` | Reducer, checkpoints, replay | V0.5 | no |
-| `eidos.policy` | Governance, autonomy levels, budgets | V0.2 hooks / V1.2 | no |
+| `eidos.policy` | Governance, autonomy levels, budgets | V1.2 (V0.2 has only a `NOT_APPLICABLE` stage in `eidos.validation` — D-110) | no |
 | `eidos.telemetry` | Structured events, metrics | V0.9 | no |
 | `eidos.memory` | Strategy and execution memory | V1.0 | no |
 | `eidos.evaluation` | Evaluation harness, experiments | V1.1 | no |
