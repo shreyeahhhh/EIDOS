@@ -18,6 +18,7 @@ state reducer, A2A, MCP, RAG, persistence, or any executable behaviour.
 Those arrive at their own milestones — see progress.md.
 """
 
+from ._base import EidosModel
 from .agent_task import AgentTask
 from .enums import (
     AutonomyLevel,
@@ -44,11 +45,19 @@ from .identifiers import (
 )
 from .mission_event import MissionEvent
 from .mission_state import MissionState
-from .plan import AgentStep, ControlStep, Plan, PlanStep
+from .plan import (
+    AgentStep,
+    ControlStep,
+    DuplicateStepIdError,
+    Plan,
+    PlanStep,
+    UnknownDependencyError,
+)
 from .reliability_contract import ReliabilityContract
 from .task_genome import TaskGenome
 
 __all__ = [
+    "EidosModel",
     "AgentTask",
     "AutonomyLevel",
     "MissionEventType",
@@ -73,8 +82,10 @@ __all__ = [
     "MissionState",
     "AgentStep",
     "ControlStep",
+    "DuplicateStepIdError",
     "Plan",
     "PlanStep",
+    "UnknownDependencyError",
     "ReliabilityContract",
     "TaskGenome",
 ]

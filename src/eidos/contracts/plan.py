@@ -23,6 +23,12 @@ capability" and "a work step without one" are unrepresentable rather than
 merely rejected by a rule (docs/05_plan_dsl.md's explicit wording; approved
 as A3, 2026-09-18).
 
+The two Plan-level failures that are not schema failures — a duplicate step_id
+and an unresolved depends_on — raise the typed ValueError subclasses
+DuplicateStepIdError and UnknownDependencyError, so a caller can tell them
+apart from each other and from a structural failure without matching message
+text (D-107). Both remain ValueErrors with unchanged messages.
+
 What this module does NOT do (out of V0.1 scope):
   - cycle detection — depends_on is checked for referential existence only,
     never for cycles, including trivial self-dependency (V0.2, D-004/D-093)
@@ -46,6 +52,31 @@ from .identifiers import (
     StepId,
     TenantId,
 )
+
+
+class DuplicateStepIdError(ValueError):
+    """Two steps in one Plan share a step_id (decisions.md D-092/D-093, D-107)."""
+
+    def __init__(self, step_id: StepId) -> None:
+        self.step_id = step_id
+        super().__init__(
+            f"duplicate step_id {step_id!r} within plan "
+            "(decisions.md D-092/D-093: step_id must be unique "
+            "within one Plan)"
+        )
+
+
+class UnknownDependencyError(ValueError):
+    """A step's depends_on names a step_id not in the Plan (decisions.md D-004, D-107)."""
+
+    def __init__(self, step_id: StepId, dependency: StepId) -> None:
+        self.step_id = step_id
+        self.dependency = dependency
+        super().__init__(
+            f"step {step_id!r} depends_on unknown step_id "
+            f"{dependency!r} (referential integrity only — cycle "
+            "detection is not V0.1 scope, decisions.md D-004)"
+        )
 
 
 class _PlanStepBase(EidosModel):
@@ -90,11 +121,7 @@ class Plan(EidosModel):
         seen: set[StepId] = set()
         for step in self.steps:
             if step.step_id in seen:
-                raise ValueError(
-                    f"duplicate step_id {step.step_id!r} within plan "
-                    "(decisions.md D-092/D-093: step_id must be unique "
-                    "within one Plan)"
-                )
+                raise DuplicateStepIdError(step.step_id)
             seen.add(step.step_id)
         return self
 
@@ -104,9 +131,5 @@ class Plan(EidosModel):
         for step in self.steps:
             for dep in step.depends_on:
                 if dep not in step_ids:
-                    raise ValueError(
-                        f"step {step.step_id!r} depends_on unknown step_id "
-                        f"{dep!r} (referential integrity only — cycle "
-                        "detection is not V0.1 scope, decisions.md D-004)"
-                    )
+                    raise UnknownDependencyError(step.step_id, dep)
         return self
