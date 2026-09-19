@@ -83,6 +83,49 @@ def identity_violations(plan: Plan, *, mission_id: MissionId, tenant_id: TenantI
     return tuple(violations)
 
 
+# --- DEPENDENCY ------------------------------------------------------------
+
+
+def check_dependencies(plan: Plan) -> StageResult:
+    """Step ids are unique and every ``depends_on`` names a step in the plan (D-092/D-093).
+
+    The ``Plan`` contract already enforces both when it is constructed, but a
+    ``Plan`` can also be produced without validation (``model_copy(update=...)``,
+    ``model_construct``). Re-checking here means a PASSED dependency stage reports
+    a check that ran on *this* plan, and it guarantees the graph stages below are
+    only ever given a well-defined graph.
+    """
+    violations: list[Violation] = []
+    seen: set[StepId] = set()  # membership only; never iterated
+    reported_duplicates: set[StepId] = set()
+    for step in plan.steps:
+        if step.step_id in seen and step.step_id not in reported_duplicates:
+            reported_duplicates.add(step.step_id)
+            violations.append(
+                Violation(
+                    stage=ValidationStage.DEPENDENCY,
+                    code=ViolationCode.DUPLICATE_STEP_ID,
+                    message=f"step_id {step.step_id!r} is used by more than one step",
+                    step_ids=(step.step_id,),
+                )
+            )
+        seen.add(step.step_id)
+    for step in plan.steps:
+        reported_dependencies: set[StepId] = set()
+        for dependency in step.depends_on:
+            if dependency not in seen and dependency not in reported_dependencies:
+                reported_dependencies.add(dependency)
+                violations.append(
+                    Violation(
+                        stage=ValidationStage.DEPENDENCY,
+                        code=ViolationCode.UNKNOWN_DEPENDENCY,
+                        message=f"step {step.step_id!r} depends on unknown step {dependency!r}",
+                        step_ids=(step.step_id,),
+                    )
+                )
+    return _outcome(ValidationStage.DEPENDENCY, violations)
+
+
 # --- CYCLE -----------------------------------------------------------------
 
 

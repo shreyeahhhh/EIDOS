@@ -15,6 +15,7 @@ from eidos.validation.stages import (
     check_capabilities,
     check_complexity,
     check_cycles,
+    check_dependencies,
     check_policy,
     check_resources,
     identity_violations,
@@ -75,6 +76,66 @@ def test_both_mismatches_are_reported_mission_first():
     assert [v.code for v in violations] == [
         ViolationCode.PLAN_MISSION_MISMATCH,
         ViolationCode.PLAN_TENANT_MISMATCH,
+    ]
+
+
+# --- DEPENDENCY ------------------------------------------------------------
+# A Plan built normally cannot fail these; model_copy(update=...) skips
+# validation, which is exactly the route the re-check exists to catch.
+
+
+def bypassed(*steps):
+    return make_plan().model_copy(update={"steps": tuple(steps)})
+
+
+def test_a_well_formed_plan_passes_the_dependency_stage():
+    result = check_dependencies(plan_of({"a": "", "b": "a", "c": "a b"}))
+    assert result.status is StageStatus.PASSED
+    assert result.stage is ValidationStage.DEPENDENCY
+
+
+def test_an_empty_plan_passes_the_dependency_stage():
+    assert check_dependencies(make_plan(steps=())).status is StageStatus.PASSED
+
+
+def test_a_self_dependency_is_not_a_dependency_stage_failure():
+    # It resolves; it is the cycle stage's business.
+    assert check_dependencies(plan_of({"s1": "s1"})).status is StageStatus.PASSED
+
+
+def test_a_duplicate_step_id_is_caught_even_when_construction_was_bypassed():
+    plan = bypassed(make_agent_step(step_id=StepId("d")), make_control_step(step_id=StepId("d")))
+    result = check_dependencies(plan)
+    (violation,) = result.violations
+    assert violation.code is ViolationCode.DUPLICATE_STEP_ID
+    assert violation.step_ids == ("d",)
+
+
+def test_a_step_id_used_three_times_is_reported_once():
+    plan = bypassed(*(make_agent_step(step_id=StepId("d")) for _ in range(3)))
+    assert len(check_dependencies(plan).violations) == 1
+
+
+def test_an_unknown_dependency_is_caught_even_when_construction_was_bypassed():
+    plan = bypassed(make_agent_step(step_id=StepId("a"), depends_on=(StepId("ghost"),)))
+    (violation,) = check_dependencies(plan).violations
+    assert violation.code is ViolationCode.UNKNOWN_DEPENDENCY
+    assert violation.step_ids == ("a",)
+    assert "'ghost'" in violation.message
+
+
+def test_dependency_violations_come_duplicates_first_then_unknowns_in_plan_order():
+    plan = bypassed(
+        make_agent_step(step_id=StepId("a"), depends_on=(StepId("x"), StepId("x"), StepId("y"))),
+        make_agent_step(step_id=StepId("b"), depends_on=(StepId("z"),)),
+        make_agent_step(step_id=StepId("a")),
+    )
+    result = check_dependencies(plan)
+    assert [(v.code, v.message) for v in result.violations] == [
+        (ViolationCode.DUPLICATE_STEP_ID, "step_id 'a' is used by more than one step"),
+        (ViolationCode.UNKNOWN_DEPENDENCY, "step 'a' depends on unknown step 'x'"),
+        (ViolationCode.UNKNOWN_DEPENDENCY, "step 'a' depends on unknown step 'y'"),
+        (ViolationCode.UNKNOWN_DEPENDENCY, "step 'b' depends on unknown step 'z'"),
     ]
 
 
