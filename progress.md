@@ -23,13 +23,14 @@ points — `validate_plan_json(text, state, limits)` and `validate_plan(plan, st
 typed report and never raises for an invalid plan. See "V0.2 Plan Validation" below. (574 tests at V0.2
 completion: 165 in `tests/unit/contracts/`, 409 in `tests/unit/validation/`.)
 
-**V0.3 (LangGraph Runtime): scope approved; Step 2 implemented.** The architecture rulings are recorded as
-D-112 to D-127 (2026-09-19). Step 2 added `src/eidos/compiler/` — the immutable compiled form and
-`compile_plan` — and nothing else: there is **no runtime, no executor, no ports, no LangGraph adapter and no
-LangGraph dependency yet**. See "V0.3 LangGraph Runtime" below. **850 tests pass** (165 in
-`tests/unit/contracts/`, 409 in `tests/unit/validation/`, 276 in `tests/unit/compiler/`).
+**V0.3 (LangGraph Runtime): scope approved; Steps 2 and 3 implemented.** The architecture rulings are recorded as
+D-112 to D-129 (2026-09-19). Step 2 added `src/eidos/compiler/` — the immutable compiled form and `compile_plan`.
+Step 3 added `src/eidos/runtime/` — result types, `ExecutionContext`, the synchronous ports, the admission
+hook, and the **sequential reference executor**. There is **no LangGraph adapter, no LangGraph dependency and no
+real agent yet**. See "V0.3 LangGraph Runtime" below. **1,281 tests pass** (165 in `tests/unit/contracts/`, 409 in
+`tests/unit/validation/`, 276 in `tests/unit/compiler/`, 431 in `tests/unit/runtime/`).
 
-There is still no planner, no runtime, no agents, no state reducer, no A2A, no MCP, no RAG, no persistence,
+There is still no planner, no agents, no state reducer, no A2A, no MCP, no RAG, no persistence,
 no telemetry, no API and no frontend.
 
 No measurement of any kind has been taken, so no metric appears anywhere in this repository.
@@ -38,7 +39,7 @@ No measurement of any kind has been taken, so no metric appears anywhere in this
 
 - [x] `CLAUDE.md` — permanent rules, 18 architecture invariants
 - [x] `progress.md` — this file
-- [x] `decisions.md` — 78 Accepted, 46 Open, 4 Deferred (counts current as of the latest decision below)
+- [x] `decisions.md` — 79 Accepted, 47 Open, 4 Deferred (counts current as of the latest decision below)
 - [x] `README.md`, `pyproject.toml`, `.gitignore`
 - [x] `docs/01`–`docs/12` — the twelve documents required by handoff §81
 - [x] `src/eidos/` and `src/eidos/contracts/` — docstring only, no code
@@ -57,7 +58,7 @@ hold, failure cases are covered, documentation matches reality, a git checkpoint
 |---|---|---|
 | **V0.1** Core Contracts | `TaskGenome`, `ReliabilityContract`, `MissionState`, `MissionEvent`, `Plan`, `PlanStep`, `AgentTask`. No real agents, no A2A, no MCP, no frontend. In-memory only (D-005). | **Implemented — 165 unit tests passing** (155 at implementation, +10 for D-107/D-108) |
 | **V0.2** Plan DSL | Schema validation, cycle detection, dependency validation, depth limits, node limits, parallel-branch limits, capability validation, policy validation. | **Implemented — 409 unit tests passing** (2026-09-19). Every stage is implemented **except policy validation, which reports `NOT_APPLICABLE`** (D-110): no policy rule exists to check, and none was invented. D-046 (the actual limit values) stays Open — no limits object ships (D-103). D-111 (eight implementation details, Open) awaits the owner. |
-| **V0.3** LangGraph Runtime | Map `SEQUENTIAL`, `PARALLEL`, `ROUTE`, `VERIFY`, `RETRY`, `REPLAN` into runtime nodes. Mock agents. | **In progress — scope approved 2026-09-19 (D-112 to D-127); Step 2 done: the compiled form and `compile_plan` (276 tests).** Narrowed from §50's list: only `agent` and `VERIFY` compile; `ROUTE`, `RETRY`, `REPLAN`, `TERMINATE`, `HUMAN_APPROVAL` are rejected at compile time and D-012 stays Open. **Not started:** the runtime, execution ports, admission guard, level scheduling, mock agents and the LangGraph adapter. |
+| **V0.3** LangGraph Runtime | Map `SEQUENTIAL`, `PARALLEL`, `ROUTE`, `VERIFY`, `RETRY`, `REPLAN` into runtime nodes. Mock agents. | **In progress — scope approved 2026-09-19 (D-112 to D-129). Done: Step 2 (the compiled form and `compile_plan`, 276 tests) and Step 3 (runtime types, `ExecutionContext`, ports, admission, prior outcomes and the sequential reference executor, 431 tests).** Narrowed from §50's list: only `agent` and `VERIFY` compile; `ROUTE`, `RETRY`, `REPLAN`, `TERMINATE`, `HUMAN_APPROVAL` are rejected at compile time and D-012 stays Open. **Not started:** the LangGraph adapter and its dependency, differential conformance tests and scenario tests. Work nodes are exercised with scripted test doubles only — no production mock agents exist. |
 | **V0.4** Real Local Agents | Research, Analysis, Verification. Baseline workflow end-to-end. | Not started — blocked (D-006) |
 | **V0.5** MissionState + Event Reducer | `MissionEvent`, `MissionState`, `StateReducer`, checkpoints, replay. §50: state handling must be reliable **before** A2A. | Not started — blocked (D-010, D-011) |
 | **V0.6** One A2A Boundary | Move exactly one agent into an independent process. Test: normal completion, timeout, duplicate event, late event, agent restart, partial artifact, failure. | Not started — deferred (D-026) |
@@ -339,10 +340,11 @@ behaviours the approved design did not specify; each was implemented conservativ
 
 ---
 
-## V0.3 LangGraph Runtime — scope approved; Step 2 implemented (2026-09-19)
+## V0.3 LangGraph Runtime — scope approved; Steps 2 and 3 implemented (2026-09-19)
 
-**Step 1 — the decision record — is done, and Step 2 — the compiled form and `compile_plan` — is
-implemented** (see "Step 2" below). Nothing in V0.1 or V0.2 was changed by either. The design behind these rulings is the V0.3 exploration (2026-09-19);
+**Step 1 — the decision record — is done, Step 2 — the compiled form and `compile_plan` — is implemented, and
+Step 3 — the runtime and the sequential reference executor — is implemented** (see "Step 2" and "Step 3" below).
+Nothing in V0.1 or V0.2 was changed by any of them, and the compiler was not changed by Step 3. The design behind these rulings is the V0.3 exploration (2026-09-19);
 LangGraph behaviour cited there came from its documentation and is **unverified** until it is installed and
 exercised.
 
@@ -395,13 +397,11 @@ introduces it, and logged in `decisions.md` if it turns out to matter.
 - ~~The compiled form's exact shape and the compile-failure codes~~ — **implemented in Step 2** as
   implementation details (D-112 and D-114 delegate both); see "Step 2" below. The three codes proposed in the
   exploration became eight, for finer diagnostics.
-- The `ExecutionContext` field set; the halt-reason set; `RunRejection` codes beyond invalid prior state
-  (for example a context mismatch); how a backend fault surfaces (proposed: an exception, not an outcome).
-- The `AdmissionGuard` request shape and purity requirement (proposed: a pure function of level facts, so
-  its answer does not depend on scheduling order).
-- **Whether `eidos.runtime` ships a sequential reference executor** (proposed as production code and as the
-  conformance oracle for the LangGraph backend). Not part of A1–A12; flagged in D-115.
-- Whether a `FINISHED` run with no passed `VERIFY` node is labelled unverified (proposed).
+- ~~The `ExecutionContext` field set; the halt-reason set; `RunRejection` codes; the `AdmissionGuard` request
+  shape and purity; whether a `FINISHED` run with no passed `VERIFY` node is labelled unverified~~ —
+  **implemented in Step 3** as implementation details; see "Step 3" below.
+- ~~Whether `eidos.runtime` ships a sequential reference executor~~ — **ruled: D-128.**
+- How a backend fault surfaces (proposed: an exception, not an outcome) — for the LangGraph adapter slice.
 - The optional extra's name and any version constraint (D-116) — settled against what is installed.
 - LangGraph behaviours to verify by spike before the adapter is designed in detail: join semantics when a
   predecessor did not succeed; deterministic results under a disjoint-key merge; terminal and multi-entry
@@ -464,20 +464,113 @@ the compiled form's shape and the failure codes to implementation, so no new `de
   compiler computes levels with its own Kahn pass rather than reusing V0.2's `graph` module, which is not part
   of `eidos.validation`'s public surface.
 
-**Not done in Step 2, by scope:** the runtime executor, the reference executor, execution ports, the
-admission guard, the verification runtime, level scheduling, mock agents, retry, the replan driver, event
-emission, any MissionState write, and LangGraph and its dependency.
+**Not done in Step 2, by scope:** execution of any kind (Step 3 followed) and LangGraph.
+
+### Step 3 — the runtime and the sequential reference executor (implemented)
+
+`src/eidos/runtime/` — six modules; imports only `eidos.contracts`, the public surface of `eidos.compiler`,
+pydantic and the standard library. Ruled by **D-128** (the reference executor is part of V0.3).
+
+| Module | Public names | Tests (file) |
+|---|---|---|
+| `results.py` | `NodeStatus`, `NodeResult`, `RunOutcome`, `HaltInfo`, `RunResult`, `PriorOutcomes`, `RunRejectionCode`, `RunRejection` | 73 (`test_runtime_results.py`) |
+| `context.py` | `ExecutionContext`, `context_from_state` | 34 (`test_runtime_context.py`) |
+| `ports.py` | `WorkExecutor`, `Verifier`, `AdmissionGuard`; `WorkResult`, `WorkStatus`, `VerificationResult`, `VerificationVerdict`, `AdmissionRequest`, `AdmissionDecision`, `AdmissionOutcome` | 37 (`test_runtime_ports.py`) |
+| `preconditions.py` | `check_run_preconditions` | 42, with the executor (`test_runtime_prior.py`) |
+| `executor.py` | `SequentialExecutor` | 178 (`test_runtime_executor.py`) |
+| — | Static and import guards over the package source | 67 (`test_runtime_guards.py`) |
+
+Test infrastructure added: `tests/support/eidos_runtime_factories.py` (scripted, recording ports and builders).
+**No existing test was modified, and the compiler package was not changed.**
+
+**Exact semantics implemented** (`decisions.md` D-117 to D-124; also `docs/03_architecture.md` §12):
+
+- Levels come from the compiled plan and are never recomputed. Levels run in order; within a level, nodes run in
+  ascending plan position; every node of a level is resolved before the next begins.
+- A node is ready when all predecessors are settled in any status. It executes only if every predecessor
+  `SUCCEEDED`; otherwise it is `SKIPPED` without dispatch and without being put to the guard. Independent
+  branches continue after a failure. Nothing is retried; a node is dispatched at most once per run.
+- Work results map `PRODUCED` → `SUCCEEDED`, `FAILED` → `FAILED`, `NO_RESULT` → `NO_RESULT`. A `VERIFY` node calls the
+  verifier once with its predecessors' results: `PASS` → `SUCCEEDED`, `FAIL` → `VERIFICATION_FAILED`,
+  `INCONCLUSIVE` → `VERIFICATION_INCONCLUSIVE`. A port that raises, or returns something that is not its typed
+  result, yields `FAILED` — never a pass, never an inconclusive verdict.
+- The guard is asked once per node that would be dispatched, with `(step_id, level, rank_in_level,
+  dispatched_before_level)`. A `HALT` leaves the node `NOT_REACHED`; the rest of the level is still asked and
+  resolved; every later level is then `NOT_REACHED` and the run is `HALTED`. A guard that raises or answers with
+  anything else **fails closed** (halts).
+- `HALTED` takes precedence. `FINISHED` is not verified success: `RunResult.verified` is true only for a
+  finished run with a succeeded `VERIFY` node.
+- Prior outcomes: `SUCCEEDED` nodes are carried over and never redispatched; anything else, an unknown step, a
+  wrong kind, a contradiction with the plan's edges or another execution's identity is `INVALID_PRIOR_STATE`.
+  Context mismatches are `WRONG_TENANT` / `WRONG_MISSION` / `WRONG_PLAN` / `WRONG_PLAN_VERSION`, checked first, in
+  that order. All rejections are returned, never raised.
+- MissionState is only *read*, once, by `context_from_state`, to build a frozen six-field `ExecutionContext`
+  (identity, plan identity, `TaskGenome`). Nothing is written, and no `MissionEvent` exists in the runtime
+  (D-123): **invariant 15 is not exercised**.
+
+**Evidence, not assertion.** Every count above was measured by running the suite (**1,281 total = 850 + 431**).
+Statuses on 60 seeded random plans are compared with an independent recursive computation, including dispatch
+order, at-most-once dispatch and outcome; 40 more check the halting invariants, and a further test proves both
+halted and unhalted runs occur. Results are asserted byte-identical across `PYTHONHASHSEED` values. The
+executor and preconditions were mutation-checked: fail-open guard, retry, immediate halt, fail-fast, prior
+redispatch, ordering by name, ignoring levels and 9 more executor breaks, plus 4 precondition breaks — **17 of
+17** made a test fail. The guard tests were mutation-checked the same way — 23 violations (forbidden and
+LangGraph imports, MissionEvent, MissionState outside `context.py`, a `while` loop, `async`, a bare
+`except`, a set, a dict view, `model_copy`, runtime accounting, a concrete guard and more) — **23 of 23** were
+caught. Writing them found three real problems, all fixed in the source, not the guard: LangGraph named in
+the docstrings, protocol names in a docstring, and a level assigned by name.
+
+**Import and dependency guard result:** the runtime imports no LangGraph, no backend package, and nothing that
+does I/O, reads a clock, draws randomness or holds process state. `import eidos.runtime` loads neither
+`langgraph` nor `eidos.backends` (checked in a fresh interpreter). No lower layer — contracts, validation,
+compiler — imports the runtime. `MissionState` is imported only by `context.py`; `MissionEvent`, `AgentTask`
+and `ReliabilityContract` by nothing. There is no `while` loop, no `async`, no default guard and no runtime
+accounting.
+
+**Implementation details chosen (not decisions; none touches an invariant).**
+
+- A `NodeResult` carries `step_id`, `kind`, `status`, `artifact`, `reason`. A **usable result** is an opaque
+  `ArtifactRef` the executor reported as produced (no artifact model exists, D-098); a succeeded work node
+  carries its artifact, a succeeded `VERIFY` node carries the verifier's reason and no artifact, and every
+  non-success states why. `NO_RESULT` belongs to work nodes and `VERIFICATION_*` to verify nodes; a verifier
+  fault is `FAILED`.
+- `RunResult` carries identity, `outcome`, `halt`, `results` (plan order) and `dispatched` (dispatch order).
+  `HaltInfo` is the first denied node, its level and the guard's own reason as free text — there is no
+  halt-reason enum. A node carried over from prior outcomes is `SUCCEEDED` in `results` and absent from
+  `dispatched`, so a resumed run's result says exactly what it did.
+- `run` returns `RunResult | RunRejection`, never raising; a rejection carries one code — the first failing
+  check — and, for prior state, the steps concerned.
+- `PriorOutcomes` carries identity so it cannot be applied to another execution or plan version. It may hold any
+  status, so the executor — not the type — rejects a non-`SUCCEEDED` one; `succeeded_from(RunResult)` is the
+  caller's explicit selection of successes.
+- `AdmissionRequest.rank_in_level` counts only the nodes of that level that will be dispatched; nodes that are
+  skipped or already settled by prior outcomes are not counted. `dispatched_before_level` counts only this run's
+  dispatches.
+- `SequentialExecutor` is a frozen dataclass of three required keyword-only ports, and keeps no state between
+  runs. The preconditions live in their own module so every backend applies the same ones.
+- The `ExecutionContext` checks that its genome belongs to its tenant. `context_from_state` takes the plan
+  identity from the compiled plan and does not look the plan up in `state.plans`.
+
+**One gap the specified signature exposes — logged as Open D-129.** The work port is `execute(context, node)`,
+so a work node is not told what its predecessors produced; only the verifier is. In V0.3 an edge into a work
+node carries ordering only. That is harmless with scripted doubles and matters as soon as real agents exist.
+
+**Not done in Step 3, by scope:** LangGraph and its dependency, any backend, real or production mock agents (the
+work executor is exercised only with scripted test doubles), A2A, MCP, model providers, events, MissionState
+mutation, the reducer, checkpoints, automatic retry, in-run replanning, runtime clock, token or budget
+accounting, the policy engine and a planner or driver loop.
 
 ### Sequence (proposed; each step after 1 needs the owner's go-ahead)
 
 1. **Record the rulings.** *Done.*
 2. **The compiled form, compile failures and `compile_plan`, with tests.** *Done* — the exploration's steps 2
-   and 3 were delivered together, as instructed.
-3. Runtime result types, ports and `ExecutionContext`.
-4. Level semantics and mock agents (plus the reference executor, if confirmed).
-5. The optional extra, the LangGraph spike and the adapter.
-6. Differential and scenario tests.
-7. Guards, docs and this file.
+   and 3 were delivered together.
+3. **Runtime types, `ExecutionContext`, ports, admission, prior outcomes and the sequential reference
+   executor, with tests.** *Done* — the exploration's steps 3 and 4 were delivered together, with the reference
+   executor confirmed as D-128.
+4. The optional dependency extra, the LangGraph spike and the adapter.
+5. Differential conformance tests (adapter against the reference executor) and scenario tests.
+6. Guards, docs and this file.
 
 ---
 
@@ -490,7 +583,6 @@ architectural components are **documented in `docs/03_architecture.md` but not s
 |---|---|
 | `capabilities/` — capability vocabulary and agent registry | V0.4 (V0.2 needed neither — D-102) |
 | `planning/` — candidate strategy generation | V0.2+ |
-| `runtime/` — backend-neutral execution semantics, results, ports (D-115) | V0.3 |
 | `backends/langgraph/` — the LangGraph adapter; the only importer of LangGraph (D-115) | V0.3 |
 | `agents/` — Research, Analysis, Verification | V0.4 |
 | `state/` — reducer, checkpoints, replay | V0.5 |
@@ -533,6 +625,7 @@ Highest-impact first.
 | **D-075** per-type payload definitions | V0.3–V0.8 | §33 names thirteen types and describes none. |
 | **D-125** plan-level `RETRY` vs a runtime retry policy | none at V0.3 | Retry appears both as a §13 step kind and as §32 runtime recovery; the handoff never relates them. `RETRY` is compile-rejected and V0.3 has no automatic retry. |
 | **D-126** `MissionEvent` vocabulary for local node lifecycle | V0.5 or later | The thirteen §33 types (D-090) cannot represent a local node starting, finishing, failing or being skipped, and there is no payload (D-067). Invariant 15 is not exercised in V0.3 (D-123). |
+| **D-129** how a work node receives its predecessors' outputs | V0.4 (none at V0.3) | The specified work port `execute(context, node)` passes a node no upstream results, so an edge into a work node carries ordering only; only the verifier receives its predecessors' results. `ArtifactRef` is opaque and no artifact model exists (D-098). |
 | **D-071** detached/reusable genome representations | V1.0 | §21 stores derived characteristics, not the genome, so the detached case may never arise. |
 | **D-074** is §30's approval wording exactly `autonomy_level >= 3`? | V1.2 | §30 scopes to actions, §29 to the mission. If not equivalent, D-069 dropped a capability rather than a duplicate. |
 | **D-059** contract-unsatisfied as `failed` or a fifth state | V0.4 | Invariant 13 requires it distinguishable from a crash; the handoff gives it no event name and no status value. |
@@ -558,6 +651,7 @@ Full detail for each is in [decisions.md](decisions.md).
 
 | Date | Milestone | Outcome |
 |---|---|---|
+| 2026-09-19 | **V0.3 Step 3 — the runtime and the sequential reference executor** | Implemented `src/eidos/runtime/`: typed results (`NodeResult`, `RunResult`, `PriorOutcomes`, `RunRejection`), a frozen six-field `ExecutionContext` (MissionState only read, once), the synchronous `WorkExecutor` / `Verifier` / `AdmissionGuard` ports, and `SequentialExecutor` — level-synchronous, plan-position order within a level, skip-without-dispatch behind any non-success, independent branches continuing, halt after the current level, no retry, prior `SUCCEEDED` outcomes carried over and never redispatched, invalid prior or context rejected with typed `RunRejection`s, port faults contained as `FAILED`, a faulting guard failing closed. Recorded **D-128** (the reference executor is part of V0.3; resolves D-115's open note) and logged **D-129** (Open): the specified work port passes a node no predecessor outputs. **431 new tests; 1,281 pass in total.** Executor and preconditions mutation-checked 17 of 17, guards 23 of 23. No LangGraph, backend, real agent, MissionState write or event. V0.1, V0.2, the compiler and the handoff untouched. Nothing pushed. |
 | 2026-09-19 | **V0.3 Step 2 — the compiled form and `compile_plan`** | Implemented `src/eidos/compiler/`: the immutable, backend-neutral `CompiledPlan` (`WorkNode` / `VerifyNode`, each with `position`, `level` and `predecessors`; self-validating) and `compile_plan(plan, validation_report) -> CompileReport`, which rejects missing, unaccepted or other-plan evidence, re-checks the structure it depends on (duplicate ids, dangling dependencies, cycles) even when handed an accepted report, and rejects `ROUTE`, `RETRY`, `REPLAN`, `TERMINATE` and `HUMAN_APPROVAL` — including plans V0.2 accepted — without ever repairing or dropping a step. Never raises for an invalid plan or report. **276 new tests; 850 pass in total.** Compiler tests mutation-checked 8 of 8, guards 11 of 11. No LangGraph, runtime, ports, executor or MissionState write. **No new decision IDs**: D-112 and D-114 leave the compiled form's shape and failure codes to implementation. V0.1, V0.2 and the handoff untouched. Nothing pushed. |
 | 2026-09-19 | **V0.3 Step 1 — architecture rulings recorded** | Explored the V0.3 boundary (design only) and recorded the owner's approvals as **D-112 to D-124**, two Open entries (**D-125** plan-level `RETRY` vs runtime retry policy; **D-126** `MissionEvent` vocabulary for local node lifecycle) and one Deferred register (**D-127**). Scope: only `agent` and `VERIFY` compile; the five other kinds are rejected at compile time and **D-012 stays Open**. **D-040 resolved** by D-113 (MissionState never enters LangGraph state). Level-synchronous execution, seven node statuses, no automatic retry or in-run replan, resume by prior `SUCCEEDED` outcomes, a `PASS`/`FAIL`/`INCONCLUSIVE` verifier with no scalar, synchronous ports with a required `AdmissionGuard`, and **invariant 15 explicitly not exercised**. D-055 recorded as a V0.3-specific implementation decision only — **not resolved**. docs/03 (package mapping), 05, 06 and 12 updated. Settled V0.1/V0.2 decisions not reopened; handoff not modified. **No source code written; nothing pushed.** |
 | 2026-09-19 | **V0.2 Plan Validation implemented** | Ruled and recorded D-104..D-110, then implemented in the owner's order, one logical slice per commit: shared test factories moved to `tests/support` (155 tests unchanged); typed `DuplicateStepIdError` / `UnknownDependencyError` and the `EidosModel` export (+10 tests); `validation/limits.py`; `results.py`; iterative `graph.py` with exact antichain width; `stages.py` (incl. a dependency re-check for plans built without validation); `pipeline.py` with `validate_plan_json` / `validate_plan`; static guard tests. **574 tests pass (165 contracts + 409 validation).** POLICY reports `NOT_APPLICABLE`. Logged **D-111** (Open): eight implementation details the approved design left unspecified, implemented conservatively for the owner to confirm. docs/03, 05, 10, 12, README.md (its status line still said "no validator", stale since V0.1) and tests/unit/README updated; docs/10 D-043 row corrected to V0.3 (a missed remnant of the earlier D-043 correction). Nothing pushed. |

@@ -226,7 +226,7 @@ the architectural map; `progress.md` tracks which of these exist.
 | `eidos.planning` | Candidate strategy generation, strategy selection | V0.2+ | no |
 | `eidos.validation` | The validation pipeline of §14 — depends only on `eidos.contracts` | V0.2 | **yes** |
 | `eidos.compiler` | Validated `Plan` + accepted `PlanValidationReport` → an immutable, backend-neutral compiled form; deterministic; compiles only `agent` and `VERIFY` (D-112, D-114); imports no LangGraph | V0.3 | **yes** — the compiled form and `compile_plan` only (Step 2) |
-| `eidos.runtime` | Backend-neutral execution: level-synchronous semantics, node and run results, synchronous execution ports, frozen `ExecutionContext` (D-113, D-115, D-117, D-118, D-122); imports no LangGraph | V0.3 | no |
+| `eidos.runtime` | Backend-neutral execution: level-synchronous semantics, node and run results, synchronous execution ports, frozen `ExecutionContext` (D-113, D-115, D-117, D-118, D-122); imports no LangGraph | V0.3 | **yes** — ports, results, `ExecutionContext` and the sequential reference executor (Step 3) |
 | `eidos.backends.langgraph` | The LangGraph adapter — the **only** package that may import LangGraph (D-115); an optional dependency extra, also in `dev` (D-116) | V0.3 | no |
 | `eidos.agents` | Research, Analysis, Verification | V0.4 | no |
 | `eidos.state` | Reducer, checkpoints, replay | V0.5 | no |
@@ -298,6 +298,43 @@ the single-tenant context rather than by each caller, and it carries **no securi
 - **Only `eidos.backends.langgraph` may import LangGraph** (D-115). The compiler, the runtime and every
   other core layer must not; LangGraph is an execution backend, not the architectural authority.
 
+## 12. Execution semantics — V0.3
+
+Implemented in `eidos.runtime` by the **sequential reference executor** (D-128) — the semantic oracle a backend
+is held to. It is not the production concurrency backend. Full detail: `decisions.md` D-117 to D-124.
+
+**Level-synchronous (D-117).** Each node's `level` comes from the compiled plan and is never recomputed.
+Levels run in order; within a level nodes run in ascending plan position; every node of a level is resolved
+before the next level begins. A node is *ready* when all its predecessors are settled, in any status. It
+executes only if **every** predecessor `SUCCEEDED`; otherwise it is `SKIPPED` without a dispatch. Independent
+branches continue after a failure, and nothing is retried: a node is dispatched at most once per run.
+
+**Statuses and outcomes (D-118).** Seven node statuses — `SUCCEEDED`, `FAILED`, `NO_RESULT`,
+`VERIFICATION_FAILED`, `VERIFICATION_INCONCLUSIVE`, `SKIPPED`, `NOT_REACHED` — and three run outcomes:
+`FINISHED`, `FAILED`, `HALTED`. `HALTED` takes precedence. **`FINISHED` is not verified success**: a
+`RunResult` reports `verified` only for a finished run in which a `VERIFY` node succeeded.
+
+**Ports (D-122).** Three synchronous, narrow ports owned by the runtime: `WorkExecutor.execute(context, node)`,
+`Verifier.verify(context, node, predecessors)` and `AdmissionGuard.admit(request)`. The guard is **required**;
+there is no default and no production guard. A work node carries only a requested capability, never an agent.
+A fault in a port — an exception, or a return that is not the port's typed result — becomes `FAILED`, never a
+pass and never an inconclusive verdict. A guard that faults **fails closed**: the run halts.
+
+**Halting.** The guard is asked once for each node that would be dispatched, told only its level, its rank among
+that level's dispatched nodes and how many nodes earlier levels dispatched. A `HALT` leaves that node
+`NOT_REACHED`; the rest of the level is still resolved, then every later level is `NOT_REACHED` and the run is
+`HALTED`.
+
+**Resume (D-120).** A later run may be given prior `SUCCEEDED` outcomes; those nodes are carried over and never
+redispatched. Anything else in the prior — another status, an unknown step, a contradiction with the plan's
+edges, or an identity that is not this execution's — is a typed `RunRejection`, never silently adapted. A
+context or prior that does not match the compiled plan is likewise rejected before anything runs.
+
+**Not here.** LangGraph; MissionState writes (`ExecutionContext` is a frozen snapshot, and MissionState is only
+read to build it); events (invariant 15 is **not exercised**, D-123); automatic retry or in-run replan (D-119);
+runtime budget, time or token accounting; real agents. Open: how a work node receives its predecessors' outputs
+(D-129).
+
 ---
 
 ## Open questions
@@ -309,6 +346,7 @@ the single-tenant context rather than by each caller, and it carries **no securi
 | D-020 | Strategy vs Plan — one object or two |
 | D-009 | Where execution bounds originate |
 | D-024 | Whether the FAISS/Qdrant comparison is an out-of-runtime experiment |
+| D-129 | How a work node receives its predecessors' outputs (V0.3's work port passes none) |
 
 ## Out of scope for this document
 

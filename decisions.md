@@ -1955,6 +1955,9 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
   - **Not decided here:** whether `eidos.runtime` also ships a sequential reference executor. It was
     proposed in the V0.3 exploration but is not part of A1–A12; to be confirmed before the runtime
     slice.
+- **Reference executor — resolved by D-128 (2026-09-19):** `eidos.runtime` ships a sequential reference executor, as the
+  semantic oracle and conformance target for the LangGraph backend. The "not decided here" note above no
+  longer applies.
 
 ### D-116 — LangGraph is an optional dependency extra, also included in `dev`
 
@@ -2142,6 +2145,31 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
   - **D-058 and D-061 are unaffected:** no `HUMAN_APPROVAL` step compiles and no pause-by-approval
     exists at V0.3.
 
+### D-128 — The sequential reference executor is part of V0.3
+
+- **Status:** Accepted · **Date:** 2026-09-19 · **Decided by:** human owner
+- **Source:** D-115 ("not decided here"), D-117, D-118; V0.3 Step 3 instruction
+- **Context:** D-115 fixed the package boundary but recorded that whether `eidos.runtime` also ships a
+  sequential reference executor was **not decided** — it had been proposed in the V0.3 exploration and was
+  not part of A1–A12, and was "to be confirmed before the runtime slice."
+- **Decision:**
+  1. **`eidos.runtime` ships a sequential reference executor.**
+  2. Its purpose is to **define EIDOS's backend-neutral execution semantics**, to be a **deterministic
+     reference and oracle**, to be **independently testable without LangGraph**, and to be the
+     **conformance target** for `eidos.backends.langgraph`.
+  3. It is **not the final production concurrency backend**, and it **must not become coupled to
+     LangGraph**.
+- **Rationale:** D-117 and D-118 say what a run means; without an executable statement of them, a backend
+  could only be tested against itself. A small dependency-free executor turns those decisions into something
+  a second implementation can be compared with.
+- **Consequences:**
+  - **D-115's open note is resolved** and annotated.
+  - For the same compiled plan, context, prior outcomes and deterministic ports, the LangGraph backend must
+    produce the same `RunResult` (or `RunRejection`) as the reference executor. A disagreement is a defect in
+    the backend, unless D-117 or D-118 are amended by a new decision.
+  - The reference executor imports no LangGraph and no backend package; only tests bring the two together.
+  - The run preconditions (context and prior-state checks) live in their own module so that every backend
+    applies exactly the same ones.
 ---
 
 ## Open — require the human owner
@@ -2870,6 +2898,23 @@ one is not.
 - **Needs:** whether to add event types, to carry lifecycle in typed payloads (D-075), or something
   else. Any change to the thirteen types supersedes D-090's "exactly thirteen" and needs its own
   decision. Material at V0.5 (reducer, replay) or wherever local node events are first recorded.
+
+
+### D-129 — How a work node receives its predecessors' outputs
+
+- **Status:** Open · **Source:** handoff §13, §16, §43; D-098, D-121, D-122; raised implementing V0.3 Step 3
+- **Finding:** the V0.3 work port is specified as `execute(context, node)` (D-122): a work node is told
+  *what to do* (its requested capability) and *for which mission*, but **not what its predecessors
+  produced**. The verifier port is different — a `VERIFY` node is given its predecessors' results. So in
+  V0.3 an edge into a work node carries **ordering only**: a downstream work node cannot consume an upstream
+  node's artifact. §16 and §43 draw analysis consuming research, which is the point of a dependency. Any
+  answer needs an output representation, and D-098 defines none: `ArtifactRef` is an opaque reference and
+  "no Artifact model is created".
+- **Effect while Open:** none on V0.3, which uses scripted test doubles only and executes no real work. It
+  becomes material when real agents exist (V0.4).
+- **Needs:** whether predecessors' results are passed to a work node (as the verifier's are), fetched by the
+  work implementation through a reference, or something else; and what an artifact is. Changing the port
+  signature is a change to D-122, so it needs the owner.
 
 ---
 
