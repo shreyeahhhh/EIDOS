@@ -79,7 +79,7 @@ Modules in `src/eidos/contracts/`:
 - `agent_task.py` — `AgentTask` — §8
 - `mission_state.py` — `MissionState` — §9, §10, with the six A7 cross-object validators
 
-`tests/unit/contracts/` — 155 tests: `conftest.py` (valid-object factories), and one test module per
+`tests/unit/contracts/` — 155 tests: valid-object factories in `tests/support/eidos_factories.py` (shared; D-109), and one test module per
 contract module above, covering construction, field validation, rejection of invalid input, the
 failure paths (§61, CLAUDE.md §6), immutability, and every cross-object consistency check named in
 A7. `test_mission_state.py` is last, since `MissionState` composes every other contract.

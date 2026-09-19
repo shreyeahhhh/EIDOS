@@ -22,7 +22,7 @@ from eidos.contracts import (
     TenantId,
 )
 
-from conftest import (
+from eidos_factories import (
     make_mission_state,
     make_plan,
     make_reliability_contract,

@@ -18,7 +18,7 @@ from eidos.contracts import (
     TenantId,
 )
 
-from conftest import make_agent_step, make_control_step, make_plan
+from eidos_factories import make_agent_step, make_control_step, make_plan
 
 
 # --- PlanStep: the discriminated union itself ----------------------------

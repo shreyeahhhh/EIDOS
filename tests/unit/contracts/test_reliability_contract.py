@@ -7,7 +7,7 @@ from pydantic import ValidationError
 
 from eidos.contracts import ReliabilityContractId, RiskLevel
 
-from conftest import make_reliability_contract
+from eidos_factories import make_reliability_contract
 
 
 def test_valid_construction_with_only_required_fields():

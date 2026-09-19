@@ -7,7 +7,7 @@ from pydantic import ValidationError
 
 from eidos.contracts import A2AContextId, A2ATaskId, AgentId, AgentTask, ArtifactRef, EventId
 
-from conftest import make_agent_task
+from eidos_factories import make_agent_task
 
 
 def test_valid_construction_with_only_required_fields():

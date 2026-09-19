@@ -8,7 +8,7 @@ from pydantic import ValidationError
 
 from eidos.contracts import DEFAULT_TENANT_ID, EventId, MissionEvent, MissionEventType, MissionId
 
-from conftest import make_mission_event, utc_now
+from eidos_factories import make_mission_event, utc_now
 
 
 def test_valid_construction():

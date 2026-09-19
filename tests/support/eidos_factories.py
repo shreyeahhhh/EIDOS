@@ -1,4 +1,8 @@
-"""Minimal valid-object factories for V0.1 contract tests.
+"""Minimal valid-object factories shared by the EIDOS test suite.
+
+Imported as ``eidos_factories`` — ``tests/support`` is on ``pythonpath`` in
+``pyproject.toml`` (decisions.md D-109), so no test depends on ``conftest.py``
+import resolution.
 
 Every factory returns a fresh, structurally valid instance so a test can
 start from something known-good and mutate exactly the field under test —
