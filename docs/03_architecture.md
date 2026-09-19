@@ -225,7 +225,7 @@ the architectural map; `progress.md` tracks which of these exist.
 | `eidos.capabilities` | Capability vocabulary, agent capability registry | V0.4 (V0.2 needed neither — D-102) | no |
 | `eidos.planning` | Candidate strategy generation, strategy selection | V0.2+ | no |
 | `eidos.validation` | The validation pipeline of §14 — depends only on `eidos.contracts` | V0.2 | **yes** |
-| `eidos.compiler` | Validated `Plan` + accepted `PlanValidationReport` → an immutable, backend-neutral compiled form; deterministic; compiles only `agent` and `VERIFY` (D-112, D-114); imports no LangGraph | V0.3 | no |
+| `eidos.compiler` | Validated `Plan` + accepted `PlanValidationReport` → an immutable, backend-neutral compiled form; deterministic; compiles only `agent` and `VERIFY` (D-112, D-114); imports no LangGraph | V0.3 | **yes** — the compiled form and `compile_plan` only (Step 2) |
 | `eidos.runtime` | Backend-neutral execution: level-synchronous semantics, node and run results, synchronous execution ports, frozen `ExecutionContext` (D-113, D-115, D-117, D-118, D-122); imports no LangGraph | V0.3 | no |
 | `eidos.backends.langgraph` | The LangGraph adapter — the **only** package that may import LangGraph (D-115); an optional dependency extra, also in `dev` (D-116) | V0.3 | no |
 | `eidos.agents` | Research, Analysis, Verification | V0.4 | no |

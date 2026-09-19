@@ -20,15 +20,17 @@ during implementation.
 
 V0.2 (`src/eidos/validation/`) adds a deterministic, seven-stage plan-validation pipeline with two entry
 points — `validate_plan_json(text, state, limits)` and `validate_plan(plan, state, limits)` — that returns a
-typed report and never raises for an invalid plan. See "V0.2 Plan Validation" below. **574 tests pass**
-(165 in `tests/unit/contracts/`, 409 in `tests/unit/validation/`).
+typed report and never raises for an invalid plan. See "V0.2 Plan Validation" below. (574 tests at V0.2
+completion: 165 in `tests/unit/contracts/`, 409 in `tests/unit/validation/`.)
 
-**V0.3 (LangGraph Runtime): scope approved, not started.** The architecture rulings are recorded as
-D-112 to D-127 (2026-09-19); no V0.3 source code, package, dependency or test exists yet. See
-"V0.3 LangGraph Runtime" below.
+**V0.3 (LangGraph Runtime): scope approved; Step 2 implemented.** The architecture rulings are recorded as
+D-112 to D-127 (2026-09-19). Step 2 added `src/eidos/compiler/` — the immutable compiled form and
+`compile_plan` — and nothing else: there is **no runtime, no executor, no ports, no LangGraph adapter and no
+LangGraph dependency yet**. See "V0.3 LangGraph Runtime" below. **850 tests pass** (165 in
+`tests/unit/contracts/`, 409 in `tests/unit/validation/`, 276 in `tests/unit/compiler/`).
 
-There is still no planner, no compiler, no runtime, no agents, no state reducer, no A2A, no MCP, no RAG,
-no persistence, no telemetry, no API and no frontend.
+There is still no planner, no runtime, no agents, no state reducer, no A2A, no MCP, no RAG, no persistence,
+no telemetry, no API and no frontend.
 
 No measurement of any kind has been taken, so no metric appears anywhere in this repository.
 
@@ -55,7 +57,7 @@ hold, failure cases are covered, documentation matches reality, a git checkpoint
 |---|---|---|
 | **V0.1** Core Contracts | `TaskGenome`, `ReliabilityContract`, `MissionState`, `MissionEvent`, `Plan`, `PlanStep`, `AgentTask`. No real agents, no A2A, no MCP, no frontend. In-memory only (D-005). | **Implemented — 165 unit tests passing** (155 at implementation, +10 for D-107/D-108) |
 | **V0.2** Plan DSL | Schema validation, cycle detection, dependency validation, depth limits, node limits, parallel-branch limits, capability validation, policy validation. | **Implemented — 409 unit tests passing** (2026-09-19). Every stage is implemented **except policy validation, which reports `NOT_APPLICABLE`** (D-110): no policy rule exists to check, and none was invented. D-046 (the actual limit values) stays Open — no limits object ships (D-103). D-111 (eight implementation details, Open) awaits the owner. |
-| **V0.3** LangGraph Runtime | Map `SEQUENTIAL`, `PARALLEL`, `ROUTE`, `VERIFY`, `RETRY`, `REPLAN` into runtime nodes. Mock agents. | **Scope approved 2026-09-19 (D-112 to D-127); implementation not started.** Narrowed from §50's list: only `agent` and `VERIFY` compile; `ROUTE`, `RETRY`, `REPLAN`, `TERMINATE`, `HUMAN_APPROVAL` are rejected at compile time and D-012 stays Open. No architecture blocker remains; see the V0.3 section for what is still unconfirmed. |
+| **V0.3** LangGraph Runtime | Map `SEQUENTIAL`, `PARALLEL`, `ROUTE`, `VERIFY`, `RETRY`, `REPLAN` into runtime nodes. Mock agents. | **In progress — scope approved 2026-09-19 (D-112 to D-127); Step 2 done: the compiled form and `compile_plan` (276 tests).** Narrowed from §50's list: only `agent` and `VERIFY` compile; `ROUTE`, `RETRY`, `REPLAN`, `TERMINATE`, `HUMAN_APPROVAL` are rejected at compile time and D-012 stays Open. **Not started:** the runtime, execution ports, admission guard, level scheduling, mock agents and the LangGraph adapter. |
 | **V0.4** Real Local Agents | Research, Analysis, Verification. Baseline workflow end-to-end. | Not started — blocked (D-006) |
 | **V0.5** MissionState + Event Reducer | `MissionEvent`, `MissionState`, `StateReducer`, checkpoints, replay. §50: state handling must be reliable **before** A2A. | Not started — blocked (D-010, D-011) |
 | **V0.6** One A2A Boundary | Move exactly one agent into an independent process. Test: normal completion, timeout, duplicate event, late event, agent restart, partial artifact, failure. | Not started — deferred (D-026) |
@@ -337,10 +339,10 @@ behaviours the approved design did not specify; each was implemented conservativ
 
 ---
 
-## V0.3 LangGraph Runtime — scope approved, not started (2026-09-19)
+## V0.3 LangGraph Runtime — scope approved; Step 2 implemented (2026-09-19)
 
-**Step 1 — the decision record — is done.** No V0.3 source code, package, dependency or test exists, and
-nothing in V0.1 or V0.2 was changed. The design behind these rulings is the V0.3 exploration (2026-09-19);
+**Step 1 — the decision record — is done, and Step 2 — the compiled form and `compile_plan` — is
+implemented** (see "Step 2" below). Nothing in V0.1 or V0.2 was changed by either. The design behind these rulings is the V0.3 exploration (2026-09-19);
 LangGraph behaviour cited there came from its documentation and is **unverified** until it is installed and
 exercised.
 
@@ -390,9 +392,9 @@ D-039, D-015, D-059, D-046, D-007 and D-020 are not blockers under this scope.
 These are implementation details, not decisions. Each is to be confirmed or adjusted by the slice that
 introduces it, and logged in `decisions.md` if it turns out to matter.
 
-- The compiled form's exact shape (proposed: a frozen model with one node class per supported kind, each
-  carrying `step_id`, plan `position`, `level` and `predecessors`) and the compile-failure codes (proposed:
-  `NOT_VALIDATED`, `STRUCTURE_INVALID`, `UNSUPPORTED_STEP_KIND`).
+- ~~The compiled form's exact shape and the compile-failure codes~~ — **implemented in Step 2** as
+  implementation details (D-112 and D-114 delegate both); see "Step 2" below. The three codes proposed in the
+  exploration became eight, for finer diagnostics.
 - The `ExecutionContext` field set; the halt-reason set; `RunRejection` codes beyond invalid prior state
   (for example a context mismatch); how a backend fault surfaces (proposed: an exception, not an outcome).
 - The `AdmissionGuard` request shape and purity requirement (proposed: a pure function of level facts, so
@@ -414,16 +416,68 @@ accounting; the capability registry; async ports, A2A, MCP and RAG; policy seman
 visibility:** V0.2's policy stage is `NOT_APPLICABLE`, so plans V0.3 compiles have had no policy evaluation;
 only mock agents execute at V0.3, and whether real agents may run before a policy exists is a V0.4 question.
 
-### Sequence (proposed; only Step 1 is authorised)
+### Step 2 — the compiled form and `compile_plan` (implemented)
 
-1. **Record the rulings** — this slice. *Done.*
-2. Compiled form and its tests.
-3. Compile failures and `compile_plan`, with the defensive checks and the unsupported-kind tests.
-4. Runtime result types, ports and `ExecutionContext`.
-5. Level semantics and mock agents (plus the reference executor, if confirmed).
-6. The optional extra, the LangGraph spike and the adapter.
-7. Differential and scenario tests.
-8. Guards, docs and this file.
+`src/eidos/compiler/` — four modules, no LangGraph, no runtime, no I/O; imports only `eidos.contracts`, the
+public surface of `eidos.validation` (`PlanValidationReport`), pydantic and the standard library.
+
+| Module | Public names | Tests (file) |
+|---|---|---|
+| `ir.py` | `CompiledPlan`, `WorkNode`, `VerifyNode`, `CompiledNode`, `SUPPORTED_STEP_KINDS` | 79 (`test_compiler_ir.py`) |
+| `results.py` | `CompileReport`, `CompileViolation`, `CompileFailureCode` | 32 (`test_compiler_results.py`) |
+| `compile.py` | `compile_plan(plan, validation_report) -> CompileReport` | 125 (`test_compile_plan.py`) |
+| — | Static and import guards over the package source | 40 (`test_compiler_guards.py`) |
+
+Test infrastructure added: `tests/support/eidos_compiler_factories.py` (a real-V0.2-report factory, and a
+"forged" report factory that gives the compiler evidence which lies). **No existing test was modified.**
+
+**Evidence, not assertion.** Every count above was measured by running the suite (**850 total = 574 + 276**).
+The compiler tests were mutation-checked: removing the not-accepted check, the plan-mismatch check, cycle
+detection or the unknown-dependency check; compiling non-`VERIFY` control kinds as `VerifyNode`; using a wrong
+level formula; keeping repeated predecessors; and accepting a relabelled step each made a test fail (8 of 8).
+The guard tests were mutation-checked the same way: a forbidden import, a LangGraph import, a runtime import,
+a non-public validation import, a MissionState import, a `set()` call, a dict view, module-level mutable
+state, self-recursion, a vendor name and a `print` call each made a guard fail (11 of 11). They found two real
+problems while being written — LangGraph named in the compiler's docstrings, and set literals in
+`results.py` — both fixed in the source, not the guard.
+
+**Import and dependency guard result:** the compiler imports no LangGraph, no runtime, no backend, and nothing
+that does I/O, reads a clock, draws randomness or holds process state. `import eidos.compiler` loads neither
+`langgraph` nor `eidos.runtime` (checked in a fresh interpreter). `contracts` and `validation` do not import
+the compiler. The compiler touches none of `MissionState`, `MissionEvent`, `AgentTask`, `TaskGenome` or
+`ReliabilityContract`.
+
+**Implementation details chosen (not decisions; none touches an invariant).** D-112 and D-114 explicitly leave
+the compiled form's shape and the failure codes to implementation, so no new `decisions.md` entry was made.
+
+- Nodes carry a `kind` discriminator reusing `PlanStepKind`, so the union round-trips through JSON.
+- A node's predecessors are unique; the compiler collapses a repeated `depends_on` entry (the same edge) and the
+  model rejects a repeated one. Predecessors keep `depends_on` order.
+- The compiled form's identifiers are required (no default tenant), unlike `Plan`'s.
+- **All** violations are reported together (evidence, then structure, then step kinds), not only the first.
+- Eight failure codes (see `docs/05_plan_dsl.md` §4). Something that is not a `PlanValidationReport` counts as
+  missing evidence. A control kind that is not `VERIFY` is unsupported by default, so a kind added to
+  `PlanStepKind` later is rejected until deliberately supported.
+- `MALFORMED_STEP` covers a step whose kind and shape disagree (reachable only by bypassing `Plan`
+  construction) so that no capability is ever silently stripped.
+- A cycle violation names the steps **on, or downstream of**, a cycle, not the exact cycle members — the
+  compiler computes levels with its own Kahn pass rather than reusing V0.2's `graph` module, which is not part
+  of `eidos.validation`'s public surface.
+
+**Not done in Step 2, by scope:** the runtime executor, the reference executor, execution ports, the
+admission guard, the verification runtime, level scheduling, mock agents, retry, the replan driver, event
+emission, any MissionState write, and LangGraph and its dependency.
+
+### Sequence (proposed; each step after 1 needs the owner's go-ahead)
+
+1. **Record the rulings.** *Done.*
+2. **The compiled form, compile failures and `compile_plan`, with tests.** *Done* — the exploration's steps 2
+   and 3 were delivered together, as instructed.
+3. Runtime result types, ports and `ExecutionContext`.
+4. Level semantics and mock agents (plus the reference executor, if confirmed).
+5. The optional extra, the LangGraph spike and the adapter.
+6. Differential and scenario tests.
+7. Guards, docs and this file.
 
 ---
 
@@ -436,7 +490,6 @@ architectural components are **documented in `docs/03_architecture.md` but not s
 |---|---|
 | `capabilities/` — capability vocabulary and agent registry | V0.4 (V0.2 needed neither — D-102) |
 | `planning/` — candidate strategy generation | V0.2+ |
-| `compiler/` — Plan DSL → runtime graph | V0.3 |
 | `runtime/` — backend-neutral execution semantics, results, ports (D-115) | V0.3 |
 | `backends/langgraph/` — the LangGraph adapter; the only importer of LangGraph (D-115) | V0.3 |
 | `agents/` — Research, Analysis, Verification | V0.4 |
@@ -505,6 +558,7 @@ Full detail for each is in [decisions.md](decisions.md).
 
 | Date | Milestone | Outcome |
 |---|---|---|
+| 2026-09-19 | **V0.3 Step 2 — the compiled form and `compile_plan`** | Implemented `src/eidos/compiler/`: the immutable, backend-neutral `CompiledPlan` (`WorkNode` / `VerifyNode`, each with `position`, `level` and `predecessors`; self-validating) and `compile_plan(plan, validation_report) -> CompileReport`, which rejects missing, unaccepted or other-plan evidence, re-checks the structure it depends on (duplicate ids, dangling dependencies, cycles) even when handed an accepted report, and rejects `ROUTE`, `RETRY`, `REPLAN`, `TERMINATE` and `HUMAN_APPROVAL` — including plans V0.2 accepted — without ever repairing or dropping a step. Never raises for an invalid plan or report. **276 new tests; 850 pass in total.** Compiler tests mutation-checked 8 of 8, guards 11 of 11. No LangGraph, runtime, ports, executor or MissionState write. **No new decision IDs**: D-112 and D-114 leave the compiled form's shape and failure codes to implementation. V0.1, V0.2 and the handoff untouched. Nothing pushed. |
 | 2026-09-19 | **V0.3 Step 1 — architecture rulings recorded** | Explored the V0.3 boundary (design only) and recorded the owner's approvals as **D-112 to D-124**, two Open entries (**D-125** plan-level `RETRY` vs runtime retry policy; **D-126** `MissionEvent` vocabulary for local node lifecycle) and one Deferred register (**D-127**). Scope: only `agent` and `VERIFY` compile; the five other kinds are rejected at compile time and **D-012 stays Open**. **D-040 resolved** by D-113 (MissionState never enters LangGraph state). Level-synchronous execution, seven node statuses, no automatic retry or in-run replan, resume by prior `SUCCEEDED` outcomes, a `PASS`/`FAIL`/`INCONCLUSIVE` verifier with no scalar, synchronous ports with a required `AdmissionGuard`, and **invariant 15 explicitly not exercised**. D-055 recorded as a V0.3-specific implementation decision only — **not resolved**. docs/03 (package mapping), 05, 06 and 12 updated. Settled V0.1/V0.2 decisions not reopened; handoff not modified. **No source code written; nothing pushed.** |
 | 2026-09-19 | **V0.2 Plan Validation implemented** | Ruled and recorded D-104..D-110, then implemented in the owner's order, one logical slice per commit: shared test factories moved to `tests/support` (155 tests unchanged); typed `DuplicateStepIdError` / `UnknownDependencyError` and the `EidosModel` export (+10 tests); `validation/limits.py`; `results.py`; iterative `graph.py` with exact antichain width; `stages.py` (incl. a dependency re-check for plans built without validation); `pipeline.py` with `validate_plan_json` / `validate_plan`; static guard tests. **574 tests pass (165 contracts + 409 validation).** POLICY reports `NOT_APPLICABLE`. Logged **D-111** (Open): eight implementation details the approved design left unspecified, implemented conservatively for the owner to confirm. docs/03, 05, 10, 12, README.md (its status line still said "no validator", stale since V0.1) and tests/unit/README updated; docs/10 D-043 row corrected to V0.3 (a missed remnant of the earlier D-043 correction). Nothing pushed. |
 | 2026-09-19 | V0.2 rulings recorded | Human owner ruled on the V0.2 design exploration. **D-104**: `max_depth` counts *nodes* (single-node plan = depth 1). **D-105**: V0.2 statically checks only *declared* `max_agent_calls`; the other five budgets are checked only as contract-vs-system-ceiling; nothing is inferred from plan structure. **D-106**: empty plans are legal. **D-107**: JSON text is the untrusted ingress; two typed `ValueError` subclasses are added to V0.1 plan construction. **D-108**: `EidosModel` exported from `eidos.contracts`. **D-109**: shared test factories move to a uniquely named module, own commit, 155-test baseline kept. **D-110**: POLICY stage exists and reports `NOT_APPLICABLE` — no policy semantics, no injection mechanism. D-050 annotated with a pointer to D-104. No source code changed by this entry. |

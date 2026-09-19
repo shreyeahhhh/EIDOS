@@ -297,6 +297,53 @@ runtime counting of retries, replans, tool calls, time or tokens; plan lineage, 
 and version monotonicity across a mission's plans (D-082 — a V0.5 reducer concern); the
 `risk_level` versus `max_risk_level` comparison (D-030 / D-057, Open).
 
+### V0.3 compiled form — `eidos.compiler` (Step 2)
+
+`compile_plan(plan, validation_report) -> CompileReport` turns a validated `Plan` into an immutable,
+backend-neutral `CompiledPlan`. It **never raises for an invalid plan or report**; it returns a typed
+`CompileReport` whose `compiled` is present exactly when there are no violations. It never repairs, drops
+or transforms a step, and a plan with any violation yields **no** compiled form — never a partial one.
+
+**Input and authority (D-114).** The report must be present, accepted and for this plan. It binds to a plan
+only by `plan_id`, so it is evidence rather than proof; the compiler therefore re-checks the structure it
+depends on — unique step ids, resolved dependencies, no cycle — and does **not** repeat V0.2's capability,
+resource, complexity or policy checks (it has neither the mission nor the limits).
+
+**Compile failures are their own family** (`CompileFailureCode`, not V0.2's `ViolationCode`). A plan can be
+validation-accepted and compile-rejected; V0.2 accepts every kind by design (D-047).
+
+| Code | Meaning |
+|---|---|
+| `MISSING_VALIDATION` | no `PlanValidationReport` was supplied |
+| `VALIDATION_NOT_ACCEPTED` | the report is not accepted |
+| `VALIDATION_PLAN_MISMATCH` | the report is for another plan (or for none) |
+| `DUPLICATE_STEP_ID`, `UNKNOWN_DEPENDENCY`, `DEPENDENCY_CYCLE` | the structure the compiler depends on is unsound; a cycle report names the steps on, or downstream of, it |
+| `UNSUPPORTED_STEP_KIND` | `ROUTE`, `RETRY`, `REPLAN`, `TERMINATE` or `HUMAN_APPROVAL` (D-112); the message names the Open decision that blocks it |
+| `MALFORMED_STEP` | a step whose kind and shape disagree — reachable only by bypassing `Plan` construction |
+
+All violations are reported together, in evidence → structure → step-kind order, each group in
+`Plan.steps` order.
+
+**The compiled form** is a frozen `CompiledPlan` — `tenant_id`, `mission_id`, `plan_id`, `plan_version` and
+`nodes` in `Plan.steps` order — of exactly two node classes, so an unsupported kind is **unrepresentable**
+rather than a placeholder:
+
+| Node | Fields |
+|---|---|
+| `WorkNode` (`agent`) | `step_id`, `position`, `level`, `predecessors`, `kind`, `capability` |
+| `VerifyNode` (`VERIFY`, D-124) | `step_id`, `position`, `level`, `predecessors`, `kind` |
+
+`position` is the step's index in `Plan.steps`. `level` is the length of the longest predecessor chain,
+counted in nodes (D-117): 1 for a root, otherwise `1 + max(predecessor levels)`. The model validates itself:
+unique ids, `position` equal to the index, resolved and non-repeating predecessors, predecessors at strictly
+lower levels, and exact levels. It carries **no** execution-backend objects, agent or model bindings, budgets,
+retry or timeout fields, conditions, edge objects, parent-plan lineage (which stays in `Plan`), or
+MissionState. Nothing is written to MissionState and no event is emitted (D-123).
+
+Ordering is deterministic: it derives only from `Plan.steps` order, and reports are asserted byte-identical
+across process hash seeds. Execution — ports, admission guard, level scheduling, LangGraph — is later V0.3
+steps; **none of it exists yet**.
+
 ## 5. Bounds
 
 Plans must have limits (§14):
