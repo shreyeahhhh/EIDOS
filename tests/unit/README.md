@@ -26,4 +26,4 @@ scoring and policy evaluation — are all verified here.
 - Deterministic components must be tested as deterministic: same input, same output, no clock, no
   randomness, no hidden state.
 
-Currently empty. V0.1 contract tests are the first tests this project will have.
+The unit suites are listed above by milestone; each subdirectory holds one component's tests.
