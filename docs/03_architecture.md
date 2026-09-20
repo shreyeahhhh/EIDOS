@@ -228,7 +228,7 @@ the architectural map; `progress.md` tracks which of these exist.
 | Package | Responsibility | Milestone | Exists |
 |---|---|---|---|
 | `eidos.contracts` | Typed contracts: TaskGenome, ReliabilityContract, MissionState, MissionEvent, Plan, PlanStep, AgentTask | V0.1 | **yes** |
-| `eidos.capabilities` | The V0.4 capability set (five exact-string, lowercase names, D-132, D-144), the agent descriptor and a deterministic registry that resolves a capability to an agent; an unbound capability is a typed pre-run rejection (D-134) | V0.4 (V0.2 needed neither — D-102) | no |
+| `eidos.capabilities` | The V0.4 capability set (five exact-string, lowercase names, D-132, D-144), the agent descriptor and a deterministic registry that resolves a capability to an agent; an unbound capability is a typed pre-run rejection (D-134) | V0.4 (V0.2 needed neither — D-102) | **yes** — vocabulary, descriptor, registry and `bind_plan` (Step 4) |
 | `eidos.planning` | Candidate strategy generation, strategy selection | V0.2+ | no |
 | `eidos.validation` | The validation pipeline of §14 — depends only on `eidos.contracts` | V0.2 | **yes** |
 | `eidos.compiler` | Validated `Plan` + accepted `PlanValidationReport` → an immutable, backend-neutral compiled form; deterministic; compiles only `agent` and `VERIFY` (D-112, D-114); imports no LangGraph | V0.3 | **yes** — the compiled form and `compile_plan` only (Step 2) |
@@ -378,7 +378,7 @@ Recorded in D-131 to D-140. Nothing here exists yet; `progress.md` tracks the st
 ```text
 runner (single pass)  ---> validation, compiler, runtime, backends.langgraph, capabilities, agents
 agents                ---> runtime ports (it implements them), contracts, ModelPort (it owns it)
-capabilities          ---> contracts
+capabilities          ---> contracts, compiler          (binding reads a CompiledPlan)
 providers             ---> agents' ModelPort         (the only vendor-aware layer)
 core: contracts, validation, compiler, runtime     (unchanged; import none of the above)
 ```
