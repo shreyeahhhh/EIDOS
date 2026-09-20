@@ -11,6 +11,7 @@ and from `tests/scenarios/`, which tests whole missions.
 | Subject | Milestone |
 |---|---|
 | Compiled plan executing on the LangGraph runtime with mock agents | V0.3 — `tests/integration/langgraph/` (Step 4: the spike, the adapter, and conformance with the reference executor) |
+| The local-runtime provider adapter against a local fake runtime over real sockets; real-model tests are an explicit opt-in (`-m real_model`), deselected by default and never skipped | V0.4 — `tests/integration/providers/` (Step 8) |
 | Local agents wired into the runtime end-to-end | V0.4 |
 | Checkpointing and replay against real state storage | V0.5 |
 | Qdrant retrieval, embeddings, reranking | V0.8 |

@@ -32,7 +32,12 @@ pythonpath = ["src", "tests/support"]
 # LangGraph pulls in langsmith, which registers a pytest plugin that would otherwise be loaded into every
 # test session — including tests that never touch LangGraph — and hook every test call. It is inert unless
 # asked, but nothing in EIDOS asks for it, so it is not loaded (V0.3 Step 4).
-addopts = "-p no:langsmith_plugin"
+# Real-model tests call a real local model runtime, so they run only when selected with `-m real_model` (V0.4, D-136). They are
+# deselected here, never skipped, and when selected they fail loudly if their configuration is missing.
+addopts = "-p no:langsmith_plugin -m 'not real_model'"
+markers = [
+    "real_model: calls a real local model runtime; excluded from the default run, selected explicitly with -m real_model (D-136)",
+]
 testpaths = [
     "tests/unit",
     "tests/integration",
