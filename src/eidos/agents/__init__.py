@@ -1,9 +1,10 @@
 """Agents and the model seam — milestone V0.4.
 
-Step 3 ships only the model seam (decisions.md D-135). The three agents, the artifact store and the verifier
-arrive in later V0.4 steps, and this docstring is updated as each one does.
+Shipped so far: the model seam (D-135, Step 3) and the artifact model and in-memory store (D-137, D-145, Step 5). The three
+agents and the verifier arrive in a later V0.4 step, and this docstring is updated as each one does.
 
     from eidos.agents import ModelPort, ModelRequest, ModelSettings, GenerationParameters
+    from eidos.agents import Artifact, InMemoryArtifactStore
 
 Constraints (the repository rules, §8; D-135, D-140):
 
@@ -13,6 +14,7 @@ Constraints (the repository rules, §8; D-135, D-140):
 - Core layers (contracts, validation, compiler, runtime, backends) never import this package.
 """
 
+from .artifacts import Artifact, ArtifactConflict, ArtifactStore, InMemoryArtifactStore
 from .model import (
     GenerationParameters,
     MeasuredFacts,
@@ -26,7 +28,11 @@ from .model import (
 )
 
 __all__ = [
+    "Artifact",
+    "ArtifactConflict",
+    "ArtifactStore",
     "GenerationParameters",
+    "InMemoryArtifactStore",
     "MeasuredFacts",
     "ModelFailure",
     "ModelFailureKind",
