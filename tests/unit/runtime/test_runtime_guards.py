@@ -36,7 +36,7 @@ VENDOR_NAMES = (
 
 # Contract names the runtime must never import: events, and everything of the authoritative
 # state except the one read-only snapshot builder (D-113, D-123).
-NEVER_IN_RUNTIME = {"MissionEvent", "MissionEventType", "AgentTask", "ReliabilityContract", "MissionStatus"}
+NEVER_IN_RUNTIME = {"MissionEvent", "MissionEventType", "AgentTask", "MissionStatus"}
 
 
 def imports_of(path: Path) -> list[tuple[str, tuple[str, ...], int]]:
@@ -106,6 +106,8 @@ def test_no_event_or_state_contract_is_imported_beyond_the_one_read_only_snapsho
     assert imported & NEVER_IN_RUNTIME == set()
     if module.name != "context.py":
         assert "MissionState" not in imported, f"{module.name} imports MissionState"
+        # D-139: the frozen contract is part of the context snapshot, and only there.
+        assert "ReliabilityContract" not in imported, f"{module.name} imports ReliabilityContract"
 
 
 def test_mission_state_is_only_read_never_written_or_copied():

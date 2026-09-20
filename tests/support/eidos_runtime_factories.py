@@ -26,7 +26,13 @@ from eidos.runtime import (
 )
 
 from eidos_compiler_factories import forged_accepted_report
-from eidos_factories import make_agent_step, make_control_step, make_plan, make_task_genome
+from eidos_factories import (
+    make_agent_step,
+    make_control_step,
+    make_plan,
+    make_reliability_contract,
+    make_task_genome,
+)
 
 EXECUTION_ID = ExecutionId(UUID(int=9))
 
@@ -47,6 +53,10 @@ def compiled_of(spec: dict[str, str], *, verify: tuple[str, ...] = (), **plan_ov
 
 
 def context_for(compiled: CompiledPlan, **overrides) -> ExecutionContext:
+    # The contract and the genome belong to the context's tenant, so an overridden tenant carries both with it.
+    contract = make_reliability_contract(
+        tenant_id=overrides.get("tenant_id", compiled.tenant_id), contract_id=ReliabilityContractId(UUID(int=11))
+    )
     fields = dict(
         tenant_id=compiled.tenant_id,
         mission_id=compiled.mission_id,
@@ -54,9 +64,8 @@ def context_for(compiled: CompiledPlan, **overrides) -> ExecutionContext:
         plan_id=compiled.plan_id,
         plan_version=compiled.plan_version,
         # A fixed contract id keeps the fixture deterministic: two calls give equal contexts.
-        task_genome=make_task_genome(
-            tenant_id=compiled.tenant_id, reliability_contract_id=ReliabilityContractId(UUID(int=11))
-        ),
+        task_genome=make_task_genome(contract=contract),
+        reliability_contract=contract,
     )
     fields.update(overrides)
     return ExecutionContext(**fields)

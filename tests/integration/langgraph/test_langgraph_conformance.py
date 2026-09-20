@@ -36,7 +36,6 @@ from eidos_backend_factories import (
     locked_admit_all,
     locked_halt_when,
 )
-from eidos_factories import make_task_genome
 from eidos_runtime_factories import EXECUTION_ID, compiled_of, context_for, statuses, succeeded_result
 
 R = RunOutcome
@@ -208,8 +207,7 @@ def _rejected(spec, *, name, prior=None, ctx=None, verify=(), expect_code):
 
 REJECTIONS = [
     _rejected({"a": ""}, name="wrong_tenant", expect_code=Code.WRONG_TENANT,
-              ctx=lambda c: context_for(c, tenant_id=TenantId(UUID(int=801)),
-                                        task_genome=make_task_genome(tenant_id=TenantId(UUID(int=801))))),
+              ctx=lambda c: context_for(c, tenant_id=TenantId(UUID(int=801)))),
     _rejected({"a": ""}, name="wrong_mission", expect_code=Code.WRONG_MISSION,
               ctx=lambda c: context_for(c, mission_id=MissionId(UUID(int=802)))),
     _rejected({"a": ""}, name="wrong_plan", expect_code=Code.WRONG_PLAN,

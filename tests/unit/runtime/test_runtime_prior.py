@@ -277,10 +277,6 @@ def test_a_matching_context_and_no_prior_is_accepted():
 )
 def test_a_context_for_another_tenant_mission_plan_or_version_is_rejected(override, code):
     compiled = compiled_of({"a": "", "b": "a"})
-    if "tenant_id" in override:  # the genome must belong to the context's tenant
-        from eidos_factories import make_task_genome
-
-        override = {**override, "task_genome": make_task_genome(tenant_id=override["tenant_id"])}
     result, work, verifier, guard = run(compiled, context=context_for(compiled, **override))
     assert isinstance(result, RunRejection) and result.code is code
     assert work.calls == [] and verifier.calls == [] and guard.requests == []
@@ -298,8 +294,6 @@ def test_a_run_of_the_wrong_plan_is_refused_not_run_under_the_wrong_context():
 
 def test_preconditions_are_checked_in_a_fixed_order_tenant_then_mission_then_plan_then_version():
     compiled = compiled_of({"a": ""})
-    from eidos_factories import make_task_genome
-
     tenant = TenantId(UUID(int=701))
     everything_wrong = context_for(
         compiled,
@@ -307,7 +301,6 @@ def test_preconditions_are_checked_in_a_fixed_order_tenant_then_mission_then_pla
         mission_id=MissionId(UUID(int=702)),
         plan_id=PlanId(UUID(int=703)),
         plan_version=9,
-        task_genome=make_task_genome(tenant_id=tenant),
     )
     assert check_run_preconditions(compiled, everything_wrong, None).code is Code.WRONG_TENANT
     no_tenant_issue = context_for(
