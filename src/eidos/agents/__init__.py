@@ -1,7 +1,7 @@
 """Agents and the model seam — milestone V0.4.
 
-Shipped so far: the model seam (D-135, Step 3) and the artifact model and in-memory store (D-137, D-145, Step 5). The three
-agents and the verifier arrive in a later V0.4 step, and this docstring is updated as each one does.
+The model seam (D-135), the artifact model and in-memory store (D-137, D-145), the Research and Analysis agents and the
+deterministic Verification Agent (D-138, D-146). The dispatcher and the single-pass runner arrive in a later V0.4 step.
 
     from eidos.agents import ModelPort, ModelRequest, ModelSettings, GenerationParameters
     from eidos.agents import Artifact, InMemoryArtifactStore
@@ -14,7 +14,9 @@ Constraints (the repository rules, §8; D-135, D-140):
 - Core layers (contracts, validation, compiler, runtime, backends) never import this package.
 """
 
+from .analysis import AnalysisAgent
 from .artifacts import Artifact, ArtifactConflict, ArtifactStore, InMemoryArtifactStore
+from .base import SUPPORTED_CONTENT_TYPES, WorkAgent, artifact_ref_for, cited_refs
 from .model import (
     GenerationParameters,
     MeasuredFacts,
@@ -26,8 +28,18 @@ from .model import (
     ModelResult,
     ModelSettings,
 )
+from .research import ResearchAgent
+from .verification import (
+    NOT_EVALUATED_CLAUSES,
+    Rule,
+    RuleOutcome,
+    RuleResult,
+    VerificationAgent,
+    VerificationReport,
+)
 
 __all__ = [
+    "AnalysisAgent",
     "Artifact",
     "ArtifactConflict",
     "ArtifactStore",
@@ -41,4 +53,15 @@ __all__ = [
     "ModelResponse",
     "ModelResult",
     "ModelSettings",
+    "NOT_EVALUATED_CLAUSES",
+    "ResearchAgent",
+    "Rule",
+    "RuleOutcome",
+    "RuleResult",
+    "SUPPORTED_CONTENT_TYPES",
+    "VerificationAgent",
+    "VerificationReport",
+    "WorkAgent",
+    "artifact_ref_for",
+    "cited_refs",
 ]

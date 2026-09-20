@@ -15,6 +15,7 @@ scoring and policy evaluation — are all verified here.
 | Compiler determinism | V0.3 — `tests/unit/compiler/` (Step 2: the compiled form and `compile_plan`) |
 | Runtime execution semantics: level-synchronous runs, node statuses, ports, admission, prior outcomes | V0.3 — `tests/unit/runtime/` (Step 3: the sequential reference executor) |
 | The V0.4 capability vocabulary, registry and binding, and their static guards | V0.4 — `tests/unit/capabilities/` (Step 4) |
+| The V0.4 Research and Analysis agents against a scripted model, and the deterministic Verification Agent | V0.4 — `tests/unit/agents/` (Step 6) |
 | The V0.4 artifact model and in-memory store: write-once, namespaced by execution, thread-safe | V0.4 — `tests/unit/agents/` (Step 5) |
 | The V0.4 model seam and static guards on `eidos.agents`: explicit configuration, typed failures, no vendor, no I/O | V0.4 — `tests/unit/agents/` (Step 3) |
 | Static guards on the LangGraph backend package: who may import LangGraph, and which of its features are ruled out | V0.3 — `tests/unit/backends/` (Step 4; runs without LangGraph installed) |
