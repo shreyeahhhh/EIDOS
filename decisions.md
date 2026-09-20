@@ -1974,6 +1974,13 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
     installed.
   - LangGraph's transitive dependencies were reported by a secondary source and are unverified until
     it is installed.
+- **Settled at V0.3 Step 4 (2026-09-20):** the extra is named `langgraph` and pins `langgraph>=1.2.11,<2` — the
+  version the spike and conformance tests were verified against; `dev` includes it as `eidos[langgraph]`. The
+  base `dependencies` still hold only `pydantic>=2`. Installed: LangGraph 1.2.11 (`Requires-Python >=3.10`,
+  exercised on Python 3.12.10 only), with six direct requirements and a dependency closure of 38 distributions (measured with
+  `importlib.metadata`; 32 beyond `langgraph` and the `pydantic` family EIDOS already needs), including
+  `langchain-core`, `langsmith`, `httpx` and `websockets`. Consequences are recorded as **D-130** (ambient
+  tracing) and in `progress.md`; this entry is not reopened.
 
 ### D-117 — V0.3 execution semantics: level-synchronous waves
 
@@ -2915,6 +2922,24 @@ one is not.
 - **Needs:** whether predecessors' results are passed to a work node (as the verifier's are), fetched by the
   work implementation through a reference, or something else; and what an artifact is. Changing the port
   signature is a change to D-122, so it needs the owner.
+
+### D-130 — LangGraph's ambient tracing can export a run's data; the backend forces it off
+
+- **Status:** Open · **Source:** V0.3 Step 4 spike (S10); D-103, D-113, D-122, D-123; handoff §33, §76
+- **Finding:** LangGraph depends on LangSmith. With `LANGSMITH_TRACING` or `LANGCHAIN_TRACING_V2` set in the
+  **environment**, an unmodified LangGraph run POSTs every node's inputs and outputs to
+  `api.smith.langchain.com` (spike S10 observes the attempt). For EIDOS those inputs and outputs are a mission's outcomes, artifacts and
+  failure reasons. The variables are **ambient configuration**, exactly what D-103 and D-122 refuse for limits and the guard, and the
+  handoff names OpenTelemetry for observability (§76), never LangSmith. **Nothing decides whether a run's
+  data may leave the process, or through what.**
+- **Implemented conservatively, not decided:** `eidos.backends.langgraph` runs every invocation inside
+  `tracing_context(enabled=False)`, which switches tracing off in LangGraph's worker threads too. Tests run
+  with the tracing variables set before the process starts and the network refused, and prove **no attempt is
+  made** (`tests/integration/langgraph`); a static guard requires the call and permits `langsmith` to be
+  imported for that purpose only. **There is no opt-in.**
+- **Effect while Open:** none on V0.3. Nothing is exported, and nothing depends on it being exportable.
+- **Needs:** the owner to confirm "off, with no opt-in", or to define an explicit, opt-in mechanism and say
+  what may be exported and where. Telemetry proper is V0.9 (§50); any exporter belongs to that decision.
 
 ---
 

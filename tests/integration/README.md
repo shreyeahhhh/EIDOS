@@ -10,7 +10,7 @@ and from `tests/scenarios/`, which tests whole missions.
 
 | Subject | Milestone |
 |---|---|
-| Compiled plan executing on the LangGraph runtime with mock agents | V0.3 |
+| Compiled plan executing on the LangGraph runtime with mock agents | V0.3 — `tests/integration/langgraph/` (Step 4: the spike, the adapter, and conformance with the reference executor) |
 | Local agents wired into the runtime end-to-end | V0.4 |
 | Checkpointing and replay against real state storage | V0.5 |
 | Qdrant retrieval, embeddings, reranking | V0.8 |
@@ -22,4 +22,5 @@ and from `tests/scenarios/`, which tests whole missions.
   substituted, the substitution is the point of the test, not a convenience.
 - Never suppress a runtime error to get green (CLAUDE.md §6).
 
-Currently empty. The first integration tests arrive with V0.3.
+`tests/integration/langgraph/` needs the `langgraph` extra, which the `dev` extra includes. These tests import LangGraph
+directly and fail loudly if it is missing; they are never skipped. Core tests in `tests/unit/` run without it.

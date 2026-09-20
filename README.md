@@ -72,7 +72,8 @@ The prototype is designed to run entirely locally at zero software cost (compute
 The full intended stack is recorded in the handoff §51 and §76; it is **not** installed yet.
 Only the dependencies required by the current milestone are declared in `pyproject.toml`.
 
-Currently declared: `pydantic>=2` (contracts), `pytest` (tests).
+Currently declared: `pydantic>=2` (contracts); the optional extra `langgraph` (the LangGraph backend, V0.3 — D-116);
+`dev` (`pytest`, plus the `langgraph` extra). The core never imports LangGraph, and its tests run without it.
 
 ## Development
 
@@ -80,5 +81,4 @@ Currently declared: `pydantic>=2` (contracts), `pytest` (tests).
 python -m pytest
 ```
 
-Collects zero tests today. That is the expected result for the bootstrap milestone — it verifies the
-src layout and test roots are wired, nothing more.
+Runs every test root. The current test state and counts are recorded in [progress.md](progress.md).

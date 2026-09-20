@@ -227,7 +227,7 @@ the architectural map; `progress.md` tracks which of these exist.
 | `eidos.validation` | The validation pipeline of §14 — depends only on `eidos.contracts` | V0.2 | **yes** |
 | `eidos.compiler` | Validated `Plan` + accepted `PlanValidationReport` → an immutable, backend-neutral compiled form; deterministic; compiles only `agent` and `VERIFY` (D-112, D-114); imports no LangGraph | V0.3 | **yes** — the compiled form and `compile_plan` only (Step 2) |
 | `eidos.runtime` | Backend-neutral execution: level-synchronous semantics, node and run results, synchronous execution ports, frozen `ExecutionContext` (D-113, D-115, D-117, D-118, D-122); imports no LangGraph | V0.3 | **yes** — ports, results, `ExecutionContext` and the sequential reference executor (Step 3) |
-| `eidos.backends.langgraph` | The LangGraph adapter — the **only** package that may import LangGraph (D-115); an optional dependency extra, also in `dev` (D-116) | V0.3 | no |
+| `eidos.backends.langgraph` | The LangGraph adapter — the **only** package that may import LangGraph (D-115); an optional dependency extra, also in `dev` (D-116) | V0.3 | **yes** — `LangGraphExecutor`, held to the reference executor (Step 4) |
 | `eidos.agents` | Research, Analysis, Verification | V0.4 | no |
 | `eidos.state` | Reducer, checkpoints, replay | V0.5 | no |
 | `eidos.policy` | Governance, autonomy levels, budgets | V1.2 (V0.2 has only a `NOT_APPLICABLE` stage in `eidos.validation` — D-110) | no |
@@ -335,6 +335,33 @@ read to build it); events (invariant 15 is **not exercised**, D-123); automatic 
 runtime budget, time or token accounting; real agents. Open: how a work node receives its predecessors' outputs
 (D-129).
 
+### The LangGraph backend — V0.3 Step 4
+
+`eidos.backends.langgraph.LangGraphExecutor` has the same signature and contract as the reference executor
+(D-128) and is tested to return an **equal `RunResult` or `RunRejection`, byte for byte**, for the same
+compiled plan, context, prior outcomes and deterministic ports. LangGraph supplies mechanics; EIDOS supplies
+every semantic.
+
+- One LangGraph node per compiled node, named by plan position (LangGraph rejects names such as `__start__`
+  and anything containing `:` or `|`, which a step id could be). Roots hang off `START`; a node with several
+  predecessors has one list-form join edge. The compiled plan's edges are the graph's edges.
+- LangGraph's super-steps *are* levels. Nodes of a level run **concurrently on worker threads**, so ports must
+  be thread-safe; the result never depends on which finishes first.
+- **The graph state is `outcomes` and nothing else (D-113).** A level's nodes read a start-of-step snapshot, and
+  each writes only its own key. The context, plan and ports are closed over by the wrappers, so MissionState is
+  never in the state. There is no checkpointer, `thread_id`, interrupt, LangGraph retry, streaming or store
+  (D-127). A port that fails is recorded as `FAILED` by the wrapper and never reaches LangGraph.
+- Dispatch order, the halt and the outcome are derived from the final outcomes and the plan, never from
+  completion order. An empty plan is answered without building a graph, because LangGraph refuses one.
+- The recursion limit is passed explicitly — the plan's depth plus a measured overhead — because LangGraph's
+  own default comes from an environment variable. **Tracing is forced off:** an ambient `LANGSMITH_TRACING`
+  would otherwise export every node's inputs and outputs to a third party (**D-130**, Open).
+- A fault in LangGraph or in the adapter raises `BackendError`. Nothing a run can legitimately produce is ever
+  raised.
+
+LangGraph is an optional extra (D-116), heavy for what it does — a closure of 38 distributions, including an HTTP client,
+`websockets` and LangSmith — and the core and its tests run without it.
+
 ---
 
 ## Open questions
@@ -347,6 +374,7 @@ runtime budget, time or token accounting; real agents. Open: how a work node rec
 | D-009 | Where execution bounds originate |
 | D-024 | Whether the FAISS/Qdrant comparison is an out-of-runtime experiment |
 | D-129 | How a work node receives its predecessors' outputs (V0.3's work port passes none) |
+| D-130 | Whether a run's data may ever leave the process through LangGraph's tracing (the backend forces it off) |
 
 ## Out of scope for this document
 

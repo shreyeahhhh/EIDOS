@@ -13,8 +13,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# D-116: LangGraph is an optional extra, also included in dev. Core installation and core
+# tests never import it; only eidos.backends.langgraph does (D-115). The lower bound is the
+# version the spike and conformance tests were verified against (V0.3 Step 4).
+langgraph = [
+    "langgraph>=1.2.11,<2",
+]
 dev = [
     "pytest",
+    "eidos[langgraph]",
 ]
 
 [tool.setuptools.packages.find]
@@ -22,6 +29,10 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src", "tests/support"]
+# LangGraph pulls in langsmith, which registers a pytest plugin that would otherwise be loaded into every
+# test session — including tests that never touch LangGraph — and hook every test call. It is inert unless
+# asked, but nothing in EIDOS asks for it, so it is not loaded (V0.3 Step 4).
+addopts = "-p no:langsmith_plugin"
 testpaths = [
     "tests/unit",
     "tests/integration",
