@@ -355,7 +355,8 @@ every semantic.
   completion order. An empty plan is answered without building a graph, because LangGraph refuses one.
 - The recursion limit is passed explicitly — the plan's depth plus a measured overhead — because LangGraph's
   own default comes from an environment variable. **Tracing is forced off:** an ambient `LANGSMITH_TRACING`
-  would otherwise export every node's inputs and outputs to a third party (**D-130**, Open).
+  would otherwise export every node's inputs and outputs to a third party. That stays off, with no opt-in
+  (**D-130**, Accepted).
 - A fault in LangGraph or in the adapter raises `BackendError`. Nothing a run can legitimately produce is ever
   raised.
 
@@ -374,7 +375,6 @@ LangGraph is an optional extra (D-116), heavy for what it does — a closure of 
 | D-009 | Where execution bounds originate |
 | D-024 | Whether the FAISS/Qdrant comparison is an out-of-runtime experiment |
 | D-129 | How a work node receives its predecessors' outputs (V0.3's work port passes none) |
-| D-130 | Whether a run's data may ever leave the process through LangGraph's tracing (the backend forces it off) |
 
 ## Out of scope for this document
 

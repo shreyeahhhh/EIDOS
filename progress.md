@@ -24,7 +24,7 @@ typed report and never raises for an invalid plan. See "V0.2 Plan Validation" be
 completion: 165 in `tests/unit/contracts/`, 409 in `tests/unit/validation/`.)
 
 **V0.3 (LangGraph Runtime): scope approved; Steps 2, 3 and 4 implemented.** The architecture rulings are recorded as
-D-112 to D-130 (2026-09-19 to 2026-09-20). Step 2 added `src/eidos/compiler/` — the immutable compiled form and `compile_plan`.
+D-112 to D-130 (2026-09-19 to 2026-09-20; D-130 accepted 2026-09-20). Step 2 added `src/eidos/compiler/` — the immutable compiled form and `compile_plan`.
 Step 3 added `src/eidos/runtime/` — result types, `ExecutionContext`, the synchronous ports, the admission
 hook, and the **sequential reference executor**. Step 4 added `src/eidos/backends/langgraph/` — the LangGraph adapter, the **only** importer of LangGraph — and the
 optional `langgraph` extra. There is **no real agent yet**. See "V0.3 LangGraph Runtime" below. **1,634 tests pass**
@@ -40,7 +40,7 @@ No measurement of any kind has been taken, so no metric appears anywhere in this
 
 - [x] `CLAUDE.md` — permanent rules, 18 architecture invariants
 - [x] `progress.md` — this file
-- [x] `decisions.md` — 79 Accepted, 48 Open, 4 Deferred (counts current as of the latest decision below)
+- [x] `decisions.md` — 80 Accepted, 47 Open, 4 Deferred (counts current as of the latest decision below)
 - [x] `README.md`, `pyproject.toml`, `.gitignore`
 - [x] `docs/01`–`docs/12` — the twelve documents required by handoff §81
 - [x] `src/eidos/` and `src/eidos/contracts/` — docstring only, no code
@@ -597,7 +597,7 @@ closed over. Everything a node decides — skip, guard, halt, dispatch — is a 
 and the static plan, by the same rules as the reference. Dispatch order, the halt and the outcome are derived from the
 final outcomes, never from completion order. There is no checkpointer, `thread_id`, interrupt, retry policy, streaming or
 store (D-127). A fault in LangGraph or the adapter raises `BackendError`; a port fault, a bad plan or a rejected run never
-does. **Tracing is forced off** — see D-130.
+does. **Tracing is forced off, with no opt-in (D-130, Accepted)**.
 
 | Where | What | Tests (file) |
 |---|---|---|
@@ -634,9 +634,9 @@ without the extra raises an `ImportError` that says `pip install 'eidos[langgrap
   own state merge and is not run in the tests.
 - The ports must be thread-safe: LangGraph runs a level's nodes on worker threads.
 
-**Open, logged: D-130.** LangGraph's ambient tracing would export a mission's data to a third party if an environment
-variable said so. Nothing in the handoff decides whether run data may leave the process, so the adapter forces tracing off
-and provides **no opt-in**; the owner is asked to confirm or to define one. D-129 stays Open.
+**Decided: D-130 (Accepted, 2026-09-20).** LangGraph's ambient tracing would export a mission's data to a third party if an
+environment variable said so. The owner accepted the adapter's behaviour as written: tracing stays **off** in V0.3, with **no
+opt-in**. Any later export of run data is a separate decision (telemetry proper is V0.9). D-129 stays Open.
 
 **Not done in Step 4, by scope:** scenario tests (whole missions), real or production mock agents, A2A, MCP, model
 providers, events, MissionState mutation, the reducer, checkpoints, automatic retry, in-run replanning, runtime accounting, the
@@ -704,7 +704,6 @@ Highest-impact first.
 | **D-125** plan-level `RETRY` vs a runtime retry policy | none at V0.3 | Retry appears both as a §13 step kind and as §32 runtime recovery; the handoff never relates them. `RETRY` is compile-rejected and V0.3 has no automatic retry. |
 | **D-126** `MissionEvent` vocabulary for local node lifecycle | V0.5 or later | The thirteen §33 types (D-090) cannot represent a local node starting, finishing, failing or being skipped, and there is no payload (D-067). Invariant 15 is not exercised in V0.3 (D-123). |
 | **D-129** how a work node receives its predecessors' outputs | V0.4 (none at V0.3) | The specified work port `execute(context, node)` passes a node no upstream results, so an edge into a work node carries ordering only; only the verifier receives its predecessors' results. `ArtifactRef` is opaque and no artifact model exists (D-098). |
-| **D-130** LangGraph's ambient tracing can export a run's data | none at V0.3 | An environment variable would make LangGraph POST every node's inputs and outputs to a third party; the handoff names OpenTelemetry (§76), never LangSmith, and decides nothing here. The backend forces tracing off and offers no opt-in; the owner is asked to confirm or define one. |
 | **D-071** detached/reusable genome representations | V1.0 | §21 stores derived characteristics, not the genome, so the detached case may never arise. |
 | **D-074** is §30's approval wording exactly `autonomy_level >= 3`? | V1.2 | §30 scopes to actions, §29 to the mission. If not equivalent, D-069 dropped a capability rather than a duplicate. |
 | **D-059** contract-unsatisfied as `failed` or a fifth state | V0.4 | Invariant 13 requires it distinguishable from a crash; the handoff gives it no event name and no status value. |
