@@ -5,7 +5,9 @@ from uuid import UUID
 import pytest
 
 from eidos.agents import (
+    STEP_ID_REUSED,
     AnalysisAgent,
+    ArtifactConflict,
     InMemoryArtifactStore,
     ModelFailure,
     ModelFailureKind,
@@ -162,13 +164,121 @@ def test_a_model_that_raises_is_not_swallowed_by_the_agent_the_executor_contains
     assert store.get_step_artifact(context.execution_id, node.step_id) is None
 
 
-def test_running_a_step_twice_fails_the_second_time_rather_than_overwriting():
-    agent, _, store, context, node = research_setup()
+def test_running_a_step_twice_is_refused_the_second_time_before_any_model_call_and_nothing_is_overwritten():
+    agent, model, store, context, node = research_setup()
     first = agent.run(context, node)
+    kept = store.get_step_artifact(context.execution_id, node.step_id)
+
     second = agent.run(context, node)
+
     assert first.status is WorkStatus.PRODUCED
-    assert second.status is WorkStatus.FAILED and "could not be recorded" in second.reason
-    assert store.get_step_artifact(context.execution_id, node.step_id).ref == first.artifact
+    assert second.status is WorkStatus.FAILED and second.reason.startswith(f"{STEP_ID_REUSED}:")
+    assert "No model call was made" in second.reason
+    assert model.calls == 1  # the second attempt spent nothing
+    assert store.get_step_artifact(context.execution_id, node.step_id) == kept
+
+
+# --- D-147: a newly executed step needs a fresh id, and the check comes before any model call --------------------------------
+
+
+def test_an_existing_artifact_for_the_step_is_refused_before_any_model_call_by_the_research_agent():
+    agent, model, store, context, node = research_setup()
+    earlier = doc("artifact:gather", "an earlier plan version's output", sources=("doc:a",))
+    store.put_step_artifact(context.execution_id, node.step_id, earlier)
+
+    result = agent.run(context, node)
+
+    assert result.status is WorkStatus.FAILED and result.reason.startswith(f"{STEP_ID_REUSED}:")
+    assert model.calls == 0
+    assert store.get_step_artifact(context.execution_id, node.step_id) == earlier  # untouched
+
+
+def test_an_existing_artifact_for_the_step_is_refused_before_any_model_call_by_the_analysis_agent():
+    agent, model, store, context, node = analysis_setup()
+    earlier = doc("artifact:analyse", "an earlier plan version's analysis", sources=("doc:s",))
+    store.put_step_artifact(context.execution_id, node.step_id, earlier)
+
+    result = agent.run(context, node)
+
+    assert result.status is WorkStatus.FAILED and result.reason.startswith(f"{STEP_ID_REUSED}:")
+    assert model.calls == 0
+    assert store.get_step_artifact(context.execution_id, node.step_id) == earlier
+
+
+def test_the_reference_artifact_step_id_being_taken_by_a_supplied_document_also_refuses_the_step():
+    agent, model, store, context, node = research_setup(docs=("doc:a",))
+    store.put_supplied(context.execution_id, doc("artifact:gather", "a document that squats on the step's reference"))
+
+    result = agent.run(context, node)
+
+    assert result.status is WorkStatus.FAILED and result.reason.startswith(f"{STEP_ID_REUSED}:")
+    assert model.calls == 0
+    assert store.get_step_artifact(context.execution_id, node.step_id) is None
+
+
+def test_a_step_artifact_stored_under_another_reference_still_refuses_the_step():
+    # The step's slot and the reference `artifact:<step_id>` are two halves of its identity; either one being taken refuses the step.
+    agent, model, store, context, node = research_setup()
+    store.put_step_artifact(context.execution_id, node.step_id, doc("custom:gathered-elsewhere", "written by another implementation"))
+
+    result = agent.run(context, node)
+
+    assert result.status is WorkStatus.FAILED and result.reason.startswith(f"{STEP_ID_REUSED}:")
+    assert model.calls == 0
+
+
+def test_the_reuse_check_comes_before_the_other_checks_so_nothing_is_read_or_asked():
+    agent, model, store, context, node = research_setup(docs=())  # nothing supplied: would otherwise be NO_RESULT
+    store.put_step_artifact(context.execution_id, node.step_id, doc("artifact:gather", "earlier"))
+    result = agent.run(context, node)
+    assert result.status is WorkStatus.FAILED and result.reason.startswith(f"{STEP_ID_REUSED}:")
+    assert model.calls == 0
+
+
+def test_the_same_step_id_in_another_execution_is_not_reused():
+    agent, model, store, context, node = research_setup()
+    other = ExecutionId(UUID(int=777))
+    store.put_step_artifact(other, node.step_id, doc("artifact:gather", "another execution's output"))
+    assert agent.run(context, node).status is WorkStatus.PRODUCED
+    assert model.calls == 1
+
+
+def test_a_step_that_produced_nothing_wrote_nothing_and_may_run_again():
+    failing_agent, _, store, context, node = research_setup(model=ScriptedModel(failing(ModelFailureKind.TIMEOUT)))
+    assert failing_agent.run(context, node).status is WorkStatus.FAILED
+    assert store.get_step_artifact(context.execution_id, node.step_id) is None
+
+    retry = ResearchAgent(model=ScriptedModel(answer("Found [[doc:a]].")), settings=make_settings(), store=store)
+    assert retry.run(context, node).status is WorkStatus.PRODUCED  # a failed step is not a reused step
+
+
+class RacingStore(InMemoryArtifactStore):
+    """A store where a concurrent writer wins between the agent's check and its write: the check sees nothing, the write conflicts."""
+
+    def get_step_artifact(self, execution_id, step_id):
+        return None
+
+    def get(self, execution_id, ref):
+        return None if str(ref).startswith("artifact:") else super().get(execution_id, ref)
+
+    def put_step_artifact(self, execution_id, step_id, artifact):
+        raise ArtifactConflict("another writer got there first")
+
+
+def test_the_write_once_store_is_still_the_backstop_when_a_writer_races_the_check():
+    context = context_for(compiled_with({"gather": ""}))
+    compiled = compiled_with({"gather": ""})
+    store = RacingStore()
+    store.put_supplied(context.execution_id, doc("doc:a"))
+    agent = ResearchAgent(model=ScriptedModel(answer("Found [[doc:a]].")), settings=make_settings(), store=store)
+
+    result = agent.run(context, node_of(compiled, StepId("gather")))
+
+    assert result.status is WorkStatus.FAILED and "could not be recorded" in result.reason  # refused, never overwritten
+
+
+def test_the_stable_marker_names_the_refusal():
+    assert STEP_ID_REUSED == "step_id_reused"
 
 
 # --- the Analysis Agent ---------------------------------------------------------------------------------------------------

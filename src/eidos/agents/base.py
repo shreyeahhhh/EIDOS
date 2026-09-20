@@ -9,6 +9,11 @@ Citations. An agent asks the model to cite a source as ``[[ref]]``, where ``ref`
 prompt. The agent then records **what the model cited** as the artifact's ``source_refs``. Whether those references are real
 is not decided here: the verification rules check that each one resolves (D-146).
 
+Fresh step ids (D-147). A step's artifact is ``(execution_id, step_id)`` and ``artifact:<step_id>``, and the store is write-once, so within one
+execution a newly executed work step needs a step id no earlier-executed step used, across plan versions. ``refuse_a_reused_step`` enforces that
+**before any model call**: an agent that finds the step's artifact already present refuses with a ``FAILED`` result and spends nothing. A resumed run
+never trips it: a step with a prior ``SUCCEEDED`` outcome is not dispatched, and a step that failed or produced nothing wrote no artifact.
+
 Nothing here parses a model's output into anything executable (invariant 3): the output is text, stored as text.
 """
 
@@ -26,6 +31,9 @@ CONTENT_TYPE_MARKDOWN = "text/markdown"
 CONTENT_TYPE_PLAIN = "text/plain"
 SUPPORTED_CONTENT_TYPES: tuple[str, ...] = (CONTENT_TYPE_MARKDOWN, CONTENT_TYPE_PLAIN)
 
+# The stable marker a refusal under D-147 begins with. A work result carries only a status and a reason, so this is the typed failure's name.
+STEP_ID_REUSED = "step_id_reused"
+
 _CITATION = re.compile(r"\[\[([^\[\]\n]+)\]\]")
 
 
@@ -38,6 +46,22 @@ class WorkAgent(Protocol):
 def artifact_ref_for(step_id: StepId) -> ArtifactRef:
     """The reference a step's primary artifact is given: deterministic, and unique within an execution."""
     return ArtifactRef(f"artifact:{step_id}")
+
+
+def refuse_a_reused_step(store: ArtifactStore, context: ExecutionContext, node: WorkNode) -> WorkResult | None:
+    """``None`` if the step may run; otherwise the ``FAILED`` result that refuses it (D-147), decided **before** any model call.
+
+    The step is refused when the store already holds its artifact under ``(execution_id, step_id)``, or when the reference ``artifact:<step_id>`` is
+    already taken in this execution (for example by a supplied document). The write-once store remains the backstop for a race between this check
+    and the write.
+    """
+    ref = artifact_ref_for(node.step_id)
+    if store.get_step_artifact(context.execution_id, node.step_id) is None and store.get(context.execution_id, ref) is None:
+        return None
+    return WorkResult.failed(
+        f"{STEP_ID_REUSED}: step {str(node.step_id)!r} already has an artifact ({str(ref)!r}) in this execution; a newly executed work step "
+        "must use a fresh step id across plan versions (D-147). No model call was made."
+    )
 
 
 def cited_refs(text: str) -> tuple[ArtifactRef, ...]:

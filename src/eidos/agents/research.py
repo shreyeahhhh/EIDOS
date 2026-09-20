@@ -13,7 +13,7 @@ from eidos.compiler import WorkNode
 from eidos.runtime import ExecutionContext, WorkResult
 
 from .artifacts import ArtifactStore
-from .base import ask_model, record_output, render_artifacts
+from .base import ask_model, record_output, refuse_a_reused_step, render_artifacts
 from .model import ModelPort, ModelResponse, ModelSettings
 
 SYSTEM_PROMPT = (
@@ -34,6 +34,9 @@ class ResearchAgent:
     def run(self, context: ExecutionContext, node: WorkNode) -> WorkResult:
         if node.capability not in self.CAPABILITIES:
             return WorkResult.failed(f"the research agent does not serve capability {str(node.capability)!r}")
+        refused = refuse_a_reused_step(self.store, context, node)  # D-147: before anything else, and before any model call
+        if refused is not None:
+            return refused
         documents = self.store.supplied(context.execution_id)
         if not documents:
             return WorkResult.no_result("no documents were supplied, so there is nothing to research")

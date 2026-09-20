@@ -15,7 +15,7 @@ from eidos.compiler import WorkNode
 from eidos.runtime import ExecutionContext, WorkResult
 
 from .artifacts import Artifact, ArtifactStore
-from .base import ask_model, record_output, render_artifacts
+from .base import ask_model, record_output, refuse_a_reused_step, render_artifacts
 from .model import ModelPort, ModelResponse, ModelSettings
 
 SYSTEM_PROMPT = (
@@ -43,6 +43,10 @@ class AnalysisAgent:
         focus = next((text for capability, text in FOCUS if capability == node.capability), None)
         if focus is None:
             return WorkResult.failed(f"the analysis agent does not serve capability {str(node.capability)!r}")
+
+        refused = refuse_a_reused_step(self.store, context, node)  # D-147: before reading anything, and before any model call
+        if refused is not None:
+            return refused
 
         upstream: list[Artifact] = []
         for predecessor in node.predecessors:

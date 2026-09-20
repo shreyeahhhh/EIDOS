@@ -395,7 +395,8 @@ Four seams:
   Explicit model, generation parameters and timeout; failures are typed.
 - **Artifact seam (D-137).** An in-memory store under `(execution_id, step_id)`, one primary artifact per work step; `ArtifactRef`
   stays opaque. Agents read predecessors' outputs and the supplied documents from the store. An artifact has four fields — `ref`,
-  `content_type`, `content`, `source_refs` — and supplied documents are addressed by `ArtifactRef`, namespaced by execution (D-145).
+  `content_type`, `content`, `source_refs` — and supplied documents are addressed by `ArtifactRef`, namespaced by execution (D-145). Identity is `(execution_id, step_id)` and `artifact:<step_id>`; within one
+  execution a newly executed work step needs a fresh step id across plan versions, and an agent refuses a step whose artifact already exists **before any model call** (D-147).
 
 **Scope (D-131).** A fixed, hand-authored plan — Research, Analysis, `VERIFY` — over a supplied `TaskGenome`, driven once.
 No planner, no candidate strategies, no system-driven replan, no events or history, no A2A, MCP or RAG. Agents are read-only with no

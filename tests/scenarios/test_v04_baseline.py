@@ -11,6 +11,7 @@ store, and on what the model was asked.
 
 import pytest
 
+from eidos.agents import STEP_ID_REUSED
 from eidos.baseline import BaselineStage
 from eidos.contracts import StepId
 from eidos.runtime import NodeStatus, RunOutcome
@@ -279,18 +280,86 @@ def test_a_replan_is_a_new_plan_run_again_and_the_old_artifacts_are_not_overwrit
     assert store.get_step_artifact(state.execution_id, StepId("analyse2")) is not None
 
 
-def test_reusing_a_step_id_across_plan_versions_in_one_execution_is_refused_not_overwritten():
+def test_reusing_a_step_id_across_plan_versions_in_one_execution_is_refused_before_any_model_call_and_nothing_is_overwritten():
+    # D-147: a newly executed work step needs a fresh step id. The refusal comes before the model is asked.
     state = mission()
     plan = baseline_plan(state)
     first = drive_baseline(state, plan)
     assert first.report.run.outcome is RunOutcome.FINISHED
+    kept = first.reference.store.get_step_artifact(state.execution_id, StepId("gather"))
     v2 = make_mission_plan(state, SPEC, verify=("check",), capability_of=CAPABILITY_OF, version=2, parent=plan, reason="run again")
 
     again = drive_baseline(state, v2, rigs=first.rigs)
 
-    gather = again.report.run.result_for(StepId("gather"))
-    assert gather.status is NodeStatus.FAILED and "could not be recorded" in gather.reason
-    assert again.report.run.outcome is RunOutcome.FAILED
+    run = again.report.run
+    gather = run.result_for(StepId("gather"))
+    assert gather.status is NodeStatus.FAILED and gather.reason.startswith(f"{STEP_ID_REUSED}:")
+    assert [r.status for r in run.results[1:]] == [NodeStatus.SKIPPED, NodeStatus.SKIPPED]
+    assert run.outcome is RunOutcome.FAILED
+    assert again.reference.model.calls == 2 and again.backend.model.calls == 2  # the two calls of the first run; the refusal spent none
+    assert again.reference.store.get_step_artifact(state.execution_id, StepId("gather")) == kept
+
+
+def test_rerunning_the_same_plan_from_scratch_in_one_execution_is_refused_and_asks_no_model():
+    state = mission()
+    plan = baseline_plan(state)
+    first = drive_baseline(state, plan)
+    assert first.report.run.outcome is RunOutcome.FINISHED
+
+    again = drive_baseline(state, plan, rigs=first.rigs)  # no prior outcomes: this is a new execution of every step
+
+    assert again.report.run.result_for(StepId("gather")).reason.startswith(f"{STEP_ID_REUSED}:")
+    assert again.reference.model.calls == 2
+
+
+def test_a_step_that_failed_wrote_nothing_and_a_resume_runs_it_again():
+    from eidos.agents import ModelFailure, ModelFailureKind
+    from eidos.runtime import PriorOutcomes
+
+    state = mission()
+    plan = baseline_plan(state)
+    outage = lambda request: ModelFailure(kind=ModelFailureKind.TIMEOUT, message="no answer")
+    failed = drive_baseline(state, plan, respond=outage)
+    assert failed.report.run.result_for(StepId("gather")).status is NodeStatus.FAILED
+    assert failed.reference.store.get_step_artifact(state.execution_id, StepId("gather")) is None
+
+    resumed = drive_baseline(state, plan, respond=answer_by_task(), prior=PriorOutcomes.succeeded_from(failed.report.run), rigs=failed.rigs)
+
+    run = resumed.report.run
+    assert run.outcome is RunOutcome.FINISHED and run.verified is True
+    assert run.dispatched == ("gather", "analyse", "check")  # the failed step ran again: it was not a reused step
+
+
+def test_a_resumed_run_never_trips_the_reuse_guard_on_steps_it_carries_over():
+    from eidos.runtime import PriorOutcomes
+
+    state = mission()
+    plan = baseline_plan(state)
+    halt_analysis = lambda: locked_halt_when(lambda request: request.step_id == "analyse", "held for review")
+    paused = drive_baseline(state, plan, guard=halt_analysis)
+
+    resumed = drive_baseline(state, plan, prior=PriorOutcomes.succeeded_from(paused.report.run), rigs=paused.rigs)
+
+    assert resumed.report.run.outcome is RunOutcome.FINISHED
+    assert not any((r.reason or "").startswith(STEP_ID_REUSED) for r in resumed.report.run.results)
+
+
+# --- a recorded V0.4 limitation (D-148, item 6): pinned so a later change is deliberate ----------------------------------------------------
+
+
+def test_v04_limitation_an_analysis_step_cannot_follow_a_verify_step():
+    # A VERIFY node produces no artifact, so an analysis step whose predecessor is a VERIFY step has nothing to read. This is
+    # recorded, not redesigned; a plan of this shape is a later decision if it is wanted.
+    state = mission()
+    plan = make_mission_plan(state, {"gather": "", "check": "gather", "analyse": "check"}, verify=("check",), capability_of=CAPABILITY_OF)
+
+    attempt = drive_baseline(state, plan)
+
+    run = attempt.report.run
+    assert run.result_for(StepId("check")).status is NodeStatus.SUCCEEDED
+    analyse = run.result_for(StepId("analyse"))
+    assert analyse.status is NodeStatus.FAILED and "predecessor 'check' has no artifact to analyse" in analyse.reason
+    assert attempt.reference.model.calls == 1  # only research asked a model
 
 
 # --- the agents can be swapped without touching the core (invariant 9) and the runner is not tied to a domain (invariant 10) ---------

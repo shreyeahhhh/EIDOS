@@ -16,7 +16,7 @@ Constraints (the repository rules, §8; D-135, D-140):
 
 from .analysis import AnalysisAgent
 from .artifacts import Artifact, ArtifactConflict, ArtifactStore, InMemoryArtifactStore
-from .base import SUPPORTED_CONTENT_TYPES, WorkAgent, artifact_ref_for, cited_refs
+from .base import STEP_ID_REUSED, SUPPORTED_CONTENT_TYPES, WorkAgent, artifact_ref_for, cited_refs, refuse_a_reused_step
 from .model import (
     GenerationParameters,
     MeasuredFacts,
@@ -58,10 +58,12 @@ __all__ = [
     "Rule",
     "RuleOutcome",
     "RuleResult",
+    "STEP_ID_REUSED",
     "SUPPORTED_CONTENT_TYPES",
     "VerificationAgent",
     "VerificationReport",
     "WorkAgent",
     "artifact_ref_for",
     "cited_refs",
+    "refuse_a_reused_step",
 ]
