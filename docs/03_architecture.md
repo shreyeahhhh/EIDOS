@@ -236,7 +236,7 @@ the architectural map; `progress.md` tracks which of these exist.
 | `eidos.backends.langgraph` | The LangGraph adapter — the **only** package that may import LangGraph (D-115); an optional dependency extra, also in `dev` (D-116) | V0.3 | **yes** — `LangGraphExecutor`, held to the reference executor (Step 4) |
 | `eidos.agents` | Research, Analysis and Verification — exactly three logical agents (D-131); owns the synchronous `ModelPort` (D-135) and the in-memory artifact store (D-137); read-only, no tools (D-140); vendor-free | V0.4 | **yes** — the model seam (Step 3), the artifact model and store (Step 5), and the Research, Analysis and deterministic Verification agents (Step 6) |
 | `eidos.providers` | Model-provider adapters — the **only** place a vendor, model or SDK name may appear (D-135); standard-library HTTP, no new dependency (D-136) | V0.4 | no |
-| (runner module) | The single-pass baseline runner: validate, compile, bind, execute on the LangGraph backend, report; one module, no CLI, no API (D-131); name recorded when created | V0.4 | no |
+| `eidos.baseline` (one module) | The single-pass baseline runner and the work dispatcher: validate, compile, bind, execute on a backend handed to it, report; stops at the first gate that refuses; backend-neutral, no CLI, no API (D-131) | V0.4 | **yes** — `run_baseline`, `WorkDispatcher`, `BaselineReport` (Step 7) |
 | `eidos.state` | Reducer, checkpoints, replay | V0.5 | no |
 | `eidos.policy` | Governance, autonomy levels, budgets | V1.2 (V0.2 has only a `NOT_APPLICABLE` stage in `eidos.validation` — D-110) | no |
 | `eidos.telemetry` | Structured events, metrics | V0.9 | no |
@@ -376,7 +376,7 @@ LangGraph is an optional extra (D-116), heavy for what it does — a closure of 
 Recorded in D-131 to D-140. Nothing here exists yet; `progress.md` tracks the steps.
 
 ```text
-runner (single pass)  ---> validation, compiler, runtime, backends.langgraph, capabilities, agents
+eidos.baseline (runner) ---> validation, compiler, runtime, capabilities, agents   (handed a backend; imports none)
 agents                ---> runtime ports (it implements them), contracts, ModelPort (it owns it)
 capabilities          ---> contracts, compiler          (binding reads a CompiledPlan)
 providers             ---> agents' ModelPort         (the only vendor-aware layer)

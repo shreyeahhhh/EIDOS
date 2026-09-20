@@ -48,6 +48,16 @@ mock agents — so they prove the pipeline and the meaning of a run, not any age
 | `test_v03_plan_gates.py` | Invalid plans, rule-breaking plans, non-DSL documents and unsupported step kinds are stopped before any executor is reached; a forged acceptance does not compile a broken plan | 3, 5, 13; D-112, D-114 |
 | `test_v03_determinism.py` | A whole story (fail, replan, halt, resume) serializes to identical bytes under different `PYTHONHASHSEED`s | CLAUDE.md §8 (deterministic components) |
 
+### V0.4 scenarios (built)
+
+Real Research, Analysis and Verification agents over a **scripted** model, run through `eidos.baseline.run_baseline` on both executors;
+`drive_baseline` (`tests/support/eidos_v04_factories.py`) asserts the two reports are byte-identical. No real model is involved.
+
+| File | Scenarios | Invariants and decisions exercised |
+|---|---|---|
+| `test_v04_baseline.py` | The baseline finishes verified from supplied documents; a PASS names what was NOT_EVALUATED and never claims contract satisfaction; well-formed output that cites a source that does not exist fails verification; too few sources, no citations and a failed verification gating what follows; a model outage, an empty answer and a raising adapter are contained; nothing supplied means nothing to research; an unbound capability stops at binding, an invalid plan at validation and an unsupported kind at compilation, each before any agent is called; halt then resume without asking the research model again; a replan needs fresh step ids and reuse is refused, not overwritten; a different research implementation and an unrelated domain need no core change | 3, 5, 9, 10, 11, 12, 14; D-131 to D-140, D-144 to D-146 |
+| `test_v04_determinism.py` | A whole V0.4 mission (verified, failed verification, unbound, halt and resume) serializes to identical bytes under different `PYTHONHASHSEED`s | CLAUDE.md §8 (deterministic components) |
+
 **Not exercised by these, by scope:** replay (invariant 15, V0.5), evidence lineage (invariant 16, V0.8), the reliability
 contract being unmet (invariant 13 as a mission outcome, V1.2), and real budgets and policy (V1.2). The halt scenarios use a
 guard the test wrote; no budget is enforced by the runtime.

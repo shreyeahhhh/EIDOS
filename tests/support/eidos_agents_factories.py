@@ -48,7 +48,13 @@ class ScriptedModel:
     def complete(self, request):
         with self._lock:
             self.requests.append(request)
-        return self._respond(request)
+            respond = self._respond
+        return respond(request)
+
+    def script(self, respond) -> None:
+        """Change how the model answers from now on (a scenario that continues with a different script)."""
+        with self._lock:
+            self._respond = respond
 
     @property
     def calls(self) -> int:
