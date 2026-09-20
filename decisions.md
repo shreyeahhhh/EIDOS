@@ -1524,6 +1524,9 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
   `ArtifactRef` is **string-backed and exempt from D-053**, recorded as a consequence: artifacts are
   produced by remote A2A agents, so this follows **D-095**'s treatment of externally assigned protocol
   identifiers.
+- **V0.4 (2026-09-20):** **D-145** introduces a **minimal** artifact model (`ref`, `content_type`, `content`, `source_refs`) in `eidos.agents`.
+  `ArtifactRef` stays opaque and the runtime never sees content; the full model this entry deferred is still not created.
+
 
 ### D-099 — `information_dependencies` is an immutable collection of opaque strings
 
@@ -1891,6 +1894,9 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
   - LangGraph's own checkpointing and interrupts are not used at V0.3 (D-127).
   - Because MissionState is not in the run, nothing about the run is authoritative until the reducer
     accepts it.
+- **V0.4 (2026-09-20):** **D-139** adds the frozen `ReliabilityContract` to `ExecutionContext`. The principle here is unchanged:
+  MissionState never enters runtime or backend state, and the context is a frozen, minimal, immutable snapshot.
+
 
 ### D-040 — The exact MissionState / LangGraph execution-state boundary
 
@@ -2115,6 +2121,9 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
     supply their own guards.
   - The execution ports are owned by `eidos.runtime` (D-115); implementations depend on them, never the
     reverse.
+- **V0.4 (2026-09-20):** D-018 is now **resolved by D-135**, which places the model-provider boundary in `eidos.agents` and the
+  adapters in `eidos.providers`. This entry's execution-side scope is unchanged.
+
 
 ### D-123 — V0.3 emits no `MissionEvent` and mutates no `MissionState`; invariant 15 is not exercised
 
@@ -2201,6 +2210,365 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
   - **Not decided here:** any later export of run data. Telemetry proper is V0.9 (§50, §33), and an exporter,
     if one is ever wanted, is a separate decision that names what may leave the process and where it goes.
     The guard and tests above are what such a decision would have to amend.
+### D-131 — V0.4 scope: the baseline chain and the single-pass runner
+
+- **Status:** Accepted · **Date:** 2026-09-20 · **Decided by:** human owner
+- **Source:** handoff §49, §50 (V0.4), §68; D-119, D-127, CLAUDE.md §3; V0.4 exploration (Q1, Q2)
+- **Context:** §50 says only "Add Research, Analysis, Verification. Make the baseline workflow work end-to-end."
+  "Baseline workflow" appears nowhere else in the handoff. §49's chain (task, genome, candidate strategies,
+  validation, execution, evaluation, history) contains stages that belong to later milestones, and D-127 leaves
+  the planner and the driver loop unassigned.
+- **Decision:**
+  1. **V0.4's baseline workflow is a fixed, hand-authored plan — Research, then Analysis, then a `VERIFY`
+     node — over a supplied `TaskGenome`, driven once, single-pass:** validate (V0.2), compile, execute on the
+     LangGraph backend, with the three agents and a real local model behind the model seam (D-135), and the typed
+     run result reported.
+  2. **The plan is supplied to the runner; nothing generates plans.** No planner, no candidate strategies, no
+     LLM-emitted Plan DSL (invariant 3 is untouched) and no system-driven replan: a replan remains a caller-supplied
+     new plan (D-119).
+  3. **Out of V0.4:** planner and candidate strategies, evaluation, execution history and events (V0.5), A2A (V0.6),
+     MCP (V0.7), RAG (V0.8).
+  4. **The runner is one small module:** one pass, **no CLI and no API** (§53's API is later). Its name and placement
+     are settled when it is created and recorded in `docs/03_architecture.md`.
+  5. **Exactly three logical agents** — Research, Analysis, Verification — per CLAUDE.md §3.
+- **Rationale:** it is the smallest chain that exercises every V0.1 to V0.3 authority with real agents, and it is what
+  §68's "fixed multi-agent" version describes. Generating plans needs a planner, which is a fourth LLM role, and
+  D-127 has not assigned it.
+- **Consequences:**
+  - D-127's "a planner and the mission driver loop" row is **split**: the single-pass runner is in V0.4; the planner and
+    a replanning loop stay unassigned. **D-020 stays Open.**
+  - The baseline plan's per-step capabilities depend on **D-141 (Open)**.
+  - The runner requires an explicit `AdmissionGuard` (D-140).
+
+### D-132 — V0.4 capability vocabulary: the five capabilities of handoff §43 (V0.4 only)
+
+- **Status:** Accepted · **Date:** 2026-09-20 · **Decided by:** human owner · **Resolves D-006**
+- **Source:** handoff §6, §7, §16, §43; D-006, D-007, D-080, D-102; V0.4 exploration (Q3)
+- **Decision:**
+  1. **For V0.4 only, five capability IDs exist**, exactly as listed under "Required capabilities" in §43:
+     **`Architecture`, `Security`, `Cost`, `Research`, `Verification`.**
+  2. **Matching stays exact-string** (D-102, D-080).
+  3. **This is scoped to V0.4 and is not a global vocabulary. D-007 stays Open:** nothing here decides hierarchy,
+     similarity, ownership or a canonical cross-mission list.
+  4. **D-006 is resolved for V0.4:** the capability set is five, not three; the agent set stays three logical
+     agents (D-131).
+- **Consequences:**
+  - **V0.2 is unchanged.** Its capability stage still checks that a step's capability is in the mission's own
+    `required_capabilities` (D-102).
+  - §43 lists these five under "Required capabilities", while its strategy diagram uses Research, Security,
+    Architecture, Analysis and Verification — Analysis in place of Cost. The ruling follows the "Required
+    capabilities" list. How the diagram's Analysis step is expressed is **D-141 (Open)**.
+  - Which agent serves which capability, the spelling of the names beyond "as printed", and what `Verification`
+    binds to are **D-141 (Open)**.
+- **Spelling settled (2026-09-20):** **D-144** fixes the V0.4 spellings as lowercase — `architecture`, `security`, `cost`, `research`,
+  `verification` — superseding the capitalised forms above **for spelling only**. The set is unchanged and D-007 stays Open.
+
+
+### D-133 — `VERIFY` is bound to the `Verifier` port by node kind, not by capability
+
+- **Status:** Accepted · **Date:** 2026-09-20 · **Decided by:** human owner · **D-055 stays Open**
+- **Source:** handoff §7, §31; D-049, D-055, D-121, D-124; V0.4 exploration (Q4)
+- **Decision:**
+  1. A `VERIFY` node is executed through the **`Verifier` port** (D-121, D-124) and is **bound by node kind, not by
+     capability.**
+  2. `VERIFY` carries no capability (D-049, D-124 unchanged).
+  3. **This does not answer D-055.** It records how V0.4 binds `VERIFY`, not whether `VERIFY` is a work step.
+- **Consequences:**
+  - The Verification Agent implements the `Verifier` port (D-138). Invariant 11 holds for work steps (capabilities)
+    and, for `VERIFY`, binding happens by kind when the run is constructed.
+  - If D-055 is later resolved differently, this binding is revisited, at the cost D-124 already accepted.
+  - What the `Verification` capability ID (D-132) binds to, if an `agent` step requested it, is **D-141 (Open)**.
+
+### D-134 — Capability registry, binding and unbound capabilities (V0.4)
+
+- **Status:** Accepted · **Date:** 2026-09-20 · **Decided by:** human owner
+- **Source:** handoff §7; D-053, D-080, D-102, D-114; invariant 11; V0.4 exploration (Q5)
+- **Decision:**
+  1. **`eidos.capabilities`** holds the V0.4 capability set (D-132) and a **registry that resolves a capability to an
+     agent**, deterministically and by exact string.
+  2. **An agent descriptor carries `agent_id`, a version and its capabilities — nothing else.** `agent_id` is
+     a fixed, UUID-backed value supplied at registration (D-053): no randomness. The rest of §7's metadata
+     (supported inputs and outputs, permissions, tools, historical latency, success and verification rate,
+     availability) is **not built**: the statistics belong to telemetry (V0.9), the rest to V0.6, V0.7 and V1.2.
+  3. **An unbound capability is a typed pre-run rejection**, produced when the run is bound and before anything is
+     dispatched. **V0.2 validation is unchanged:** it does not know which agents exist (D-102).
+- **Consequences:**
+  - A plan can be validation-accepted and compile-accepted and still be refused at binding. Binding is a third
+    authority with its own typed failure family, separate from `ViolationCode` and `CompileFailureCode`, for the
+    reason D-114 gives for separating validation and compilation. Its shape is pinned at implementation.
+  - The registry is deterministic and does no I/O.
+
+### D-135 — The model seam: `eidos.agents` owns `ModelPort`, providers implement it (resolves D-018)
+
+- **Status:** Accepted · **Date:** 2026-09-20 · **Decided by:** human owner · **Resolves D-018**
+- **Source:** handoff §36, §51, §77; invariant 9; D-018, D-103, D-122; V0.4 exploration (Q6)
+- **Decision:**
+  1. **`eidos.agents` owns a synchronous `ModelPort` protocol** and its typed request, response and failure types.
+     Only agents call it; only a provider adapter implements it.
+  2. **Every provider adapter lives in `eidos.providers`**, the only place a vendor, model or SDK name may appear.
+  3. **Configuration is explicit; there are no silent defaults.** The model identifier, the generation parameters
+     (temperature, seed, maximum output tokens) and the timeout are **required inputs** (D-103's spirit). Nothing is
+     ambient.
+  4. **Provider outages, timeouts and malformed responses become typed failures.** They are never raised out of a
+     run and never read as success.
+  5. **Facts a provider measures** (token counts, elapsed time) are returned as measured facts and labelled as such
+     (invariant 17). They are never model-asserted.
+- **Consequences:**
+  - **D-018 is resolved** and moved to Accepted. D-122's narrow, execution-side scope is unchanged.
+  - Field-level shape is pinned at implementation.
+  - **Ports must be thread-safe:** the LangGraph backend runs a level's nodes on worker threads, and a single local GPU
+    may serialise concurrent calls. The synchronous port has no runtime time budget (D-127), so the client-side
+    timeout is the only bound on a hung call; its value is the caller's (D-046 stays Open).
+  - Static guards extend: `eidos.agents` and `eidos.capabilities` stay vendor-free; only `eidos.providers` may name a
+    vendor; core layers import none of these (CLAUDE.md §8). Invariant 9 is verified by substituting one
+    implementation for another without touching core layers (docs/12).
+  - Model outputs must be capturable so V0.5 can record them for replay (D-076); nothing is recorded at V0.4.
+
+### D-136 — The local model provider: dependency, environment and test gating
+
+- **Status:** Accepted · **Date:** 2026-09-20 · **Decided by:** human owner
+- **Source:** handoff §51, §76, §77; CLAUDE.md §3, §6, §7; D-116, D-135; V0.4 exploration (Q7, Q8, Q9)
+- **Decision:**
+  1. **No new dependency.** The provider adapter uses the standard library's HTTP client. No vendor SDK and no new
+     extra at V0.4.
+  2. **The runtime environment is the owner's action.** Installing the local model runtime and choosing and pulling a
+     model are done by the owner, never by Claude Code. The model used is recorded when it is first used.
+  3. **Test gating.** The default suite uses a scripted fake model and stays offline and deterministic (a fake at the
+     port, and a local fake HTTP server for the adapter). **Real-model tests are an explicit opt-in** — a marker
+     excluded from the default run — and are **never a silent skip** (CLAUDE.md §6). Any latency, throughput or
+     quality figure comes only from an actual recorded run (CLAUDE.md §7).
+- **Recorded fact (measured during the V0.4 exploration, on the owner's machine):** no local model runtime is installed;
+  the GPU has 4 GB of memory and the machine 15.7 GB of RAM. Nothing about model speed or quality has been measured.
+- **Consequences:** a dependency needed later is a new decision and an optional extra (D-116). The opt-in marker's
+  mechanics are pinned at implementation and registered in `pyproject.toml`.
+
+### D-137 — Artifacts and data flow at V0.4 (D-129 answered for V0.4; it stays Open)
+
+- **Status:** Accepted · **Date:** 2026-09-20 · **Decided by:** human owner · **D-129 stays Open**
+- **Source:** handoff §8, §13; D-005, D-017, D-098, D-122, D-129; V0.4 exploration (Q10, Q11)
+- **Decision:**
+  1. **An in-memory artifact store.** An artifact is held under **`(execution_id, step_id)`**, and V0.4 has **one
+     primary artifact per work step.**
+  2. **`ArtifactRef` stays an opaque reference** (D-098). A work result names it; the runtime never interprets it.
+  3. **A work node reads its predecessors' outputs, and a verifier reads what it verifies, by fetching from the store.**
+     **The `WorkExecutor` signature is not changed** (D-122), and neither is the `Verifier` signature.
+  4. **Research works from supplied input or document artifacts** placed in the store by the caller. No file access, no
+     tools and no retrieval: MCP is V0.7 and RAG is V0.8.
+  5. **Storage is in memory only** (D-005). Nothing is persisted; persistence stays with D-017.
+- **Not decided here:** what an artifact contains, how a supplied document is keyed, and how a step learns what it is for.
+  Those are **D-142 (Open)**. No full artifact model exists (D-098 stands).
+- **Consequences:**
+  - **D-129 is answered for V0.4 and stays Open:** "what an artifact is" and the general data-flow question (for example
+    for remote agents at V0.6) remain.
+  - The store is the consumer's, not the runtime's: it lives with the agents, so the runtime never imports it (CLAUDE.md §8).
+  - The store must be thread-safe: a level's nodes run on worker threads.
+- **Settled (2026-09-20):** what an artifact contains, how supplied documents are keyed and the absence of a per-step input field are
+  answered by **D-145**. D-129 stays Open.
+
+
+### D-138 — V0.4 verification is a deterministic rule set; no model gives a verdict
+
+- **Status:** Accepted · **Date:** 2026-09-20 · **Decided by:** human owner · **D-015 stays Open**
+- **Source:** handoff §18, §19, §31, §47; invariants 12 and 13; D-015, D-121, D-133; V0.4 exploration (Q12)
+- **Decision:**
+  1. **The V0.4 Verification Agent implements the `Verifier` port (D-121, D-133) as a deterministic rule set.** No model
+     is consulted for a verdict.
+  2. **Verdicts are `PASS`, `FAIL` or `INCONCLUSIVE` with a reason** (D-121). No scalar.
+  3. **The rule categories are** schema correctness of the artifacts, citation coverage, and a minimum number of
+     distinct sources. Each rule's exact definition is pinned at implementation, against the content shape D-142 will
+     settle.
+  4. **A check that cannot be performed yields `INCONCLUSIVE`, never `PASS`** (invariant 13).
+  5. A model may produce Research and Analysis content; it never judges it.
+- **Consequences:**
+  - **D-015 stays Open.** This answers it for V0.4 only. A scalar confidence and §31's threshold-driven replan are V1.2.
+    **D-063 and D-064 stay Open and dormant:** no scalar exists to type or compare.
+  - The `min_independent_evidence` clause of the reliability contract is a count and can be evaluated (D-139 supplies the
+    contract). `min_quality` has no measure at V0.4: **D-143 (Open).**
+- **Settled (2026-09-20):** which clauses the rule set evaluates, and that `min_quality` is `NOT_EVALUATED`, are **D-146**.
+
+
+### D-139 — `ExecutionContext` carries the frozen `ReliabilityContract`
+
+- **Status:** Accepted · **Date:** 2026-09-20 · **Decided by:** human owner · **D-041 stays Open**
+- **Source:** handoff §30, §31; D-041, D-089, D-100, D-113; V0.4 exploration (Q13)
+- **Decision:**
+  1. **From V0.4, `ExecutionContext` includes the mission's frozen `ReliabilityContract`** (an additive field), read once
+     from MissionState by `context_from_state`.
+  2. **No universal output or answer field is introduced, and D-041 is not reopened.**
+  3. MissionState still never enters runtime or backend state (D-113): the context remains a frozen, minimal snapshot.
+- **Consequences:**
+  - This **amends an implementation-level detail of V0.3 Step 3**: the `ExecutionContext` docstring says the context
+    deliberately excludes the contract. That exclusion was not a decision; **D-113's principle stands** (only the required
+    immutable run snapshot).
+  - The tests that pin the context's six fields change **because the approved specification changes**, not to get green.
+    Consistency rules (the contract's tenant and identifier must match the tenant and the genome's reference, as
+    MissionState's own validators require) are pinned at implementation.
+  - The LangGraph adapter closes over the context, so no adapter change is expected; conformance tests will prove it.
+
+### D-140 — V0.4 agents are read-only; the `AdmissionGuard` stays explicit
+
+- **Status:** Accepted · **Date:** 2026-09-20 · **Decided by:** human owner · **D-043 and D-046 stay Open**
+- **Source:** handoff §29, §32; D-043, D-046, D-060, D-061, D-074, D-110, D-122, D-127; V0.4 exploration (Q14, Q15)
+- **Decision:**
+  1. **V0.4 agents are read-only, with no tools and no side effects.** They read supplied artifacts and call the model
+     seam; they take no action. Under that constraint, the question D-127 left for the owner — whether real agents may
+     execute before a policy exists — is **answered for V0.4**: they may, because none can act. **Policy semantics
+     stay deferred** (D-060, D-061, D-074, D-110 are untouched).
+  2. **The `AdmissionGuard` remains an explicit, caller-supplied input** (D-122). **No production guard and no default
+     ships**, and the runner requires one.
+  3. **D-043 and D-046 stay Open.** No runtime accounting is introduced (D-127).
+- **Consequences:**
+  - If a later milestone gives an agent a tool or an action, this decision no longer covers it, and policy must be decided
+    first (MCP at V0.7, policy at V1.2).
+  - A minimal agent-call-count guard remains an option for the owner. It is not built.
+
+### D-006 — Which capabilities exist in the MVP agent set
+
+- **Status:** Accepted · **Date:** 2026-09-20 · **Decided by:** human owner · **Resolved by D-132**
+  (originally Open)
+- **Source:** handoff §49 vs §16, §43
+- **Original finding:** §49 says start with exactly three logical agents — Research, Analysis, Verification —
+  and "do not build 10+". But the flagship demo (§43) and the candidate strategies (§16) both use
+  five: Research, Security, Architecture, Analysis, Verification.
+- **Original need:** Which capability set exists at V0.4? If three, the §43 demo cannot be run as written.
+- **Resolution:** **D-132.** Five capabilities exist at V0.4 — the five listed under "Required capabilities" in §43 — while the agent set stays three logical agents (D-131). This is a V0.4-only answer.
+- **Not resolved by this:** **D-007** (the cross-mission vocabulary) stays Open. Which agent serves which capability, and
+  the spelling of the five names, are **D-141 (Open)**.
+
+### D-018 — Where the model-provider abstraction boundary lives
+
+- **Status:** Accepted · **Date:** 2026-09-20 · **Decided by:** human owner · **Resolved by D-135**
+  (originally Open)
+- **Source:** handoff §36 vs §51
+- **Original finding:** §36 forbids model dependence anywhere in EIDOS; §51 names Ollama plus a local open
+  model as the concrete LLM. The handoff shows a "Model/Agent Interface" in a diagram but does not
+  say which module owns it, what its interface is, or which layers may import it.
+- **Original need:** The owning module and its interface. Invariant 9 forbids vendor names in contracts,
+  planning, validation, compiler, runtime and state — so the boundary must be defined before any
+  code calls a model.
+- **Scoped narrowly at V0.3 (2026-09-19, D-122):** only the *execution-side* port interface — how the runtime asks
+  for work to be performed and a verification to be judged — is defined at V0.3, and it is owned by
+  `eidos.runtime`. The model-provider abstraction boundary this entry asks about is untouched and
+  remains Open.
+- **Resolution:** **D-135.** `eidos.agents` owns a synchronous `ModelPort` and its typed request, response and failure
+  types; every provider adapter lives in `eidos.providers`, the only place a vendor, model or SDK name may appear;
+  model, generation parameters and timeout are explicit and never defaulted.
+
+### D-144 — V0.4 canonical capability IDs, and which agent serves which (resolves D-141)
+
+- **Status:** Accepted · **Date:** 2026-09-20 · **Decided by:** human owner · **Resolves D-141**
+- **Source:** handoff §6, §7, §43; D-006, D-007, D-132, D-133, D-134
+- **Decision:**
+  1. **The V0.4 canonical capability IDs are exactly `architecture`, `security`, `cost`, `research`, `verification`** (lowercase).
+     This settles the spelling D-132 left to D-141: D-132's capitalised forms are superseded **for spelling only**; the set of
+     five is unchanged.
+  2. **Scoped to V0.4. D-007 stays Open:** nothing global, hierarchical, similarity-based or cross-mission is decided.
+  3. **The Research Agent serves `research`. The Analysis Agent serves `architecture`, `security` and `cost`.**
+  4. **The Verification Agent is not capability-bound.** It is reached through the `Verifier` port by `VERIFY` node kind (D-133).
+- **Consequences:**
+  - `verification` is a member of the V0.4 vocabulary (a genome label) that **no work agent serves**. An `agent` step that requested
+    it is an unbound capability and is refused before dispatch (D-134).
+  - The baseline plan is supplied (D-131), so which of the Analysis Agent's three capabilities its analysis step requests is the plan
+    author's choice, not the runner's.
+  - **V0.2 is unchanged:** it still checks membership in the mission's own `required_capabilities` (D-102), not the vocabulary.
+
+### D-145 — The V0.4 artifact model, supplied documents and access (resolves D-142)
+
+- **Status:** Accepted · **Date:** 2026-09-20 · **Decided by:** human owner · **Resolves D-142**
+- **Source:** D-047, D-098, D-099, D-129, D-137
+- **Decision:**
+  1. **A minimal typed artifact model** with four fields: **`ref`, `content_type`, `content`, `source_refs`.**
+  2. **V0.4 artifacts are primarily text or Markdown plus source references.**
+  3. **Supplied documents are stored and addressed by `ArtifactRef`, namespaced by execution.**
+  4. **No per-step input field is added** (D-047 stands; `PlanStep` is unchanged).
+  5. **Research and Analysis reach mission-level and supplied artifacts through the in-memory artifact store**, so the `WorkExecutor`
+     signature is preserved (D-137).
+- **Consequences:**
+  - This introduces the minimal model D-098 deferred; **`ArtifactRef` itself stays opaque** and the runtime never sees an artifact's
+    content. The model lives with the store, in `eidos.agents` (D-137), not in `eidos.contracts`.
+  - An agent's task derives from the mission goal, its capability, its predecessors' artifacts and the supplied artifacts
+    — nothing else.
+  - **D-129 stays Open:** the general data-flow question (for example for remote agents at V0.6) is untouched.
+  - Field constraints and the store's exact interface are pinned at implementation.
+
+### D-146 — Which reliability-contract clauses V0.4 evaluates; `min_quality` is NOT_EVALUATED (resolves D-143)
+
+- **Status:** Accepted · **Date:** 2026-09-20 · **Decided by:** human owner · **Resolves D-143**
+- **Source:** handoff §30, §47; invariants 12 and 13; D-057, D-059, D-063, D-064, D-121, D-138, D-139
+- **Decision:**
+  1. **V0.4 evaluates only `ReliabilityContract` clauses that have an explicitly defined deterministic measurement.**
+  2. **Evaluable:** schema validity, citation and source coverage, and a minimum number of distinct sources.
+  3. **`min_quality` is explicitly `NOT_EVALUATED`.** No quality metric is invented.
+  4. **Contract satisfaction is never silently claimed.** A `PASS` means the **supported V0.4 verification rules passed**, not that
+     every `ReliabilityContract` clause was evaluated.
+- **Consequences:**
+  - By rule 1, any other clause without a defined measurement is also `NOT_EVALUATED`: `max_risk_level` (how a run's risk is
+    determined is D-057, Open). The six budget clauses are runtime accounting, deferred (D-127), and are not verification clauses.
+  - Every verdict's reason names the clauses that were `NOT_EVALUATED`. The `Verifier` port carries only a verdict and a reason
+    (D-121), so this is stated in the reason; the verification agent keeps a typed per-clause record from which the reason is rendered.
+    No runtime type changes.
+  - `RunResult.verified` keeps its meaning: never a claim that the mission or its contract succeeded.
+  - **D-059 stays Open** (no status is invented for "contract not satisfied"); **D-063 and D-064 stay Open and dormant.**
+
+### D-141 — The five V0.4 capabilities: spelling, the agents that serve them, and what `Verification` binds to
+
+- **Status:** Accepted · **Date:** 2026-09-20 · **Decided by:** human owner · **Resolved by D-144**
+  (originally Open)
+- **Source:** handoff §6, §7, §16, §43; D-006, D-132, D-133, D-134; raised while recording the V0.4 rulings
+- **Original finding:**
+  - **(a) Spelling.** §43 prints the five names as display labels — capitalised single words. §6's example for the same
+    mission writes `architecture_analysis`, `security_analysis`, `cost_analysis`, `research` and `verification`; the
+    examples and tests elsewhere in this repository use lowercase. D-132 records the names **exactly as printed in §43**.
+    Matching is exact-string, so the spelling decides every genome, plan and registration.
+  - **(b) Which agent serves what.** There are five capabilities and three logical agents (D-131). §7 gives the Analysis
+    Agent `technical_analysis` and `cost_analysis` and describes a separate Security Agent; the handoff does not say which of
+    the three agents serves `Architecture`, `Security` and `Cost`.
+  - **(c) The analysis step.** The baseline plan is Research, then Analysis, then `VERIFY` (D-131), but "Analysis" is not one of
+    the five, and an `agent` step must request a capability.
+  - **(d) `Verification`.** It is a capability ID, yet `VERIFY` is bound by node kind (D-133). An `agent` step that requested
+    `Verification` would have no work agent registered for it: an unbound capability (D-134).
+- **Effect while Open:** none until the registry and the baseline plan are built (V0.4 Step 4).
+- **Original need:** (a) confirm the literal spelling or give another form; (b) the capability-to-agent mapping — *proposal:* the
+  Research Agent serves `Research`, the Analysis Agent serves `Architecture`, `Security` and `Cost`, and the Verification
+  Agent serves the `Verifier` port only; (c) which of the Analysis Agent's capabilities the baseline plan's analysis step
+  requests; (d) whether `Verification` stays in the vocabulary as a genome-only label that no work agent serves, or is dropped.
+- **Resolution:** **D-144.** The spelling is lowercase, the mapping is settled, and `verification` is a vocabulary member that no work agent serves.
+
+### D-142 — V0.4 artifact content, supplied documents and per-step input
+
+- **Status:** Accepted · **Date:** 2026-09-20 · **Decided by:** human owner · **Resolved by D-145**
+  (originally Open)
+- **Source:** D-047, D-098, D-099, D-129, D-137, D-138
+- **Original finding:** D-137 fixes where artifacts live, not what they contain.
+  - **(a) Content.** The deterministic verifier (D-138) needs schema-checkable structure — claims and the sources they cite —
+    and D-098 says no artifact model exists. A minimal typed shape is unavoidable, and defining one is a contract decision.
+  - **(b) Supplied documents.** A supplied document is not produced by a step, so `(execution_id, step_id)` does not key it.
+    `information_dependencies` are opaque strings (D-099); reading them as store keys would be invention.
+  - **(c) Per-step input.** `PlanStep` carries no instruction or input (D-047). An agent's task can only be derived from the
+    mission goal, its capability and its predecessors' artifacts.
+- **Effect while Open:** blocks the artifact-store slice and the agents (V0.4 Steps 5 and 6) only.
+- **Original need:** (a) the minimal content shape for Research and Analysis artifacts; (b) how supplied input artifacts are named and
+  keyed; (c) confirmation that V0.4 adds no per-step input field — *recommended*; a field would be an additive contract
+  change later (D-047).
+- **Resolution:** **D-145.** A minimal typed artifact model; supplied documents addressed by `ArtifactRef`, namespaced by execution; no per-step input field.
+
+### D-143 — Reliability-contract clauses the V0.4 verifier cannot evaluate
+
+- **Status:** Accepted · **Date:** 2026-09-20 · **Decided by:** human owner · **Resolved by D-146**
+  (originally Open)
+- **Source:** handoff §30, §47; invariant 13; D-057, D-059, D-063, D-064, D-073, D-138, D-139
+- **Original finding:** D-139 gives the verifier the frozen `ReliabilityContract`. `min_independent_evidence` is a count and can be
+  checked deterministically. **`min_quality`** is a required contract field (D-073) with no measure at V0.4: there is no
+  scalar (D-138), and D-063 and D-064 are Open. **`max_risk_level`** has no defined check either, because how a run's risk is
+  determined is D-057 (Open). If the verifier read any unevaluable clause as `INCONCLUSIVE`, **no mission could ever
+  `PASS`**. If it ignored them, a `PASS` could be read as "the contract is satisfied", which invariant 13 forbids
+  manufacturing. (`RunResult.verified` already states that it is never a claim of mission success.)
+- **Effect while Open:** blocks the verifier slice (V0.4 Step 6) only.
+- **Original need:** the rule. *Recommended:* the verdict is judged only on the clauses that can be evaluated; its reason names every
+  clause **not evaluated** and why; a `verified` run is never reported as contract-satisfied; D-059 (whether an unmet contract is
+  a status) stays Open. *Alternative:* `INCONCLUSIVE` whenever any clause is unevaluated — safe, but nothing then passes.
+- **Resolution:** **D-146.** Only clauses with an explicitly defined deterministic measurement are evaluated; `min_quality` is explicitly NOT_EVALUATED.
+
 ---
 
 ## Open — require the human owner
@@ -2208,7 +2576,7 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
 These are ambiguities, contradictions and gaps found in the handoff during the bootstrap read. None
 has been resolved. Work that depends on one of them is blocked until the owner decides.
 
-Count: 47. Highest-impact first is **D-015** (how verification confidence is computed), then
+Count: 45. Highest-impact first is **D-015** (how verification confidence is computed), then
 **D-007** (now V0.4-only, not V0.2 — see D-102) and **D-046** (bound values, mechanism unaffected —
 see D-103) for later V0.2 work. **D-012** (predicate language) was corrected 2026-09-18 to no longer
 be listed as a V0.2 item — it blocks the V0.3 compiler. **D-102** and **D-103**, logged the same day,
@@ -2257,14 +2625,6 @@ one is not.
   The contradiction inside the handoff stands and is reported here.
 - **Needs:** Owner to confirm the numbering, or amend the handoff.
 
-### D-006 — Which capabilities exist in the MVP agent set
-
-- **Status:** Open · **Source:** handoff §49 vs §16, §43
-- **Finding:** §49 says start with exactly three logical agents — Research, Analysis, Verification —
-  and "do not build 10+". But the flagship demo (§43) and the candidate strategies (§16) both use
-  five: Research, Security, Architecture, Analysis, Verification.
-- **Needs:** Which capability set exists at V0.4? If three, the §43 demo cannot be run as written.
-
 ### D-007 — Capability vocabulary and matching semantics
 
 - **Status:** Open · **Source:** handoff §6 vs §7
@@ -2276,6 +2636,10 @@ one is not.
 - **Needs:** Is capability matching exact-string against a controlled vocabulary, hierarchical
   (e.g. `analysis.security`), or similarity-based? Is there a canonical capability list, and who
   owns it? This blocks capability validation (§14) and capability discovery.
+- **V0.4 (2026-09-20):** **D-132** fixes a V0.4-only, exact-string set of five capabilities (the §43 "Required capabilities").
+  **D-007 stays Open:** nothing global, hierarchical, similarity-based or cross-mission is decided. Spelling and the
+  agents behind each capability are **D-141 (Open)**.
+
 
 ### D-008 — Lint and type-checking tooling not adopted
 
@@ -2320,6 +2684,9 @@ one is not.
   Excluded by scope discipline, not by oversight.
 - **Effect while Open:** none on V0.1.
 - **Needs:** Decide at V0.4 (result) and V0.8 (evidence), each as its own milestone question.
+- **V0.4 (2026-09-20):** not reopened. **D-139** adds the frozen `ReliabilityContract` to `ExecutionContext` and explicitly
+  introduces **no universal output or answer field.**
+
 
 ### D-012 — Predicate language for conditional primitives
 
@@ -2407,6 +2774,10 @@ one is not.
   gap found.
 - **Needs:** A defined, measurable confidence function — or an explicit decision that verification
   is a pass/fail rule set rather than a scalar comparison.
+- **V0.4 (2026-09-20):** **D-138** decides that V0.4 verification is a **deterministic rule set with no model verdict** and no
+  scalar. That answers this entry for V0.4 only. **D-015 stays Open** for a scalar confidence and §31's threshold-driven
+  replan (V1.2). **D-063 and D-064 stay Open and dormant.** Clauses of the contract the verifier cannot evaluate: **D-143 (Open).**
+
 
 ### D-063 — The concrete type or structure of a quality estimate
 
@@ -2450,20 +2821,6 @@ one is not.
   D-005 settles V0.1 only.
 - **Needs:** When persistence enters, what it stores (events? state snapshots? both — and which is
   authoritative for replay per §73), and the storage interface.
-
-### D-018 — Where the model-provider abstraction boundary lives
-
-- **Status:** Open · **Source:** handoff §36 vs §51
-- **Finding:** §36 forbids model dependence anywhere in EIDOS; §51 names Ollama plus a local open
-  model as the concrete LLM. The handoff shows a "Model/Agent Interface" in a diagram but does not
-  say which module owns it, what its interface is, or which layers may import it.
-- **Needs:** The owning module and its interface. Invariant 9 forbids vendor names in contracts,
-  planning, validation, compiler, runtime and state — so the boundary must be defined before any
-  code calls a model.
-- **Scoped narrowly at V0.3 (2026-09-19, D-122):** only the *execution-side* port interface — how the runtime asks
-  for work to be performed and a verification to be judged — is defined at V0.3, and it is owned by
-  `eidos.runtime`. The model-provider abstraction boundary this entry asks about is untouched and
-  remains Open.
 
 ### D-020 — "Strategy" and "Plan" are used interchangeably
 
@@ -2744,6 +3101,9 @@ one is not.
 - **V0.3 implementation note (2026-09-19, D-124):** for V0.3 only, `VERIFY` is treated as a control step compiling to a
   `VerifyNode`, and `HUMAN_APPROVAL` is unsupported (compile-rejected). This does **not** answer this
   item; the broader classification remains Open.
+- **V0.4 (2026-09-20):** **D-133** binds a `VERIFY` node to the `Verifier` port by node kind, not by capability. That records
+  how V0.4 binds `VERIFY`; **D-055 stays Open.**
+
 
 ### D-058 — Should `paused` later become a more specific name?
 
@@ -2946,6 +3306,10 @@ one is not.
 - **Needs:** whether predecessors' results are passed to a work node (as the verifier's are), fetched by the
   work implementation through a reference, or something else; and what an artifact is. Changing the port
   signature is a change to D-122, so it needs the owner.
+- **V0.4 (2026-09-20):** **D-137** answers this for V0.4: predecessors' outputs are fetched from an in-memory artifact store
+  under `(execution_id, step_id)`, one primary artifact per work step, and **the `WorkExecutor` signature is unchanged.** **D-129
+  stays Open:** what an artifact contains (**D-142, Open**) and the general data-flow question remain.
+
 
 ---
 
@@ -2995,3 +3359,8 @@ one is not.
   plan that V0.3 compiles has had no policy evaluation. At V0.3 only mock agents execute, so nothing
   ungoverned has any effect. Whether real agents may execute before a policy exists is a V0.4 question
   for the owner.
+- **V0.4 (2026-09-20):** the single-pass runner is now in V0.4 (**D-131**); the planner and a replanning loop stay unassigned. The
+  capability registry and binding are scheduled for V0.4 (**D-134**). The question recorded above — whether real agents may
+  execute before a policy exists — is **answered for V0.4 by D-140** (they are read-only and cannot act); policy semantics
+  stay deferred.
+

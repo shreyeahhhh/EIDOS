@@ -443,7 +443,7 @@ verification; and an ordered variant that front-loads architecture before target
 
 | Id | Question | Blocks |
 |---|---|---|
-| D-055 | Are `VERIFY` and `HUMAN_APPROVAL` work steps rather than control-flow steps? | not V0.1; rework risk if answered after `PlanStep` exists. **V0.3 (D-124):** `VERIFY` compiles as a control step, `HUMAN_APPROVAL` is unsupported; the question stays Open |
+| D-055 | Are `VERIFY` and `HUMAN_APPROVAL` work steps rather than control-flow steps? | not V0.1; rework risk if answered after `PlanStep` exists. **V0.3 (D-124):** `VERIFY` compiles as a control step, `HUMAN_APPROVAL` is unsupported; the question stays Open. **V0.4 (D-133):** `VERIFY` is bound to the `Verifier` port by node kind, not by capability; still Open |
 | D-012 | Predicate language for ROUTE / RETRY / REPLAN / TERMINATE | Blocks compiling these kinds; V0.3 rejects them (D-112, D-127); not a V0.2 validator requirement |
 | D-046 | Numerical bound values (the mechanism is unblocked; D-103) | V0.2 values, V0.9+ tuning |
 | D-043 | Declared plan limits vs actual execution counters | **V0.3** (corrected 2026-09-18; not a V0.2 blocker) |

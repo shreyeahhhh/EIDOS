@@ -122,9 +122,10 @@ Task -> Task Genome -> 2-3 candidate strategies -> Plan validation
 
 With exactly three logical agents: **Research, Analysis, Verification**. Not 10+.
 
-> **Open:** the flagship demo (§43) and the candidate strategies (§16) use five capabilities —
-> Research, Security, Architecture, Analysis, Verification — which contradicts the three named here.
-> See `decisions.md` D-006. Unresolved.
+> **Resolved for V0.4** (`decisions.md` D-006, D-132): five capabilities exist at V0.4 — the five listed under
+> "Required capabilities" in §43 — while the agent set stays **three logical agents** (D-131). Their spelling is lowercase and
+> the Research Agent serves `research`, the Analysis Agent `architecture`, `security` and `cost`, and the Verification Agent is reached
+> through the `Verifier` port, not by capability (D-144). D-007 (the global vocabulary) stays Open.
 
 ## 7. Scope control
 
@@ -201,7 +202,6 @@ authentication project** (§54).
 
 | Id | Question |
 |---|---|
-| D-006 | MVP agent set — three capabilities (§49) or five (§16, §43)? |
 | D-019 | Does `tenant_id` appear in V0.1 models? |
 | D-022 | Frontend stack — React/TypeScript or Streamlit for the early prototype? |
 | D-013 | How mission constraints map onto TaskGenome vs ReliabilityContract |

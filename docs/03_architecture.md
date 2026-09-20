@@ -93,6 +93,11 @@ at selection/execution time.
 > longer blocks V0.2** — `decisions.md` **D-102** scopes V0.2 capability validation to the mission's
 > own `TaskGenome.required_capabilities`, needing no cross-mission vocabulary. D-007 now blocks only
 > V0.4, when a real agent registry needs a real vocabulary to bind against.
+>
+> **V0.4 (D-132, D-134, D-144):** the registry binds against a **V0.4-only, exact-string set of five capabilities** —
+> `architecture`, `security`, `cost`, `research`, `verification`. **D-007 stays Open;** nothing global is decided. The Research
+> Agent serves `research`; the Analysis Agent serves `architecture`, `security` and `cost`; the Verification Agent is reached
+> through the `Verifier` port by `VERIFY` node kind, not by capability.
 
 ## 5. Model independence
 
@@ -114,9 +119,10 @@ A model may be replaced without redesigning EIDOS. Different capabilities may us
 depending on the task and policy. This is invariant 9: no model, vendor or SDK name appears in
 contracts, planning, validation, compiler, runtime or state.
 
-> **Open:** which module owns the Model/Agent Interface, and what its interface is. See
-> `decisions.md` D-018. **Narrowed at V0.3 (D-122):** only the *execution-side* port interface is
-> defined then, owned by `eidos.runtime`; the model-provider boundary stays Open.
+> **Resolved (D-135, D-018):** `eidos.agents` owns a synchronous `ModelPort` and its typed request, response and failure types;
+> every provider adapter lives in `eidos.providers`, the only place a vendor, model or SDK name may appear. The model, the
+> generation parameters and the timeout are **explicit inputs, never defaulted.** (V0.3's D-122 defined only the
+> *execution-side* ports, owned by `eidos.runtime`; that is unchanged.)
 
 ## 6. Interoperability boundaries
 
@@ -222,13 +228,15 @@ the architectural map; `progress.md` tracks which of these exist.
 | Package | Responsibility | Milestone | Exists |
 |---|---|---|---|
 | `eidos.contracts` | Typed contracts: TaskGenome, ReliabilityContract, MissionState, MissionEvent, Plan, PlanStep, AgentTask | V0.1 | **yes** |
-| `eidos.capabilities` | Capability vocabulary, agent capability registry | V0.4 (V0.2 needed neither — D-102) | no |
+| `eidos.capabilities` | The V0.4 capability set (five exact-string, lowercase names, D-132, D-144), the agent descriptor and a deterministic registry that resolves a capability to an agent; an unbound capability is a typed pre-run rejection (D-134) | V0.4 (V0.2 needed neither — D-102) | no |
 | `eidos.planning` | Candidate strategy generation, strategy selection | V0.2+ | no |
 | `eidos.validation` | The validation pipeline of §14 — depends only on `eidos.contracts` | V0.2 | **yes** |
 | `eidos.compiler` | Validated `Plan` + accepted `PlanValidationReport` → an immutable, backend-neutral compiled form; deterministic; compiles only `agent` and `VERIFY` (D-112, D-114); imports no LangGraph | V0.3 | **yes** — the compiled form and `compile_plan` only (Step 2) |
 | `eidos.runtime` | Backend-neutral execution: level-synchronous semantics, node and run results, synchronous execution ports, frozen `ExecutionContext` (D-113, D-115, D-117, D-118, D-122); imports no LangGraph | V0.3 | **yes** — ports, results, `ExecutionContext` and the sequential reference executor (Step 3) |
 | `eidos.backends.langgraph` | The LangGraph adapter — the **only** package that may import LangGraph (D-115); an optional dependency extra, also in `dev` (D-116) | V0.3 | **yes** — `LangGraphExecutor`, held to the reference executor (Step 4) |
-| `eidos.agents` | Research, Analysis, Verification | V0.4 | no |
+| `eidos.agents` | Research, Analysis and Verification — exactly three logical agents (D-131); owns the synchronous `ModelPort` (D-135) and the in-memory artifact store (D-137); read-only, no tools (D-140); vendor-free | V0.4 | no |
+| `eidos.providers` | Model-provider adapters — the **only** place a vendor, model or SDK name may appear (D-135); standard-library HTTP, no new dependency (D-136) | V0.4 | no |
+| (runner module) | The single-pass baseline runner: validate, compile, bind, execute on the LangGraph backend, report; one module, no CLI, no API (D-131); name recorded when created | V0.4 | no |
 | `eidos.state` | Reducer, checkpoints, replay | V0.5 | no |
 | `eidos.policy` | Governance, autonomy levels, budgets | V1.2 (V0.2 has only a `NOT_APPLICABLE` stage in `eidos.validation` — D-110) | no |
 | `eidos.telemetry` | Structured events, metrics | V0.9 | no |
@@ -363,6 +371,37 @@ every semantic.
 LangGraph is an optional extra (D-116), heavy for what it does — a closure of 38 distributions, including an HTTP client,
 `websockets` and LangSmith — and the core and its tests run without it.
 
+### The V0.4 boundary — model, agent and capability seams (approved, not built)
+
+Recorded in D-131 to D-140. Nothing here exists yet; `progress.md` tracks the steps.
+
+```text
+runner (single pass)  ---> validation, compiler, runtime, backends.langgraph, capabilities, agents
+agents                ---> runtime ports (it implements them), contracts, ModelPort (it owns it)
+capabilities          ---> contracts
+providers             ---> agents' ModelPort         (the only vendor-aware layer)
+core: contracts, validation, compiler, runtime     (unchanged; import none of the above)
+```
+
+Four seams:
+
+- **Execution seam (exists, D-122).** `WorkExecutor.execute(context, node)` and `Verifier.verify(context, node, predecessors)`.
+  V0.4 supplies implementations; neither signature changes (D-137). A `VERIFY` node is bound to the `Verifier` port by **node
+  kind**, not by capability (D-133); a work node is bound through the registry.
+- **Capability seam (D-132, D-134, D-144).** Five exact-string, lowercase names for V0.4 only; an agent descriptor is `agent_id`, version and
+  capabilities. Binding happens when the run is constructed, and an unbound capability is a typed rejection before anything runs.
+  V0.2 validation does not learn which agents exist.
+- **Model seam (D-135).** Text in, text out, plus facts the provider measured. Only agents call it; only providers implement it.
+  Explicit model, generation parameters and timeout; failures are typed.
+- **Artifact seam (D-137).** An in-memory store under `(execution_id, step_id)`, one primary artifact per work step; `ArtifactRef`
+  stays opaque. Agents read predecessors' outputs and the supplied documents from the store. An artifact has four fields — `ref`,
+  `content_type`, `content`, `source_refs` — and supplied documents are addressed by `ArtifactRef`, namespaced by execution (D-145).
+
+**Scope (D-131).** A fixed, hand-authored plan — Research, Analysis, `VERIFY` — over a supplied `TaskGenome`, driven once.
+No planner, no candidate strategies, no system-driven replan, no events or history, no A2A, MCP or RAG. Agents are read-only with no
+tools (D-140). Verification is a deterministic rule set with no model verdict (D-138); the frozen `ReliabilityContract` is in
+`ExecutionContext` (D-139). The `AdmissionGuard` is caller-supplied, with no default.
+
 ---
 
 ## Open questions
@@ -370,11 +409,11 @@ LangGraph is an optional extra (D-116), heavy for what it does — a closure of 
 | Id | Question |
 |---|---|
 | D-007 | Capability vocabulary and matching semantics — not a V0.2 blocker (D-102) |
-| D-018 | Which module owns the model/agent interface |
 | D-020 | Strategy vs Plan — one object or two |
 | D-009 | Where execution bounds originate |
 | D-024 | Whether the FAISS/Qdrant comparison is an out-of-runtime experiment |
-| D-129 | How a work node receives its predecessors' outputs (V0.3's work port passes none) |
+| D-129 | How a work node receives its predecessors' outputs — answered for V0.4 by D-137 (in-memory store); stays Open |
+
 
 ## Out of scope for this document
 

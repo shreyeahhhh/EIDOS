@@ -441,8 +441,8 @@ and must be testable without a UI.
 
 | Id | Question | Blocks |
 |---|---|---|
-| D-015 | How verification confidence is computed from measurable proxies — or whether verification is pass/fail with no scalar | V0.4, V1.2 |
-| D-063 | The concrete quality-**estimate** type required by §19 and invariant 17 | before V0.4 |
+| D-015 | How verification confidence is computed from measurable proxies — or whether verification is pass/fail with no scalar | V0.4, V1.2. **V0.4 (D-138, D-146):** a deterministic rule set, no model verdict, no scalar; only clauses with a defined deterministic measurement are evaluated — `min_quality` is explicitly `NOT_EVALUATED` and a `PASS` never claims contract satisfaction; stays Open for a scalar (V1.2) |
+| D-063 | The concrete quality-**estimate** type required by §19 and invariant 17 | before V0.4 — dormant at V0.4: no scalar exists (D-138) |
 | D-064 | Are §31/§47 `confidence` and §30 `quality` the same quantity? | V0.4; feeds D-042 |
 | D-057 | How either risk value is determined — model-asserted or rule-derived (matters for invariant 14) | V0.2 policy validation |
 | D-057 | How either risk value is determined — model-asserted or rule-derived | V0.2 policy validation |

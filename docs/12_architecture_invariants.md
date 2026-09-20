@@ -181,7 +181,10 @@ underlying models change, and the architecture must not assume any single model 
 **Verified by:** a static check that core layers contain no provider identifier; V0.4 tests
 substituting one capability implementation for another without touching core layers.
 
-**Note:** which module owns the interface is unresolved — `decisions.md` D-018.
+**Note:** resolved for the model-provider boundary by `decisions.md` **D-135** (D-018): `eidos.agents` owns a synchronous
+`ModelPort`; adapters live in `eidos.providers`, the only place a vendor, model or SDK name may appear; configuration is
+explicit and never defaulted. V0.4's substitution test is a fake model in place of a real one, and a second registration in
+place of the first, without touching core layers.
 
 ## 10. The runtime is domain-agnostic
 
@@ -208,7 +211,9 @@ capability discovery, strategy comparison and model independence.
 **Verified by:** V0.1 contract tests that a `PlanStep` carries a capability; V0.2 capability
 validation tests.
 
-**Note:** the capability vocabulary and matching semantics are unresolved — `decisions.md` D-007.
+**Note:** the capability vocabulary and matching semantics are unresolved — `decisions.md` D-007. **V0.4 (D-132, D-134, D-144):** a
+V0.4-only, exact-string, lowercase set of five capabilities; a `VERIFY` node is bound by node kind (D-133); an unbound capability is a
+typed rejection before anything is dispatched. D-007 stays Open.
 
 ## 12. Verification is separate from completion
 
@@ -358,7 +363,6 @@ These come from the handoff and are enforced through `CLAUDE.md` rather than thr
 | D-043 | 7 | Declared plan limits vs actual execution counters share names but count differently |
 | D-029 | 7 | The RAG reformulation loop has no stated bound |
 | D-007 | 11 | Capability vocabulary and matching semantics |
-| D-018 | 9 | Which module owns the model/agent interface |
 | D-014 | 14 | `autonomy_level` scale and naming collision with §40 |
 | D-034 | 18 | Do `plan_id` and `event_id` belong in this invariant's list? §54 names only five |
 | D-033 | 18 | Does `tenant_id` propagate to nested models, or stay root-only? |

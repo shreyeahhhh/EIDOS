@@ -169,7 +169,8 @@ open. **It no longer blocks V0.2**: `decisions.md` **D-102** scopes V0.2 capabil
 check the V0.1 contracts already support without it — every `agent` `PlanStep`'s `capability` must
 appear in this genome's own `required_capabilities`, exact-string, no external vocabulary or
 registry needed. D-007 remains material at V0.4, when a real agent registry needs a real vocabulary
-to bind against.
+to bind against. **V0.4 (D-132):** the registry binds against a V0.4-only, exact-string set of five capabilities (the §43
+"Required capabilities"); **D-007 stays Open.**
 
 ## 6a. Mission ownership — `decisions.md` D-068
 

@@ -32,6 +32,10 @@ executors — and closed the milestone. There is **no real agent yet**. See "V0.
 (165 in `tests/unit/contracts/`, 409 in `tests/unit/validation/`, 276 in `tests/unit/compiler/`, 431 in
 `tests/unit/runtime/`, 48 in `tests/unit/backends/`, 305 in `tests/integration/langgraph/`, 49 in `tests/scenarios/`).
 
+**V0.4 (Real Local Agents): scope approved and recorded.** The owner ruled on the V0.4 exploration (Q1–Q15) and then on the three questions the rulings
+raised; the rulings are **D-131 to D-140 and D-144 to D-146 (Accepted)**, which also resolve **D-006, D-018, D-141, D-142 and D-143**. No gate remains
+except the owner's own action for the real-model run (D-136). See "V0.4 Real Local Agents" below.
+
 There is still no planner, no agents, no state reducer, no A2A, no MCP, no RAG, no persistence,
 no telemetry, no API and no frontend.
 
@@ -41,7 +45,7 @@ No measurement of any kind has been taken, so no metric appears anywhere in this
 
 - [x] `CLAUDE.md` — permanent rules, 18 architecture invariants
 - [x] `progress.md` — this file
-- [x] `decisions.md` — 80 Accepted, 47 Open, 4 Deferred (counts current as of the latest decision below)
+- [x] `decisions.md` — 98 Accepted, 45 Open, 4 Deferred (counts current as of the latest decision below)
 - [x] `README.md`, `pyproject.toml`, `.gitignore`
 - [x] `docs/01`–`docs/12` — the twelve documents required by handoff §81
 - [x] `src/eidos/` and `src/eidos/contracts/` — docstring only, no code
@@ -61,7 +65,7 @@ hold, failure cases are covered, documentation matches reality, a git checkpoint
 | **V0.1** Core Contracts | `TaskGenome`, `ReliabilityContract`, `MissionState`, `MissionEvent`, `Plan`, `PlanStep`, `AgentTask`. No real agents, no A2A, no MCP, no frontend. In-memory only (D-005). | **Implemented — 165 unit tests passing** (155 at implementation, +10 for D-107/D-108) |
 | **V0.2** Plan DSL | Schema validation, cycle detection, dependency validation, depth limits, node limits, parallel-branch limits, capability validation, policy validation. | **Implemented — 409 unit tests passing** (2026-09-19). Every stage is implemented **except policy validation, which reports `NOT_APPLICABLE`** (D-110): no policy rule exists to check, and none was invented. D-046 (the actual limit values) stays Open — no limits object ships (D-103). D-111 (eight implementation details, Open) awaits the owner. |
 | **V0.3** LangGraph Runtime | Map `SEQUENTIAL`, `PARALLEL`, `ROUTE`, `VERIFY`, `RETRY`, `REPLAN` into runtime nodes. Mock agents. | **Complete as scoped — 2026-09-20 (D-112 to D-130). Step 2 (compiled form and `compile_plan`, 276 tests), Step 3 (runtime types, ports, admission, prior outcomes and the sequential reference executor, 431 tests), Step 4 (the LangGraph extra, the S1–S10 spike, the adapter and conformance with the reference executor, 353 tests) and Step 5 (scenario tests, 49 tests) are done.** Narrowed from §50's list: only `agent` and `VERIFY` compile; `ROUTE`, `RETRY`, `REPLAN`, `TERMINATE`, `HUMAN_APPROVAL` are rejected at compile time and D-012 stays Open. **Not delivered, by scope:** mapping `ROUTE`, `RETRY` and `REPLAN` (D-012 and D-125 stay Open), and any importable mock agent — work is exercised by scripted test doubles only, and no product mock agents exist (see "V0.3 close-out" below). |
-| **V0.4** Real Local Agents | Research, Analysis, Verification. Baseline workflow end-to-end. | Not started — blocked (D-006) |
+| **V0.4** Real Local Agents | Research, Analysis, Verification. Baseline workflow end-to-end. | **Scope approved 2026-09-20 — decisions D-131 to D-140 recorded; no code yet.** A fixed, hand-authored plan (Research, Analysis, `VERIFY`) over a supplied genome, run once on LangGraph with a local model behind a model seam; read-only agents; a deterministic verifier. D-006 and D-018 resolved. **D-141 to D-143 resolved by D-144 to D-146: lowercase ids with a fixed agent mapping, a four-field artifact model, and `min_quality` explicitly NOT_EVALUATED.** |
 | **V0.5** MissionState + Event Reducer | `MissionEvent`, `MissionState`, `StateReducer`, checkpoints, replay. §50: state handling must be reliable **before** A2A. | Not started — blocked (D-010, D-011) |
 | **V0.6** One A2A Boundary | Move exactly one agent into an independent process. Test: normal completion, timeout, duplicate event, late event, agent restart, partial artifact, failure. | Not started — deferred (D-026) |
 | **V0.7** MCP | 2–3 real tools only (`search_documents`, `retrieve_evidence`). Test: successful call, invalid arguments, timeout, unavailable tool, unauthorized call, duplicate call. | Not started — deferred (D-027) |
@@ -716,6 +720,69 @@ predecessor outputs (D-129, Open); no capability registry (D-007); no policy eng
 
 ---
 
+## V0.4 Real Local Agents — scope approved, decisions recorded, no code (2026-09-20)
+
+**Step 1 — the exploration and the decision record — is done.** The exploration was read-only. The owner accepted Q1–Q15 with rulings, and
+they are recorded as **D-131 to D-140 (Accepted)**. **D-006** (which capabilities exist) and **D-018** (where the model boundary lives) are
+**resolved** and moved to Accepted. **D-007, D-012, D-055, D-125, D-126 and D-129 stay Open**, each annotated where a ruling touches it. Three
+questions the rulings created were logged as D-141, D-142 and D-143 and then **resolved by the owner** as **D-144, D-145 and D-146** — see below.
+
+### Approved scope
+
+| Q | Ruling | Entry |
+|---|---|---|
+| Q1, Q2 | A fixed, hand-authored plan — Research, Analysis, `VERIFY` — over a supplied `TaskGenome`, run once (validate, compile, execute on LangGraph) with a real local model behind the model seam. Nothing generates plans: no planner, no candidate strategies, no system-driven replan. The runner is one small module, no CLI, no API. Exactly three logical agents. | D-131 |
+| Q3 | Five capability IDs, exactly those under "Required capabilities" in §43: `Architecture`, `Security`, `Cost`, `Research`, `Verification` — **V0.4 only; D-007 stays Open.** Resolves D-006. | D-132 |
+| Q4 | `VERIFY` uses the `Verifier` port and is bound by node kind, not capability. D-055 stays Open. | D-133 |
+| Q5 | A registry resolves a capability to an agent; a descriptor is `agent_id`, version and capabilities only; an unbound capability is a typed pre-run rejection; V0.2 is unchanged. | D-134 |
+| Q6 | `eidos.agents` owns a synchronous `ModelPort`; adapters live in `eidos.providers`; model, generation parameters and timeout are explicit, never defaulted. Resolves D-018. | D-135 |
+| Q7–Q9 | Standard-library HTTP, no new dependency; installing the runtime and choosing a model are the owner's; the default suite is offline with a fake model, and real-model tests are an explicit opt-in, never a silent skip. | D-136 |
+| Q10, Q11 | An in-memory artifact store under `(execution_id, step_id)`, one primary artifact per work step; `ArtifactRef` stays opaque; the `WorkExecutor` signature is unchanged; Research reads supplied documents. **D-129 stays Open.** | D-137 |
+| Q12 | The verifier is a deterministic rule set returning `PASS`, `FAIL` or `INCONCLUSIVE`; no model gives a verdict. D-015 stays Open. | D-138 |
+| Q13 | `ExecutionContext` carries the frozen `ReliabilityContract`; no universal output or answer field; D-041 not reopened. | D-139 |
+| Q14, Q15 | Agents are read-only, no tools, no side effects; the `AdmissionGuard` stays explicit and caller-supplied, no production default; D-043 and D-046 stay Open. | D-140 |
+
+### The three follow-up rulings (D-141 to D-143 resolved)
+
+| Resolved | Ruling | Entry |
+|---|---|---|
+| D-141 | The V0.4 IDs are exactly `architecture`, `security`, `cost`, `research`, `verification` (lowercase; V0.4 only, D-007 stays Open). The Research Agent serves `research`; the Analysis Agent serves `architecture`, `security` and `cost`; the Verification Agent is reached through the `Verifier` port by `VERIFY` node kind and is not capability-bound. `verification` is a vocabulary member no work agent serves. | D-144 |
+| D-142 | A minimal typed artifact model: `ref`, `content_type`, `content`, `source_refs`; primarily text or Markdown plus source references. Supplied documents are stored and addressed by `ArtifactRef`, namespaced by execution. No per-step input field. Research and Analysis read supplied and predecessor artifacts through the in-memory store; the `WorkExecutor` signature is unchanged. | D-145 |
+| D-143 | Only clauses with an explicitly defined deterministic measurement are evaluated: schema validity, citation and source coverage, minimum distinct sources. `min_quality` is explicitly `NOT_EVALUATED`; no quality metric is invented. A `PASS` means the supported V0.4 rules passed, not that every clause was evaluated. By the same rule `max_risk_level` is also `NOT_EVALUATED` (D-057). | D-146 |
+
+Also still Open, unchanged: D-007, D-012, D-015 (answered for V0.4 only), D-017, D-020, D-041, D-043, D-046, D-055, D-059, D-063 and D-064 (dormant: no scalar),
+D-125, D-126 and D-129 (answered for V0.4 only).
+
+### Implementation sequence
+
+Each step is one component, one change and one acceptance condition (CLAUDE.md §4). Each ends with tests, an update of this file and `decisions.md`, and its own
+commit; nothing is pushed until the owner says so. A step that makes a behavioural choice the rulings did not specify logs it as an **Open** entry, as V0.2's D-111 did.
+Only Step 2 touches V0.1–V0.3 code; every other step is additive.
+
+| Step | What | Decisions | Gate | Proves (including failure paths) |
+|---|---|---|---|---|
+| **1** | Record the rulings | D-131–D-146 | — | **Done** |
+| **2** | `ExecutionContext` gains the frozen `ReliabilityContract`; `context_from_state` reads it once; the context's tenant, contract and genome must agree. Amends `src/eidos/runtime/context.py`, `tests/unit/runtime/test_runtime_context.py` and the `context_for` factory in `tests/support/eidos_runtime_factories.py` (the only places a context is built directly) | D-139 | none | Six-field pins updated because the specification changed (not to get green); mismatched contract rejected; MissionState still read once and never written; LangGraph state still only `outcomes`; conformance still byte-identical |
+| **3** | The model seam: package `eidos.agents` created with only `ModelPort`, its typed request (explicit model, generation parameters, timeout), response (text plus measured facts) and failure types; a scripted fake model as test support | D-135 | none | Typed failures for timeout, outage and malformed or empty output; nothing defaulted; agents vendor-free; core layers import nothing new |
+| **4** | `eidos.capabilities`: the five names, the agent descriptor, a deterministic registry, binding, and the typed pre-run rejection for an unbound capability | D-132, D-134, D-144 | none (D-141 resolved) | Exact-string matching; an unbound capability and a duplicate registration are refused; V0.2 unchanged; invariant 11 |
+| **5** | The in-memory artifact store and the artifact content types | D-137, D-145 | none (D-142 resolved) | Thread-safe under concurrent writers; one artifact per key; a missing predecessor artifact and a cross-execution read are refused |
+| **6** | The three agents, against the fake model: Research and Analysis (read supplied or predecessor artifacts, call the model, produce a typed artifact) and the deterministic Verification rule set implementing `Verifier` | D-135, D-137, D-138, D-140, D-145, D-146 | none (D-142, D-143 resolved) | Malformed model output; a model outage; missing input; `PASS`, `FAIL` and `INCONCLUSIVE` each reachable; well-formed output that fails verification (docs/12, invariant 12); a static guard that agents do no I/O beyond their ports |
+| **7** | The dispatcher (a `WorkExecutor` over the registry), `VERIFY` bound by kind, and the single-pass runner (one module, name recorded in docs/03); scenarios on both backends with the fake model | D-131, D-133, D-134, D-140 | none new | Baseline finishes verified; verification fails; a model outage fails one node and the rest is contained; an unbound capability stops the run before dispatch; an admission halt; a second, different-domain mission (invariant 10); one implementation substituted for another (invariant 9); byte-identical results on both backends |
+| **8** | `eidos.providers`: one adapter for the local model runtime over standard-library HTTP with explicit configuration, tested against a local fake HTTP server; an opt-in real-model marker; then **one real baseline run** | D-135, D-136 | **owner installs the runtime and chooses a model** | Success, timeout, refused connection, non-success status, malformed body; the real run's model, latency and verdict recorded **only from that run** |
+| **9** | Close-out: final guards (a vendor name only in `eidos.providers`; agents read-only; core layers import none of the new packages), docs, this file, the definition of done, and which invariants are and are not exercised | — | — | Full suite; unit suite with LangGraph blocked; import audit; frozen paths untouched |
+
+### Environment (recorded fact, measured during the exploration)
+
+No local model runtime is installed on the owner's machine. The GPU has 4 GB of memory and the machine 15.7 GB of RAM. No model speed or quality has been measured, and none
+is claimed. Only the owner installs the runtime and chooses the model (D-136).
+
+### Carried forward, not decided
+
+LangGraph runs a level's nodes on worker threads, so the agents, the store and the fake model must be thread-safe, and one small
+GPU may serialise concurrent model calls; V0.5 replay will need model outputs recorded (D-076), which V0.4 makes capturable but does not record.
+
+---
+
 ## Intentionally not built yet
 
 Per CLAUDE.md §3, a package is created only when the milestone that fills it begins. These
@@ -723,9 +790,11 @@ architectural components are **documented in `docs/03_architecture.md` but not s
 
 | Component | Arrives at |
 |---|---|
-| `capabilities/` — capability vocabulary and agent registry | V0.4 (V0.2 needed neither — D-102) |
+| `capabilities/` — the V0.4 capability set and agent registry | V0.4 Step 4 (V0.2 needed neither — D-102) |
 | `planning/` — candidate strategy generation | V0.2+ |
-| `agents/` — Research, Analysis, Verification | V0.4 |
+| `agents/` — `ModelPort`, the artifact store, Research, Analysis, Verification | V0.4 Steps 3, 5 and 6 |
+| `providers/` — model-provider adapters; the only place a vendor name may appear (D-135) | V0.4 Step 8 |
+| the single-pass runner (one module) | V0.4 Step 7 |
 | `state/` — reducer, checkpoints, replay | V0.5 |
 | `policy/` — governance, autonomy, budgets | V1.2 engine (V0.2 has only a `NOT_APPLICABLE` stage in `validation/` — D-110) |
 | `telemetry/` — structured events, metrics | V0.9 |
@@ -750,7 +819,7 @@ Highest-impact first.
 
 | Item | Blocks | Why it matters |
 |---|---|---|
-| **D-015** verification confidence computation | V0.4 verification, V1.2 | §31 compares a scalar confidence against a threshold while §18 forbids trusting a model-asserted score. Implementing §31 naively builds the exact anti-pattern the handoff warns against. |
+| **D-015** verification confidence computation | V0.4 verification, V1.2 | §31 compares a scalar confidence against a threshold while §18 forbids trusting a model-asserted score. Implementing §31 naively builds the exact anti-pattern the handoff warns against. **V0.4 (D-138):** the verifier is a deterministic rule set, no model verdict, no scalar; stays Open for a scalar (V1.2). |
 | **D-039** reducer signature | V0.5 | A determinism requirement that produces no observable output cannot be tested. |
 | **D-010b** checkpoint semantics | V0.5 | Contents, granularity and trigger unspecified. Entangled with D-017. |
 | **D-036** `AgentTask` lifecycle state machine | V0.6 | §10 mandates deterministic accept/reject "against lifecycle"; §8 never enumerates states or transitions. V0.6 protocol tests cannot be written without it. |
@@ -760,13 +829,12 @@ Highest-impact first.
 | **D-072** omitted vs explicitly-at-ceiling | V0.9, V1.3 | Argues for retaining the requested value alongside the effective one, not for making fields required. |
 | **D-066** contract user-supplied or synthesised | mission creation | Synthesis needs numbers D-046 defers; adopting it later would not contradict D-045. |
 | **D-012** predicate language for ROUTE/RETRY/REPLAN/TERMINATE | **V0.3** (corrected 2026-09-18; was previously mislabelled V0.2/V0.3) | Deterministic routing needs a defined, validatable condition form. Blocks the compiler, not the V0.2 validator. **V0.3 (D-112, D-127):** does not resolve it — the four conditional kinds are rejected at compile time instead. |
-| **D-007** capability vocabulary and matching | **V0.4** (corrected 2026-09-19; not a V0.2 blocker — D-102) | §6 and §7 use incompatible capability names. Untouched by D-102, which sidesteps it for V0.2 by checking against the mission's own `required_capabilities`. |
-| **D-006** MVP agent set: 3 or 5 capabilities | V0.4 | §49 says three; §16/§43 use five. |
+| **D-007** capability vocabulary and matching | **V0.4** (corrected 2026-09-19; not a V0.2 blocker — D-102) | §6 and §7 use incompatible capability names. Untouched by D-102, which sidesteps it for V0.2 by checking against the mission's own `required_capabilities`. **V0.4 (D-132):** a V0.4-only, exact-string set of five; D-007 stays Open. |
 | **D-076** payload completeness for replay | V0.5, with D-039 | D-010a puts the completeness burden on the event log; deferring payloads defers when that becomes testable. |
 | **D-075** per-type payload definitions | V0.3–V0.8 | §33 names thirteen types and describes none. |
 | **D-125** plan-level `RETRY` vs a runtime retry policy | none at V0.3 | Retry appears both as a §13 step kind and as §32 runtime recovery; the handoff never relates them. `RETRY` is compile-rejected and V0.3 has no automatic retry. |
 | **D-126** `MissionEvent` vocabulary for local node lifecycle | V0.5 or later | The thirteen §33 types (D-090) cannot represent a local node starting, finishing, failing or being skipped, and there is no payload (D-067). Invariant 15 is not exercised in V0.3 (D-123). |
-| **D-129** how a work node receives its predecessors' outputs | V0.4 (none at V0.3) | The specified work port `execute(context, node)` passes a node no upstream results, so an edge into a work node carries ordering only; only the verifier receives its predecessors' results. `ArtifactRef` is opaque and no artifact model exists (D-098). |
+| **D-129** how a work node receives its predecessors' outputs | V0.4 (none at V0.3) | The specified work port `execute(context, node)` passes a node no upstream results, so an edge into a work node carries ordering only; only the verifier receives its predecessors' results. `ArtifactRef` is opaque and no artifact model exists (D-098). **V0.4 (D-137):** answered for V0.4 by an in-memory artifact store; stays Open — a minimal four-field artifact model is defined for V0.4 (D-145). |
 | **D-071** detached/reusable genome representations | V1.0 | §21 stores derived characteristics, not the genome, so the detached case may never arise. |
 | **D-074** is §30's approval wording exactly `autonomy_level >= 3`? | V1.2 | §30 scopes to actions, §29 to the mission. If not equivalent, D-069 dropped a capability rather than a duplicate. |
 | **D-059** contract-unsatisfied as `failed` or a fifth state | V0.4 | Invariant 13 requires it distinguishable from a crash; the handoff gives it no event name and no status value. |
@@ -778,7 +846,6 @@ Highest-impact first.
 | **D-034** `plan_id`/`event_id` in invariant 18 | none | Two identifiers entered an invariant by derivation, not decision. CLAUDE.md unamended pending the call. |
 | **D-032** literal default for `tenant_id` | V0.1, constant only | Split out of D-019 and left Open by the owner. Now typed as a `TenantId` per D-053, so the value is a UUID choice. |
 | **D-020** Strategy vs Plan | V0.2, V1.0 | Determines whether one contract or two is needed. |
-| **D-018** model-provider abstraction boundary | V0.4 | Invariant 9 forbids vendor names in core layers; the boundary's owner is unspecified. **V0.3 (D-122):** only the execution-side port interface is defined; this stays Open. |
 | **D-029** RAG reformulation loop has no bound | V0.8 | Every other loop in the handoff is explicitly bounded; §24's retrieval loop is not. Invariant 7 says execution never loops. |
 | **D-001** docs numbering inconsistency | none | Cosmetic; reported, not resolved. |
 | **D-008** lint/type tooling | none | Not adopted, awaiting preference. |
@@ -792,6 +859,8 @@ Full detail for each is in [decisions.md](decisions.md).
 
 | Date | Milestone | Outcome |
 |---|---|---|
+| 2026-09-20 | **V0.4 follow-up rulings: D-141, D-142, D-143 resolved** | The owner resolved the three Open entries the V0.4 rulings raised. Recorded **D-144** (lowercase ids — `architecture`, `security`, `cost`, `research`, `verification`; Research serves `research`, Analysis serves the other three; Verification is reached by `VERIFY` node kind, not capability), **D-145** (a four-field artifact model; supplied documents addressed by `ArtifactRef`, namespaced by execution; no per-step input) and **D-146** (only clauses with a defined deterministic measurement are evaluated; `min_quality` is NOT_EVALUATED; a `PASS` never claims contract satisfaction). D-141 to D-143 moved to Accepted; D-132, D-098, D-137 and D-138 annotated. Counts: 98 Accepted, 45 Open, 4 Deferred. No source or test changed by this entry. |
+| 2026-09-20 | **V0.4 Step 1 — exploration and decision record (no code)** | Read-only exploration of the V0.4 model, agent and capability boundary, then the owner's rulings on Q1–Q15. Recorded **D-131 to D-140 (Accepted)**: a fixed hand-authored baseline plan run once on LangGraph; five V0.4-only exact-string capabilities; `VERIFY` bound by kind; a registry with typed pre-run rejection of unbound capabilities; a synchronous `ModelPort` owned by `eidos.agents` with providers in `eidos.providers` and explicit, never-defaulted configuration; standard-library HTTP and an opt-in real-model test gate; an in-memory artifact store with the `WorkExecutor` signature unchanged; a deterministic verifier with no model verdict; the frozen `ReliabilityContract` in `ExecutionContext`; read-only agents and an explicit `AdmissionGuard`. **D-006 and D-018 resolved.** D-007, D-055, D-129 and D-015 annotated and left Open. **Three new Open entries:** D-141 (capability spelling, which agent serves what), D-142 (artifact content) and D-143 (contract clauses the verifier cannot evaluate). Counts: 92 Accepted, 48 Open, 4 Deferred. Nine-step sequence recorded. **No source or test changed.** Not pushed. |
 | 2026-09-20 | **V0.3 Step 5 — scenario tests and close-out** | Added `tests/scenarios/` — **49 tests** in five files, each driving a real `MissionState` through V0.2 validation, the compiler, a frozen context and both executors (the LangGraph backend is asserted equal to the reference on every scenario): a baseline mission, verification failure and replanning (a replan is a new, separately validated plan version; nothing carries over), halt and resume (a broken guard fails closed; resume equals an uninterrupted run; no automatic retry), the plan gates (rule-breaking plans, non-DSL documents, unsupported kinds and forged acceptance stopped before any executor) and cross-interpreter determinism. **16 of 16 mutation runs caught**, including four that broke both executors identically so only the hand-written expectations could catch them. **1,683 tests pass; nothing in `src/` changed.** V0.3 closed as scoped: ROUTE, RETRY and REPLAN are not mapped (D-112, D-012, D-125 stay Open) and **no product mock agent exists** — flagged for the owner. D-129 stays Open. `tests/scenarios/README.md` and two stale READMEs corrected. Not pushed. |
 | 2026-09-20 | **D-130 accepted** | Owner ruling: LangSmith / LangChain tracing stays **off** in V0.3, with **no opt-in**. D-130 moved from Open to Accepted; the Step 4 implementation is the decision as written, so no code changed. Any later export of run data is a separate decision (telemetry proper is V0.9). Counts: 80 Accepted, 47 Open, 4 Deferred. The stale Open-count line in `decisions.md` corrected. |
 | 2026-09-20 | **V0.3 Step 4 — the LangGraph dependency, the spike, the adapter and conformance** | Declared the optional `langgraph` extra (`>=1.2.11,<2`, also in `dev`) and installed LangGraph 1.2.11 (38-distribution closure). Ran the spike **S1–S10 against the real library** — every design assumption held, so nothing contradicted D-113 or D-117 — and pinned the results as 41 characterization tests. Two findings the documentation did not carry: the **default recursion limit is 10,007 and environment-driven**, and `langsmith` registers a **pytest plugin** (now disabled in `pyproject.toml`). Implemented `eidos.backends.langgraph.LangGraphExecutor`: one node per compiled node named by position, LangGraph super-steps as levels, state `outcomes` only, no checkpointer/interrupt/retry, `BackendError` for faults. **Conformance: it returns byte-identical results to the reference executor** across 54 shaped scenarios, 9 rejections and 150 seeded random plans. **Found and fixed a data-egress risk:** with `LANGSMITH_TRACING` in the environment a bare run POSTs every node's inputs and outputs to a third party; the adapter forces tracing off, tests prove no network attempt, and it is logged as Open **D-130** with no opt-in. D-116 annotated with the settled version. Core tests verified to pass with LangGraph blocked. D-129 kept Open; no earlier architecture or source modified. Nothing pushed. |
