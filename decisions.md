@@ -2576,7 +2576,7 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
 These are ambiguities, contradictions and gaps found in the handoff during the bootstrap read. None
 has been resolved. Work that depends on one of them is blocked until the owner decides.
 
-Count: 45. Highest-impact first is **D-015** (how verification confidence is computed), then
+Count: 47. Highest-impact first is **D-015** (how verification confidence is computed), then
 **D-007** (now V0.4-only, not V0.2 — see D-102) and **D-046** (bound values, mechanism unaffected —
 see D-103) for later V0.2 work. **D-012** (predicate language) was corrected 2026-09-18 to no longer
 be listed as a V0.2 item — it blocks the V0.3 compiler. **D-102** and **D-103**, logged the same day,
@@ -3310,6 +3310,47 @@ one is not.
   under `(execution_id, step_id)`, one primary artifact per work step, and **the `WorkExecutor` signature is unchanged.** **D-129
   stays Open:** what an artifact contains (**D-142, Open**) and the general data-flow question remain.
 
+
+### D-147 — Artifact keys across plan versions in one execution
+
+- **Status:** Open · **Source:** D-085, D-119, D-120, D-137, D-145; found writing the V0.4 replan scenario
+- **Finding:** D-137 holds a work step's one primary artifact under `(execution_id, step_id)`. A replan is a new plan version run in the **same**
+  execution (D-085, D-119), and a replan naturally reuses step ids (version 2 is often version 1 plus a step). The V0.4 store is write-once, so a
+  version-2 step with the id of a version-1 step is **refused** (`FAILED`, "could not be recorded") rather than overwritten. Prior outcomes cannot
+  bridge the gap: they belong to one plan (D-120).
+- **Implemented conservatively, not decided:** the store refuses the second write, and the V0.4 replan scenario gives version 2 fresh step ids. Nothing
+  is ever silently overwritten.
+- **Effect while Open:** none for the single-pass baseline. It bites the first time a plan is replanned with a reused step id.
+- **Needs:** one of (a) plan authors must use fresh step ids across versions of one execution (a rule the validator does not enforce today);
+  (b) key artifacts by `(execution_id, plan_id, step_id)`; (c) a fresh store per plan version. Any of these changes D-137's key or adds a rule.
+
+### D-148 — V0.4 implementation details the approved design left unspecified
+
+- **Status:** Open · **Source:** D-131 to D-146; recorded at the end of V0.4 Step 8 · none touches an invariant, each was implemented conservatively
+  and awaits the owner (the same treatment as D-111 gave V0.2's)
+- **The details:**
+  1. **Registry.** Refuses a repeated `agent_id`, a capability served by two agents, and a capability outside the V0.4 five. `verification` is not
+     barred from registration (no agent registers it); an `agent` step requesting it is unbound. Registry resolution is by exact string and never nearest match.
+  2. **Binding.** One violation per unbound step, every one reported in plan order; a failed report binds nothing. `VERIFY` nodes never appear in it.
+  3. **Artifact.** `content` may be empty (verification judges it); `source_refs` are distinct, non-blank and never a self-reference; a produced
+     artifact's `ref` is `artifact:<step_id>` and its `content_type` is `text/markdown`; the supported types are `text/markdown` and `text/plain`.
+  4. **Store.** Write-once per `ref` and per step; `supplied()` returns artifacts ordered by `ref`; an absent read is `None`; nothing is shared across
+     executions; a refused write leaves nothing behind.
+  5. **Citations.** An agent asks the model to cite `[[ref]]` and records **what the model cited** as `source_refs`, including references that do not exist
+     (verification then fails them) and dropping only a citation of the output itself.
+  6. **Work agents.** Research with nothing supplied returns `NO_RESULT` and never asks a model. Analysis reads its predecessors' artifacts, then the supplied
+     documents; a predecessor with no artifact is a `FAILED` result, so an analysis step's predecessors are work steps at V0.4. Each capability has a fixed,
+     generic instruction. Model failures map `TIMEOUT` and `UNAVAILABLE` to `FAILED` and `MALFORMED_RESPONSE` and `EMPTY_RESPONSE` to `NO_RESULT`.
+  7. **Verifier.** Three rules (`schema_validity`, `citation_coverage`, `minimum_distinct_sources`), each `SATISFIED`, `VIOLATED` or `UNPERFORMABLE`; any
+     violation is `FAIL`, else any unperformable rule is `INCONCLUSIVE`, else `PASS`. "Distinct sources" are the distinct **supplied** documents reached by
+     following citations through produced artifacts. The clauses named `NOT_EVALUATED` are `min_quality` and `max_risk_level`; the budget clauses are not
+     listed. A `VERIFY` with no artifact among its predecessors is `INCONCLUSIVE`.
+  8. **Runner.** `eidos.baseline` takes an executor factory, never imports a backend or provider, and does not own the artifact store: the caller supplies
+     documents under the mission's `execution_id`. `BaselineReport` is consistent by construction and names the first gate that refused.
+  9. **Provider.** The base URL is explicit and `http` or `https` only. The timeout is passed to each socket operation, so it is the only bound on a call and
+     not a guarantee of total elapsed time. An error status and a dropped connection are `UNAVAILABLE`; malformed HTTP or JSON is `MALFORMED_RESPONSE`.
+  10. **Tests.** Real-model tests are deselected by `-m 'not real_model'` in `addopts` and fail, never skip, when selected without their configuration.
+- **Needs:** the owner to confirm or adjust any of these.
 
 ---
 
