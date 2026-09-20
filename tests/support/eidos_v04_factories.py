@@ -8,7 +8,6 @@ The model is a scripted double (D-136); nothing here reaches a real model, and n
 """
 
 from dataclasses import dataclass, field
-from uuid import UUID
 
 from eidos.agents import (
     AnalysisAgent,
@@ -19,8 +18,8 @@ from eidos.agents import (
 )
 from eidos.backends.langgraph import LangGraphExecutor
 from eidos.baseline import BaselineReport, run_baseline
-from eidos.capabilities import AgentDescriptor, CapabilityRegistry
-from eidos.contracts import AgentId, MissionState, Plan
+from eidos.capabilities import CapabilityRegistry
+from eidos.contracts import MissionState, Plan
 from eidos.runtime import SequentialExecutor
 from eidos.validation import SystemLimits
 
@@ -28,18 +27,7 @@ from eidos_agents_factories import ScriptedModel, doc, make_settings
 from eidos_backend_factories import locked_admit_all
 from eidos_validation_factories import make_system_limits
 
-RESEARCH_AGENT_ID = AgentId(UUID(int=501))
-ANALYSIS_AGENT_ID = AgentId(UUID(int=502))
-
-
-def make_registry() -> CapabilityRegistry:
-    """The mapping D-144 rules: Research serves research; Analysis serves architecture, security and cost."""
-    return CapabilityRegistry(
-        agents=(
-            AgentDescriptor(agent_id=RESEARCH_AGENT_ID, version="1", capabilities=ResearchAgent.CAPABILITIES),
-            AgentDescriptor(agent_id=ANALYSIS_AGENT_ID, version="1", capabilities=AnalysisAgent.CAPABILITIES),
-        )
-    )
+from eidos_v04_registry import ANALYSIS_AGENT_ID, RESEARCH_AGENT_ID, make_registry  # noqa: F401  (re-exported for the scenarios)
 
 
 def answer_by_task(research="Findings [[doc:1]] [[doc:2]] [[doc:3]].", analysis="Analysis [[artifact:gather]] [[doc:1]]."):

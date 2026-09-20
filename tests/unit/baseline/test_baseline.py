@@ -11,11 +11,10 @@ from eidos.capabilities import bind_plan
 from eidos.contracts import AgentId, PlanStepKind, StepId
 from eidos.runtime import SequentialExecutor, WorkResult, WorkStatus
 
-from eidos_backend_factories import locked_admit_all
 from eidos_agents_factories import compiled_with, node_of
-from eidos_runtime_factories import context_for
-from eidos_scenario_factories import make_mission, make_mission_plan
-from eidos_v04_factories import ANALYSIS_AGENT_ID, RESEARCH_AGENT_ID, make_registry
+from eidos_mission_factories import make_mission, make_mission_plan
+from eidos_runtime_factories import admit_all, context_for, halt_when
+from eidos_v04_registry import ANALYSIS_AGENT_ID, RESEARCH_AGENT_ID, make_registry
 from eidos_validation_factories import make_system_limits
 
 
@@ -38,7 +37,7 @@ def run(state, plan, *, agents=None, factory=None, registry=None, guard=None):
         registry=registry or make_registry(),
         agents=agents if agents is not None else {RESEARCH_AGENT_ID: SpyAgent(), ANALYSIS_AGENT_ID: SpyAgent()},
         verifier=VerificationAgent(store=store),
-        admission_guard=guard or locked_admit_all(),
+        admission_guard=guard or admit_all(),
         executor_factory=factory or SequentialExecutor,
     )
 
@@ -169,11 +168,10 @@ def test_an_admission_guard_is_required_and_has_no_default():
 
 
 def test_a_halting_guard_pauses_the_run_the_runner_does_not_decide_that():
-    from eidos_backend_factories import locked_halt_when
     from eidos.runtime import RunOutcome
 
     state = mission()
-    report = run(state, plan_for(state), guard=locked_halt_when(lambda request: True, "held"))
+    report = run(state, plan_for(state), guard=halt_when(lambda request: True, "held"))
     assert report.run.outcome is RunOutcome.HALTED
 
 
