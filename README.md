@@ -7,17 +7,16 @@
 
 ## Status
 
-**V0.4 — real local agents; close-out review awaiting the owner.**
+**V0.4 — real local agents: complete as scoped.**
 
 This repository contains the project rules, the architecture knowledge base, the decision record,
 the V0.1 typed contracts (`eidos.contracts`), the V0.2 plan validator (`eidos.validation`), the V0.3
 compiler and runtime (`eidos.compiler`, `eidos.runtime` and the LangGraph backend
 `eidos.backends.langgraph`), and the V0.4 capability registry, three read-only agents (Research,
 Analysis and a deterministic Verification rule set), a single-pass baseline runner and one
-local-model adapter. The baseline works end to end with a scripted model. With a real local model it
-has been run: at the first output budget the first step failed (the reasoning model spent the whole budget before answering); at a larger one the second step failed the same
-way; with 4,096 output tokens and a 240 s timeout one attempt finished and the verifier returned PASS (three rules, no quality measured). The opt-in test as committed still sets the smaller
-budget — see [progress.md](progress.md), D-149 and D-150. There is no
+local-model adapter. The baseline works end to end with a scripted model. With a real local model (`qwen3:4b`) the committed opt-in test, run once, finished — Research, Analysis and
+verification — with a verifier PASS at 4,096 output tokens and a 240 s timeout; smaller budgets had failed, as recorded in [progress.md](progress.md) (D-149, D-150). The PASS covers three
+deterministic rules and measures no quality, and the committed test asserts structure only. One question is deliberately left open (D-151). There is no
 planner, no state reducer, no A2A, no MCP, no RAG, no persistence, no API and no frontend.
 
 Current status and the milestone ladder: [progress.md](progress.md).
