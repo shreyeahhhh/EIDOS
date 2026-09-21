@@ -2771,11 +2771,11 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
   2. **`EventRecord`**, defined in `eidos.state`, pairs one `MissionEvent` with **one typed payload** from a discriminated union keyed by the envelope's `type`. A record whose payload kind does not
      match its envelope's type is rejected at construction.
   3. **Payload classes exist only for the types V0.5 emits** (D-154, D-160). A type with no payload class (`A2A_TASK_STARTED`, `A2A_TASK_COMPLETED`, `MCP_TOOL_CALLED`, `RAG_SEARCH`,
-     `EVIDENCE_REJECTED`, `REPLAN_TRIGGERED`, and `VERIFICATION_FAILED` unless D-160 changes it) cannot form an `EventRecord` in V0.5 and is refused at intake. No placeholder payloads are invented.
+     `EVIDENCE_REJECTED`, `REPLAN_TRIGGERED`, and `VERIFICATION_FAILED`, D-160 item 2) cannot form an `EventRecord` in V0.5 and is refused at intake. No placeholder payloads are invented.
   4. **A payload carries only what the reducer and the `ExecutionRecord` need.** Artifacts appear as an `ArtifactRef`, never as content.
   5. **Layering:** payload types live in `eidos.state`, which may import the core layers (contracts, runtime) and never agents, providers, capabilities or baseline. The recorded model-call outcome is
      therefore an enum owned by `eidos.state` and mirrored from the agents' failure kinds by the recording adapter, with a guard test that the two value sets match.
-- **Consequences:** the concrete payload fields are recorded in **D-160**, pending the owner's confirmation. **D-075** is answered for the emitted types only; **D-076** is discharged for them but
+- **Consequences:** the concrete payload fields are recorded in **D-160** (approved). **D-075** is answered for the emitted types only; **D-076** is discharged for them but
   stays Open (see the annotations on both).
 
 ### D-154 — The local-execution event vocabulary: `NODE_STARTED`, `NODE_SETTLED`, `MISSION_PAUSED` (resolves D-126; supersedes D-090's "exactly thirteen")
@@ -2791,7 +2791,7 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
   5. **This is the only change to the V0.1 contracts:** an enum extension. `MissionEvent`, `MissionState` and `MissionStatus` are unchanged.
   6. **Tests that pin the old set change because the specification changed, not to get green:** `test_mission_event_type_is_exactly_the_thirteen_33_types` now expects the sixteen, and the test that
      rejects an unknown type keeps rejecting one. Nothing is weakened, deleted or skipped.
-- **Not decided here:** whether `VERIFICATION_FAILED` is emitted in V0.5 (D-160, item 2).
+- **Decided in D-160 (item 2):** `VERIFICATION_FAILED` is not emitted in V0.5; the type is retained for future use.
 - **Consequences:** D-126 is resolved; D-090 is superseded in part; D-123 stays accurate about the runtime (D-158).
 
 ### D-155 — The reducer contract (resolves D-039)
@@ -2868,7 +2868,7 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
      log is deterministic, and backend conformance is asserted for the linear baseline.
   7. **A correction to the exploration.** The `Verifier` port returns a verdict and a reason only. Per-rule outcomes exist inside the verifying agent's report, not at the port, so the log records the
      verdict and the reason text; it does **not** claim typed per-rule outcomes (D-148 item 7 already carries `NOT_EVALUATED` as prose).
-- **Consequences:** V0.5 changes no V0.3 or V0.4 source unless the owner confirms D-160, item 8.
+- **Consequences:** V0.5 changes one V0.4 module, and only additively: `run_baseline` gains an optional, observational `observer` parameter (D-160, item 8). Nothing else in V0.3 or V0.4 changes.
 
 ### D-159 — `ExecutionRecord`: a thin, read-only, derived record
 
@@ -2881,6 +2881,57 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
   2. **Excluded:** any quality, confidence, score, rate or `strategy_signature`. `min_quality` and `max_risk_level` remain `NOT_EVALUATED` (D-146). No aggregation across missions.
   3. **It is not strategy memory** (V1.0) **and not the telemetry platform** (V0.9): it describes one execution.
 - **Consequences:** D-015, D-063 and D-064 are untouched. What "evaluation" means beyond recording the verifier's verdict is a later milestone's decision.
+
+### D-160 — V0.5 implementation details (approved with eight rulings)
+
+- **Status:** Accepted · **Date:** 2026-09-21 · **Decided by:** human owner · **Approved with eight rulings** (originally Open)
+- **Source:** D-152 to D-159; recorded at the end of V0.5 Step 1 — none touches an invariant
+- **Finding:** the approved rulings fix the shape of V0.5 but leave concrete details that implementation would otherwise have to choose. They are recorded here, as D-148 was for V0.4, so that none is
+  chosen silently. **The owner has confirmed them, with the rulings below.**
+- **The details, as proposed:**
+  1. **Event order for the baseline mission.** `MISSION_CREATED`; `PLAN_GENERATED`; then either `PLAN_REJECTED` (a refused gate) or `PLAN_COMPILED`; then, for each dispatched node, `NODE_STARTED`
+     followed by `NODE_SETTLED`, in level order and, within a level, in acceptance order; nodes that were never dispatched (`skipped`, `not_reached`) have a `NODE_SETTLED` only, emitted after the run in
+     plan order; and finally exactly one of `MISSION_COMPLETED`, `MISSION_FAILED` or `MISSION_PAUSED`.
+  2. **`VERIFICATION_FAILED` is not emitted in V0.5** (the type stays defined, retained for future use). `NODE_SETTLED` carries the typed verdict, so emitting it would record one fact twice;
+     emitting it for `INCONCLUSIVE` would misname it; and a mission-level recovery trigger belongs to the milestone that adds recovery. **Approved by the owner.**
+  3. **Payload fields**, all frozen and strict, for the emitted types:
+     - `MISSION_CREATED`: `task_genome`, `reliability_contract`, `execution_id`.
+     - `PLAN_GENERATED`: `plan`. `PLAN_REJECTED`: `plan_id`, `stage` (validation, compilation or binding), `reasons` (a tuple of code and message). `PLAN_COMPILED`: `plan_id`, `plan_version`.
+     - `NODE_STARTED`: `plan_id`, `step_id`, `kind`, `capability` and `agent_id` (absent for `VERIFY`).
+     - `NODE_SETTLED`: `plan_id`, `step_id`, `kind`, `status` (`NodeStatus`), `artifact` or `reason`, `duration_ms` (absent when not dispatched), `model_calls` (a tuple of outcome, prompt tokens, output
+       tokens and elapsed seconds, each absent if unreported), and for `VERIFY` the verdict and its reason. **No stop reason** (D-158).
+     - `MISSION_PAUSED`: `plan_id`, `step_id`, `level`, `reason`. `MISSION_COMPLETED`: `plan_id`, `verified`. `MISSION_FAILED`: `plan_id` (absent if no plan was accepted), a typed `cause`, `reason`.
+  4. **Reducer effects.** `MISSION_CREATED` creates the state (status `created`, counters 0). `PLAN_GENERATED` appends the plan (the `MissionState` validators check uniqueness and lineage; a violation is
+     "invalid for the current state"). `PLAN_COMPILED` sets `active_plan_id`, and the plan must exist. `NODE_STARTED` changes only `state_version` and `updated_at` (per-node state never enters
+     `MissionState`, D-010a). `NODE_SETTLED` folds the counters. The three terminal and pause events set `status` and `status_reason`.
+  5. **Terminal mapping (D-156).** A finished, verified run is `MISSION_COMPLETED` with `verified` true; a finished run without a successful `VERIFY` is `MISSION_COMPLETED` with `verified` false; a
+     failed run is `MISSION_FAILED` with a typed cause taken from the node statuses; a halted run is `MISSION_PAUSED`; a refused plan is `PLAN_REJECTED` then `MISSION_FAILED` with cause `plan_rejected`.
+  6. **`execution_time_used_ms` is accumulated accounted node execution time, not wall-clock duration.** Each dispatched node's duration is recorded in its `NODE_SETTLED` payload as an **observed
+     fact** (integer milliseconds, from the recorder's injected monotonic clock). The reducer adds the recorded `duration_ms` of each settled node; a node with no recorded duration adds nothing — it
+     is never estimated, and no wall-clock metric is invented when one is unavailable. Nodes in one level add up, so the counter can exceed elapsed wall-clock time. What a limit should bound is D-043
+     and D-046 (Open).
+  7. **Duplicates and ordering.** The intake ignores a repeated `event_id` and assigns the next sequence; the reducer enforces contiguity and lifecycle and returns the outcome. Both outcomes reach
+     the caller. The recorder supplies the `event_id` from an injected id source. **The deterministic, EIDOS-assigned sequence is the only ordering:** no semantic ordering is inferred from
+     timestamps — in particular not for nodes that run in parallel, whose acceptance order can differ between live runs.
+  8. **Plan-stage timestamps.** `run_baseline` gains an optional `observer` parameter, default `None`, so the validate, compile and bind stages are recorded with real times. **It is observational
+     only:** it receives frozen values, cannot mutate state, and its faults never change the result — a run with an observer, with a faulting observer and with none returns an identical
+     `BaselineReport`. This is the only change to a V0.3 or V0.4 module.
+  9. **`paused` is terminal in V0.5.** No resume event exists, so a paused log ends there and the reducer rejects later events. Resume is deferred (D-161).
+  10. **JSONL.** One `EventRecord` per line, produced by the strict JSON serialization, with the sequence as the only ordering.
+  11. **Model-call attribution.** A recording model port attributes each call to the node being dispatched in the same thread; no agent changes are needed. The state-owned outcome enum mirrors the
+      agents' failure kinds plus `response`, with a guard test.
+  12. **Packages.** `eidos.state` holds the records, reducer, intake and log, checkpoint, replay and `ExecutionRecord`; `eidos.recording` holds the clock and id ports, the wrappers and the run recorder.
+- **The owner's rulings (2026-09-21):**
+  1. `VERIFICATION_FAILED` is not emitted in V0.5; `NODE_SETTLED` carries the verification verdict, and the event type is retained for future use.
+  2. The optional `observer=None` hook in `run_baseline` is approved, for recording real plan-stage timestamps. It is observational only and must not mutate state or affect execution.
+  3. Ordering is the deterministic, EIDOS-assigned sequence. No semantic ordering is inferred from wall-clock timestamps, especially for parallel nodes.
+  4. `paused` stays terminal in V0.5; resume is deferred.
+  5. A finished run without a successful `VERIFY` is `MISSION_COMPLETED` with `verified` false; a refused plan is `PLAN_REJECTED` followed by `MISSION_FAILED`.
+  6. `execution_time_used_ms` is not defined as wall-clock duration: node durations are recorded as observed facts, the counter is accumulated accounted node execution time, and no wall-clock metric
+     is invented when one is unavailable.
+  7. D-151 stays Open and `MeasuredFacts` is not modified.
+  8. Proceed with the implementation sequence, with no further exploration unless a genuine contradiction with an Accepted decision is found.
+- **Effect:** none on existing code until the steps that implement it.
 
 ### D-126 — `MissionEvent` vocabulary for local node lifecycle events
 
@@ -2936,7 +2987,7 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
 These are ambiguities, contradictions and gaps found in the handoff during the bootstrap read. None
 has been resolved. Work that depends on one of them is blocked until the owner decides.
 
-Count: 44. Highest-impact first is **D-015** (how verification confidence is computed), then
+Count: 43. Highest-impact first is **D-015** (how verification confidence is computed), then
 **D-007** (now V0.4-only, not V0.2 — see D-102) and **D-046** (bound values, mechanism unaffected —
 see D-103) for later V0.2 work. **D-012** (predicate language) was corrected 2026-09-18 to no longer
 be listed as a V0.2 item — it blocks the V0.3 compiler. **D-102** and **D-103**, logged the same day,
@@ -3517,7 +3568,7 @@ one is not.
 - **Needs:** Per-type payload shapes, defined at the milestone that first emits each type. The types
   span V0.3 through V0.8, so this resolves incrementally rather than in one decision.
 - **V0.5 (2026-09-21):** answered for the types V0.5 emits by **D-153** (typed payloads in an `EventRecord`, the V0.1 envelope unchanged; the concrete fields are D-160). **Stays Open** for the types
-  V0.5 does not emit (`A2A_TASK_*`, `MCP_TOOL_CALLED`, `RAG_SEARCH`, `EVIDENCE_REJECTED`, `REPLAN_TRIGGERED` and, unless D-160 changes it, `VERIFICATION_FAILED`).
+  V0.5 does not emit (`A2A_TASK_*`, `MCP_TOOL_CALLED`, `RAG_SEARCH`, `EVIDENCE_REJECTED`, `REPLAN_TRIGGERED` and `VERIFICATION_FAILED`, D-160 item 2).
 
 
 ### D-076 — Event-log completeness: what payloads must carry for faithful replay
@@ -3681,46 +3732,6 @@ one is not.
   (d) leave it as it is and document it.
 - **V0.5 (2026-09-21):** stays Open by the owner's ruling. `MeasuredFacts` is **not** modified to improve replay, so the log records no stop reason, and history cannot tell a non-empty answer cut
   off at the output limit from a complete one (D-158). Recorded so the blind spot is visible.
-
-
-### D-160 — V0.5 implementation details (Open until the owner confirms them)
-
-- **Status:** Open · **Date:** 2026-09-21 · **Source:** D-152 to D-159; recorded at the end of V0.5 Step 1 — none touches an invariant
-- **Finding:** the approved rulings fix the shape of V0.5 but leave concrete details that implementation would otherwise have to choose. They are recorded here, as D-148 was for V0.4, so that none is
-  chosen silently. **Each step that depends on an item waits for its confirmation.**
-- **The details, as proposed:**
-  1. **Event order for the baseline mission.** `MISSION_CREATED`; `PLAN_GENERATED`; then either `PLAN_REJECTED` (a refused gate) or `PLAN_COMPILED`; then, for each dispatched node, `NODE_STARTED`
-     followed by `NODE_SETTLED`, in level order and, within a level, in acceptance order; nodes that were never dispatched (`skipped`, `not_reached`) have a `NODE_SETTLED` only, emitted after the run in
-     plan order; and finally exactly one of `MISSION_COMPLETED`, `MISSION_FAILED` or `MISSION_PAUSED`.
-  2. **`VERIFICATION_FAILED` is not emitted in V0.5** (the type stays defined). `NODE_SETTLED` already carries the typed verdict, so emitting it would record one fact twice; emitting it for
-     `INCONCLUSIVE` would misname it; and a mission-level recovery trigger belongs to the milestone that adds recovery. **This departs from the exploration's proposal**, which had it emitted after a
-     `FAIL` or `INCONCLUSIVE` verdict; it is flagged for the owner's confirmation.
-  3. **Payload fields**, all frozen and strict, for the emitted types:
-     - `MISSION_CREATED`: `task_genome`, `reliability_contract`, `execution_id`.
-     - `PLAN_GENERATED`: `plan`. `PLAN_REJECTED`: `plan_id`, `stage` (validation, compilation or binding), `reasons` (a tuple of code and message). `PLAN_COMPILED`: `plan_id`, `plan_version`.
-     - `NODE_STARTED`: `plan_id`, `step_id`, `kind`, `capability` and `agent_id` (absent for `VERIFY`).
-     - `NODE_SETTLED`: `plan_id`, `step_id`, `kind`, `status` (`NodeStatus`), `artifact` or `reason`, `duration_ms` (absent when not dispatched), `model_calls` (a tuple of outcome, prompt tokens, output
-       tokens and elapsed seconds, each absent if unreported), and for `VERIFY` the verdict and its reason. **No stop reason** (D-158).
-     - `MISSION_PAUSED`: `plan_id`, `step_id`, `level`, `reason`. `MISSION_COMPLETED`: `plan_id`, `verified`. `MISSION_FAILED`: `plan_id` (absent if no plan was accepted), a typed `cause`, `reason`.
-  4. **Reducer effects.** `MISSION_CREATED` creates the state (status `created`, counters 0). `PLAN_GENERATED` appends the plan (the `MissionState` validators check uniqueness and lineage; a violation is
-     "invalid for the current state"). `PLAN_COMPILED` sets `active_plan_id`, and the plan must exist. `NODE_STARTED` changes only `state_version` and `updated_at` (per-node state never enters
-     `MissionState`, D-010a). `NODE_SETTLED` folds the counters. The three terminal and pause events set `status` and `status_reason`.
-  5. **Terminal mapping (D-156).** A finished, verified run is `MISSION_COMPLETED` with `verified` true; a finished run without a successful `VERIFY` is `MISSION_COMPLETED` with `verified` false; a
-     failed run is `MISSION_FAILED` with a typed cause taken from the node statuses; a halted run is `MISSION_PAUSED`; a refused plan is `PLAN_REJECTED` then `MISSION_FAILED` with cause `plan_rejected`.
-  6. **`execution_time_used_ms`** is the sum of the recorded per-node `duration_ms` over dispatched nodes, in integer milliseconds from the recorder's monotonic clock. Nodes in one level add up, so it can
-     exceed elapsed wall-clock time; it is not a wall-clock span, and what a limit should bound is D-043 and D-046 (Open).
-  7. **Duplicates and ordering.** The intake ignores a repeated `event_id` and assigns the next sequence; the reducer enforces contiguity and lifecycle and returns the outcome. Both outcomes reach
-     the caller. The recorder supplies the `event_id` from an injected id source.
-  8. **Plan-stage timestamps.** The validate, compile and bind stages happen inside one `run_baseline` call. Either the plan-stage events are emitted after the call with the times the recorder observed,
-     **or** `run_baseline` gains an optional, additive `observer` parameter (default none) so they carry real times. The proposal is the observer parameter, which modifies a V0.4 module and so
-     **needs the owner's confirmation**; without it, the events are emitted after the call.
-  9. **`paused` is terminal in V0.5.** No resume event exists, so a paused log ends there and the reducer rejects later events. Resume is deferred (D-161).
-  10. **JSONL.** One `EventRecord` per line, produced by the strict JSON serialization, with the sequence as the only ordering.
-  11. **Model-call attribution.** A recording model port attributes each call to the node being dispatched in the same thread; no agent changes are needed. The state-owned outcome enum mirrors the
-      agents' failure kinds plus `response`, with a guard test.
-  12. **Packages.** `eidos.state` holds the records, reducer, intake and log, checkpoint, replay and `ExecutionRecord`; `eidos.recording` holds the clock and id ports, the wrappers and the run recorder.
-- **Effect while Open:** none on existing code. The steps that depend on an item wait for its confirmation.
-- **Needs:** the owner to confirm each item as written or change it; items 2 and 8 depart from, or go beyond, what the exploration proposed.
 
 ---
 

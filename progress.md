@@ -43,7 +43,7 @@ and the sections after it, and "V0.4 close-out review".
 **V0.5 (Mission State + Event Reducer): scope approved and recorded (D-152 to D-161, 2026-09-21); no code yet.** The owner approved the exploration's proposal with nine rulings: the event log is
 authoritative and `MissionState` is only its view; typed payloads travel in an `EventRecord` beside the unchanged V0.1 envelope; three local-execution event types are added; the reducer is pure and
 outcome-returning; the log is in memory with a JSONL round trip and **no durable store**; recording adapters sit outside the runtime; `MeasuredFacts` is not modified and **D-151 stays Open**; and a thin
-read-only `ExecutionRecord` is derived from the log. D-010b, D-039 and D-126 are resolved. **D-160 (Open)** holds implementation details awaiting the owner's confirmation. See "V0.5 Mission State +
+read-only `ExecutionRecord` is derived from the log. D-010b, D-039 and D-126 are resolved. **D-160 (Accepted, with eight rulings)** records the implementation details. See "V0.5 Mission State +
 Event Reducer" below.
 
 There is still no planner, no state reducer, no A2A, no MCP, no RAG, no persistence,
@@ -56,7 +56,7 @@ metric exists anywhere in this repository, and the only latencies recorded are t
 
 - [x] `CLAUDE.md` — permanent rules, 18 architecture invariants
 - [x] `progress.md` — this file
-- [x] `decisions.md` — 113 Accepted, 44 Open, 5 Deferred (counts current as of the latest decision below)
+- [x] `decisions.md` — 114 Accepted, 43 Open, 5 Deferred (counts current as of the latest decision below)
 - [x] `README.md`, `pyproject.toml`, `.gitignore`
 - [x] `docs/01`–`docs/12` — the twelve documents required by handoff §81
 - [x] `src/eidos/` and `src/eidos/contracts/` — docstring only, no code
@@ -77,7 +77,7 @@ hold, failure cases are covered, documentation matches reality, a git checkpoint
 | **V0.2** Plan DSL | Schema validation, cycle detection, dependency validation, depth limits, node limits, parallel-branch limits, capability validation, policy validation. | **Implemented — 409 unit tests passing** (2026-09-19). Every stage is implemented **except policy validation, which reports `NOT_APPLICABLE`** (D-110): no policy rule exists to check, and none was invented. D-046 (the actual limit values) stays Open — no limits object ships (D-103). D-111 (eight implementation details, Open) awaits the owner. |
 | **V0.3** LangGraph Runtime | Map `SEQUENTIAL`, `PARALLEL`, `ROUTE`, `VERIFY`, `RETRY`, `REPLAN` into runtime nodes. Mock agents. | **Complete as scoped — 2026-09-20 (D-112 to D-130). Step 2 (compiled form and `compile_plan`, 276 tests), Step 3 (runtime types, ports, admission, prior outcomes and the sequential reference executor, 431 tests), Step 4 (the LangGraph extra, the S1–S10 spike, the adapter and conformance with the reference executor, 353 tests) and Step 5 (scenario tests, 49 tests) are done.** Narrowed from §50's list: only `agent` and `VERIFY` compile; `ROUTE`, `RETRY`, `REPLAN`, `TERMINATE`, `HUMAN_APPROVAL` are rejected at compile time and D-012 stays Open. **Not delivered, by scope:** mapping `ROUTE`, `RETRY` and `REPLAN` (D-012 and D-125 stay Open), and any importable mock agent — work is exercised by scripted test doubles only, and no product mock agents exist (see "V0.3 close-out" below). |
 | **V0.4** Real Local Agents | Research, Analysis, Verification. Baseline workflow end-to-end. | **Complete as scoped — 2026-09-21 (D-131 to D-151).** `eidos.agents` (the model seam, the artifact store, Research, Analysis and a deterministic Verification rule set), `eidos.capabilities`, `eidos.baseline` and `eidos.providers`; 2,053 tests pass, 2 real-model tests deselected. The baseline works end to end **with a scripted model** on both backends, and **with a real local model the committed opt-in test (4,096 output tokens, 240 s), run once, finished with a verifier PASS** (three deterministic rules; no quality measured). Smaller budgets had failed, as recorded (D-149, D-150). **Not delivered, by scope:** a planner, replan, events and replay, tools, A2A, MCP, RAG and persistence; D-151 (Open) is deliberately left. See "V0.4 close-out review". |
-| **V0.5** MissionState + Event Reducer | `MissionEvent`, `MissionState`, `StateReducer`, checkpoints, replay. §50: state handling must be reliable **before** A2A. | **Scope approved 2026-09-21 — decisions D-152 to D-161 recorded; no code yet.** The event log, a pure outcome-returning reducer, checkpoint and replay, recording adapters outside the runtime, and a thin derived `ExecutionRecord`; in memory with a JSONL round trip, no durable store. Resolves D-010b, D-039 and D-126; D-151, D-129, D-059, D-015 and D-017 stay Open. D-160 (implementation details) awaits the owner. |
+| **V0.5** MissionState + Event Reducer | `MissionEvent`, `MissionState`, `StateReducer`, checkpoints, replay. §50: state handling must be reliable **before** A2A. | **Scope approved 2026-09-21 — decisions D-152 to D-161 recorded; no code yet.** The event log, a pure outcome-returning reducer, checkpoint and replay, recording adapters outside the runtime, and a thin derived `ExecutionRecord`; in memory with a JSONL round trip, no durable store. Resolves D-010b, D-039 and D-126; D-151, D-129, D-059, D-015 and D-017 stay Open. D-160 (implementation details) is approved. |
 | **V0.6** One A2A Boundary | Move exactly one agent into an independent process. Test: normal completion, timeout, duplicate event, late event, agent restart, partial artifact, failure. | Not started — deferred (D-026) |
 | **V0.7** MCP | 2–3 real tools only (`search_documents`, `retrieve_evidence`). Test: successful call, invalid arguments, timeout, unavailable tool, unauthorized call, duplicate call. | Not started — deferred (D-027) |
 | **V0.8** Agentic RAG | Qdrant, local embeddings, retrieval, reranking, evidence judge. | Not started — deferred (D-028) |
@@ -1147,7 +1147,7 @@ GPU may serialise concurrent model calls; V0.5 replay will need model outputs re
 ## V0.5 Mission State + Event Reducer — scope approved, decisions recorded, no code (2026-09-21)
 
 **Step 1 — the exploration and the decision record — is done.** The exploration was read-only. The owner approved its proposal with nine rulings, recorded as **D-152 to D-159 (Accepted)**; they resolve
-**D-010b, D-039 and D-126**. **D-160 (Open)** holds the implementation details the owner has not yet confirmed, and **D-161 (Deferred)** holds everything V0.5 excludes. The exploration also found
+**D-010b, D-039 and D-126**. **D-160 (Accepted, 2026-09-21)** records the implementation details the owner then approved with eight rulings, and **D-161 (Deferred)** holds everything V0.5 excludes. The exploration also found
 that the handoff's V0.5 line (events, state, reducer, checkpoints, replay) and the telemetry-to-memory chain differ in where they place telemetry (V0.9), memory (V1.0) and learning (V1.1); the ladder
 does not move.
 
@@ -1170,15 +1170,14 @@ does not move.
 - **V0.1 (`eidos.contracts`): one change.** `MissionEventType` gains `NODE_STARTED`, `NODE_SETTLED` and `MISSION_PAUSED` (13 to 16). `MissionEvent`, `MissionState` and `MissionStatus` are unchanged, and
   `test_no_payload_field_exists` stays true. The enum test that pins the thirteen changes because the specification changed.
 - **New, `eidos.state` (pure; imports the core layers only):** `EventRecord` (an envelope plus a typed payload keyed by its type); payloads for the nine emitted types; the reducer, returning state and an
-  outcome; the append-only log and intake; the checkpoint value; replay; and `ExecutionRecord`. Field lists are in D-160 and await confirmation.
+  outcome; the append-only log and intake; the checkpoint value; replay; and `ExecutionRecord`. Field lists are in D-160 (approved).
 - **New, `eidos.recording` (adapter; injected clock and id source):** wrappers over the agents, verifier, admission guard and model port, and a run recorder. It holds no `MissionState`.
-- **Unchanged:** the runtime, the executors, the compiler, the agents, the verifier, `WorkResult`, `RunResult`, `MeasuredFacts`, the D-122 and D-137 signatures, and `run_baseline` (unless the owner confirms
-  D-160 item 8).
+- **Unchanged:** the runtime, the executors, the compiler, the agents, the verifier, `WorkResult`, `RunResult`, `MeasuredFacts`, the D-122 and D-137 signatures, and `run_baseline`, apart from one additive,
+  observational `observer=None` parameter (D-160 item 8, approved).
 
 ### Implementation sequence
 
-Each step is one component, one change and one acceptance condition (CLAUDE.md §4), mutation-checked, in its own commit. Nothing is pushed until the owner says so, and a step that depends on a D-160
-item waits for its confirmation.
+Each step is one component, one change and one acceptance condition (CLAUDE.md §4), mutation-checked, in its own commit. Nothing is pushed until the owner says so. D-160 is approved, so no step waits on it.
 
 | Step | What | Decisions | Proves |
 |---|---|---|---|
@@ -1209,7 +1208,7 @@ item waits for its confirmation.
 ### Carried forward, not decided
 
 The exploration's statement about parallel-level event ordering is inferred from the recorded design (LangGraph runs a level's nodes on worker threads) and has not been tested; the acceptance scenario is the
-linear baseline. D-160 items 2 and 8 depart from, or go beyond, what the exploration proposed and are flagged for the owner.
+linear baseline. D-160 items 2 and 8, which departed from or went beyond the exploration, were approved by the owner (2026-09-21).
 
 ---
 
@@ -1255,7 +1254,6 @@ Highest-impact first.
 | **D-066** contract user-supplied or synthesised | mission creation | Synthesis needs numbers D-046 defers; adopting it later would not contradict D-045. |
 | **D-012** predicate language for ROUTE/RETRY/REPLAN/TERMINATE | **V0.3** (corrected 2026-09-18; was previously mislabelled V0.2/V0.3) | Deterministic routing needs a defined, validatable condition form. Blocks the compiler, not the V0.2 validator. **V0.3 (D-112, D-127):** does not resolve it — the four conditional kinds are rejected at compile time instead. |
 | **D-007** capability vocabulary and matching | **V0.4** (corrected 2026-09-19; not a V0.2 blocker — D-102) | §6 and §7 use incompatible capability names. Untouched by D-102, which sidesteps it for V0.2 by checking against the mission's own `required_capabilities`. **V0.4 (D-132):** a V0.4-only, exact-string set of five; D-007 stays Open. |
-| **D-160** V0.5 implementation details | V0.5 Steps 2 to 7 | Event order, payload fields, reducer effects, the terminal mapping, the execution-time rule, the plan-stage observer parameter and the non-emission of `VERIFICATION_FAILED`, proposed for the owner to confirm as written. Items 2 and 8 depart from, or go beyond, the exploration's proposal. |
 | **D-076** payload completeness for replay | V0.5 (discharged for the emitted types by D-153 and D-157; stays Open) | D-010a puts the completeness burden on the event log. V0.5's payloads carry what the reducer and the `ExecutionRecord` need; artifact content and a stop reason are not in the log (D-129, D-151), and the obligation continues for every later event type. |
 | **D-075** per-type payload definitions | V0.3–V0.8 (answered for V0.5's emitted types by D-153) | §33 names thirteen types and describes none; V0.5 defines payloads for the types it emits and no others. |
 | **D-125** plan-level `RETRY` vs a runtime retry policy | none at V0.3 | Retry appears both as a §13 step kind and as §32 runtime recovery; the handoff never relates them. `RETRY` is compile-rejected and V0.3 has no automatic retry. |
@@ -1285,6 +1283,7 @@ Full detail for each is in [decisions.md](decisions.md).
 
 | Date | Milestone | Outcome |
 |---|---|---|
+| 2026-09-21 | **D-160 approved with eight rulings (V0.5 Step 1, continued)** | The owner approved the implementation details: `VERIFICATION_FAILED` is not emitted (`NODE_SETTLED` carries the verdict; the type is retained); the optional, observational `observer=None` hook in `run_baseline` is approved; ordering is the EIDOS-assigned sequence only, never inferred from timestamps; `paused` is terminal; a finished run without a successful `VERIFY` is `MISSION_COMPLETED` with `verified` false and a refused plan is `PLAN_REJECTED` then `MISSION_FAILED`; `execution_time_used_ms` is accumulated accounted node execution time, not wall-clock, and no wall-clock metric is invented; D-151 stays Open and `MeasuredFacts` is not modified; and the implementation sequence proceeds. D-160 moved to Accepted. Counts: 114 Accepted, 43 Open, 5 Deferred. No source or test changed by this entry. |
 | 2026-09-21 | **V0.5 scope approved; decisions recorded (no code)** | Read-only exploration, then the owner approved the proposal with nine rulings. Recorded **D-152 to D-159 (Accepted)**: the scope; typed payloads through `EventRecord` with the V0.1 envelope unchanged; `NODE_STARTED`, `NODE_SETTLED` and `MISSION_PAUSED` (sixteen types); a pure, outcome-returning reducer; the run-outcome mapping and the counters (recorded, not enforced); an authoritative in-memory event log with a JSONL round trip, checkpoint and replay (no SQLite); recording adapters and facts-only capture; and a thin derived `ExecutionRecord` — **resolving D-010b, D-039 and D-126**. **D-160 (Open):** implementation details awaiting confirmation. **D-161 (Deferred):** what V0.5 excludes. Annotated D-015, D-017, D-038, D-043, D-059, D-067, D-075, D-076, D-090, D-097, D-123, D-127, D-129 and D-151; **D-151, D-129, D-059, D-015, D-017 and the other unrelated Open entries stay Open**, and `MeasuredFacts` is not modified. One correction to the exploration is recorded in D-158: the `Verifier` port returns a verdict and a reason only, so typed per-rule outcomes are not recorded. Counts: 113 Accepted, 44 Open, 5 Deferred. No source or test changed. Not pushed. |
 | 2026-09-21 | **V0.4 closed as scoped** | Owner-directed close-out sequence, each gate met in order: (1) option (a′) adopted in the committed opt-in test — 4,096 tokens and a committed 240 s timeout, its own commit, made before the run; (2) the committed baseline test run once from a clean tree — **`finished`, `verified` true, `gather`, `analyse` and `check` `succeeded`, verifier PASS**; (3) D-150 resolved ((a′) and (c) adopted, (b) and (d) not adopted); (4) D-151 logged (Open); (5) the full default suite green — **2,053 passed, 2 deselected, 83.95 s**. V0.4 closed on those two gates; the close-out review now reads "closed" and its "decisions requested" became "decisions taken"; the dated run records are unchanged. No architecture, provider, agent, verifier, runtime or prompt change. Counts: 102 Accepted, 46 Open, 4 Deferred. Push to `origin/master` follows verification, on the owner's direction. |
 | 2026-09-21 | **The committed real-model test run once: `finished`, verifier PASS. D-150 resolved; D-151 logged (Open)** | Owner ruling: adopt option (a′). The committed opt-in test now carries `max_output_tokens` 4,096 and a committed 240 s timeout (own commit, made before the run); everything else unchanged. The baseline node of the committed test was run **once from a clean tree** (no tap, retry, re-run or side call; the trivial-completion test not selected): **outcome `finished`, `verified` true; `gather`, `analyse`, `check` all `succeeded`; VERIFY dispatched, verifier PASS; Research 753 characters, 977 tokens, 59.531 s; Analysis 842 characters, 2,582 tokens, 172.203 s (72% of the timeout); pytest 1 passed in 232.93 s.** Counts equal the earlier (a′) run's. **D-150 moved to Accepted:** (a′) and (c) adopted, (b) and (d) not adopted. **D-151 (Open) logged:** a non-empty response that stopped at the output limit is returned as a normal response and can pass verification unmarked; not observed in any run; deferred by the owner, not redesigned in V0.4. Counts: 102 Accepted, 46 Open, 4 Deferred. Not pushed. |
