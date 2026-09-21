@@ -15,8 +15,8 @@ compiler and runtime (`eidos.compiler`, `eidos.runtime` and the LangGraph backen
 `eidos.backends.langgraph`), and the V0.4 capability registry, three read-only agents (Research,
 Analysis and a deterministic Verification rule set), a single-pass baseline runner and one
 local-model adapter. The baseline works end to end with a scripted model. With a real local model it
-has been run once and **failed at its first step** (the model returned no text), so the verifier has
-not yet checked a real model's output — see [progress.md](progress.md), D-149 (why) and D-150 (what next). There is no
+has been run and has **not yet reached the verifier**: at the first output budget the first step failed (the reasoning model spent the whole budget before answering); at a larger
+one the first step succeeded and the second failed the same way — see [progress.md](progress.md), D-149 (why) and D-150 (what next). There is no
 planner, no state reducer, no A2A, no MCP, no RAG, no persistence, no API and no frontend.
 
 Current status and the milestone ladder: [progress.md](progress.md).

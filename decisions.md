@@ -3414,12 +3414,29 @@ one is not.
 - **Effect while Open:** none on the code or the default suite. The baseline with this model still fails at its first step, so the handoff's V0.4 line ("make the baseline
   workflow work end-to-end") has not been shown with a real model, and no real model output has reached the verifier.
 - **Needs:** the owner's choice, none adopted:
-  (a) **configuration only** — raise `max_output_tokens` in the opt-in test (the value is fixed there, explicitly, per D-135) and run it once more; no production change;
+  (a) **configuration only** — raise `max_output_tokens` in the opt-in test (the value is fixed there, explicitly, per D-135) and run it once more; no production change —
+  **tried once (below): not sufficient on its own**;
+  (a′) **configuration only, both limits** — raise the timeout (an environment setting of the opt-in test) as well as the budget;
   (b) **let the seam express reasoning** — a request setting that tells the runtime whether to reason, sent by the adapter; a change to D-135's contract and to the adapter;
   (c) **make the adapter report a length cutoff distinctly** — read `done_reason` (and possibly `thinking`) so the failure names its cause; a change to the adapter and, if
   it adds a failure kind, to D-135's closed set;
   (d) **another model**, one that does not reason by default.
   These combine (for example (c) with (a)). Under every option the agents and the verifier are **not** changed to make a model pass.
+- **Owner ruling (2026-09-21): option (a) first, one run only.** For one opt-in run, `max_output_tokens` went from 512 to **2,048** — chosen so that a worst-case generation would
+  fit inside the unchanged 120 s timeout, from the 23.0 tokens/s measured under D-149; that estimate proved optimistic (below). Model, temperature, seed, timeout, endpoint and
+  mission were unchanged, and the ModelPort, the provider, the agent prompts, the verifier, the artifact model and store, the runtime and the model choice were not touched.
+  The temporary edit (that limit and a test-only tap on the HTTP layer) was reverted; the working tree equals its committed state.
+- **Result of option (a)** — one baseline attempt, two model calls, as the mission dispatches them; full detail in progress.md ("The D-150 option (a) run"):
+  - **Research succeeded:** `response` 753 characters citing `doc:1`, `doc:2` and `doc:3`; `thinking` 4,226 characters; `done_reason` `stop`; `eval_count` 977 of 2,048; 52.661 s
+    (load 6.191 s). The agent stored it as `artifact:gather` with those three `source_refs`. This is the first real model output to reach the store.
+  - **Analysis failed the same way:** `response` empty; `thinking` 10,790 characters (1,709 words); `done_reason` `length`; `eval_count` 2,048 of 2,048; 111.010 s, 93% of the
+    120 s timeout. The recorded reasoning drafted the same analysis four times and was cut off part-way through the fourth. The step was `no_result`.
+  - `check` (`VERIFY`) was skipped. The mission ended `failed`, `verified` false. **The verifier did not run: there is no PASS, FAIL or INCONCLUSIVE.**
+  - Runtime-reported generation rates: 21.2 tokens/s (Research) and 18.5 tokens/s (Analysis). At 18.5 tokens/s the 120 s timeout allows about 2,200 generated tokens on this
+    machine, so with the timeout unchanged there is almost no room above 2,048: a larger budget needs a larger timeout too (option a′). One run: not a benchmark.
+  - Not observed: whether Analysis finishes with a larger budget and timeout; reasoning switched off; another model.
+- **Also found, by reading the code (not observed in any run):** the adapter returns a `ModelResponse` whenever `response` has text, whatever `done_reason` says, so an answer cut
+  off part-way would be passed on as a normal answer and the verifier would not be told. Option (c), as worded above, does not address this; it is a separate question for the owner.
 
 
 ---
