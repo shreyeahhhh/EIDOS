@@ -2339,6 +2339,8 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
      quality figure comes only from an actual recorded run (CLAUDE.md §7).
 - **Recorded fact (measured during the V0.4 exploration, on the owner's machine):** no local model runtime is installed;
   the GPU has 4 GB of memory and the machine 15.7 GB of RAM. Nothing about model speed or quality has been measured.
+- **First use (2026-09-21, owner-run):** the model is `qwen3:4b` on Ollama 0.34.2. The owner ran the two opt-in tests once; the exact printed result and
+  the runtime's own description of the model are recorded in progress.md ("The first real baseline run"). The baseline mission ended `FAILED`; see D-149.
 - **Consequences:** a dependency needed later is a new decision and an optional extra (D-116). The opt-in marker's
   mechanics are pinned at implementation and registered in `pyproject.toml`.
 
@@ -2639,7 +2641,7 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
 These are ambiguities, contradictions and gaps found in the handoff during the bootstrap read. None
 has been resolved. Work that depends on one of them is blocked until the owner decides.
 
-Count: 45. Highest-impact first is **D-015** (how verification confidence is computed), then
+Count: 46. Highest-impact first is **D-015** (how verification confidence is computed), then
 **D-007** (now V0.4-only, not V0.2 — see D-102) and **D-046** (bound values, mechanism unaffected —
 see D-103) for later V0.2 work. **D-012** (predicate language) was corrected 2026-09-18 to no longer
 be listed as a V0.2 item — it blocks the V0.3 compiler. **D-102** and **D-103**, logged the same day,
@@ -3372,6 +3374,28 @@ one is not.
 - **V0.4 (2026-09-20):** **D-137** answers this for V0.4: predecessors' outputs are fetched from an in-memory artifact store
   under `(execution_id, step_id)`, one primary artifact per work step, and **the `WorkExecutor` signature is unchanged.** **D-129
   stays Open:** what an artifact contains (**D-142**, since resolved by D-145) and the general data-flow question remain.
+
+
+### D-149 — How the model seam treats a reasoning model's output budget: found by the first real run
+
+- **Status:** Open · **Date:** 2026-09-21 · **Source:** D-135, D-136, D-148 (items 6 and 9); the first real baseline run (owner-run, V0.4 Step 8)
+- **Finding (measured, one run):** with `qwen3:4b` through the local runtime (temperature 0.0, seed 7, `max_output_tokens` 512, timeout 120 s), a direct
+  completion of "Reply with the single word: ready." returned a 5-character response while the runtime reported **154 output tokens**; and in the baseline
+  run the Research step's one model call returned **no text** (`empty_response`), so the step was `NO_RESULT`, the Analysis and `VERIFY` steps were
+  `SKIPPED`, and the mission ended `FAILED` with `verified` false. The printed result is recorded in progress.md ("The first real baseline run").
+- **Cause: not established.** The runtime lists a `thinking` capability for this model. A candidate explanation, **unverified**: the model spends output
+  tokens on reasoning that the adapter does not read (it reads only the `response` field), so a small budget can be used up before any answer text appears.
+  Neither the raw response nor any reasoning field has been inspected, so this is a hypothesis and not a finding.
+- **What the seam cannot express today:** `GenerationParameters` and `ModelSettings` (D-135) have no notion of reasoning; `output_tokens` is the provider's
+  count and does not separate reasoning from answer; `OllamaModel` reads only `response`; and a `ModelFailure` carries no measured facts, so the latency and
+  token counts of a failed call are not recorded.
+- **Effect while Open:** none on the code or the default suite. The failed run is the specified behaviour (invariants 12 and 13; D-148 item 6 maps
+  `EMPTY_RESPONSE` to `NO_RESULT`). It **does** mean the handoff's V0.4 line, "make the baseline workflow work end-to-end", has not been shown with a
+  real model: no real model output has yet reached the verifier, so no real verdict, citation coverage or source count exists.
+- **Needs:** the owner's direction. Options, none adopted: (1) establish the cause first with one read-only diagnostic call that prints the raw response
+  (no code change); (2) change only the opt-in run's configuration (for example a larger `max_output_tokens`) and run the same test again; (3) let the seam
+  express reasoning (a request setting and/or reading the reasoning field), which changes D-135's contract and the adapter and is the owner's to decide;
+  (4) another model. Under every option the agents and the verifier are **not** changed to make a model pass.
 
 
 ---

@@ -1,8 +1,9 @@
 """Real-model tests: an explicit opt-in, excluded from the default run (decisions.md D-136).
 
 These call a **real** local model runtime. They never run unless selected with ``-m real_model``, and when selected they never skip: if the
-configuration is missing they **fail** and say what is missing. Nothing here is asserted about a model's quality or speed, because nothing
-about either has been measured; the tests print what a real run measured so that it can be recorded from that run (CLAUDE.md section 7).
+configuration is missing they **fail** and say what is missing. Nothing here is asserted about a model's quality or speed: a single
+recorded run (progress.md, "The first real baseline run") records what happened and measures neither. The tests print what a real run measured so that it can be
+recorded from that run (CLAUDE.md section 7).
 
 To run, after installing and starting the runtime yourself and pulling a model:
 
