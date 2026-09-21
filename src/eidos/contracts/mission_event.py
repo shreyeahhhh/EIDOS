@@ -12,7 +12,7 @@ externally produced events, or equal to recorded_at for EIDOS-internal
 events, set by the caller at acceptance; this model does not enforce that
 equality itself, since V0.1 has no internal/external event classification
 — that split is D-037, still Open), D-090 (type is exactly one of the
-thirteen §33 event types).
+thirteen §33 event types, plus the three local-execution types D-154 adds — sixteen).
 """
 
 from pydantic import Field

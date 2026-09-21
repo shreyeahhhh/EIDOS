@@ -71,12 +71,15 @@ class PlanStepKind(StrEnum):
 
 
 class MissionEventType(StrEnum):
-    """decisions.md D-090: exactly the thirteen event types named in §33.
+    """decisions.md D-090: the thirteen event types named in §33, plus three local-execution types (D-154).
 
-    Several of these (the A2A, MCP and RAG types) cannot occur in V0.1,
+    Several of the §33 types (the A2A, MCP and RAG types) cannot occur in V0.1,
     since those subsystems do not exist yet. D-090 chose to define the
     full §33 vocabulary regardless, rather than trim it to what V0.1 can
     reach — see D-090's rationale for why this differs from D-052.
+
+    D-154 (resolving D-126) adds ``NODE_STARTED``, ``NODE_SETTLED`` and ``MISSION_PAUSED`` — the local node lifecycle and the
+    cause of ``paused`` — so there are sixteen. They are not ``AgentTask`` events: local nodes are not remote tasks (invariant 2).
     """
 
     MISSION_CREATED = "MISSION_CREATED"
@@ -92,3 +95,7 @@ class MissionEventType(StrEnum):
     REPLAN_TRIGGERED = "REPLAN_TRIGGERED"
     MISSION_COMPLETED = "MISSION_COMPLETED"
     MISSION_FAILED = "MISSION_FAILED"
+    # D-154: local execution. A node is dispatched (STARTED) and settles with a typed NodeStatus (SETTLED); a halted run pauses the mission.
+    NODE_STARTED = "NODE_STARTED"
+    NODE_SETTLED = "NODE_SETTLED"
+    MISSION_PAUSED = "MISSION_PAUSED"

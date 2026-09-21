@@ -88,7 +88,7 @@ def test_missing_recorded_at_is_rejected():
         make_mission_event(recorded_at=None)
 
 
-def test_type_must_be_one_of_the_thirteen_event_types():
+def test_type_must_be_one_of_the_defined_event_types():
     with pytest.raises(ValidationError):
         make_mission_event(type="SOMETHING_INVENTED")
 

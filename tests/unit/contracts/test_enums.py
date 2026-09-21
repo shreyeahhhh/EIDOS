@@ -64,7 +64,8 @@ def test_plan_step_kind_agent_is_lowercase_and_control_kinds_are_uppercase():
         assert control_kind.value == control_kind.value.upper()
 
 
-def test_mission_event_type_is_exactly_the_thirteen_33_types():
+def test_mission_event_type_is_the_thirteen_33_types_plus_the_three_local_execution_types():
+    # D-154 (resolving D-126) supersedes D-090's "exactly thirteen": the specification changed, so this pin changed with it.
     assert {member.value for member in MissionEventType} == {
         "MISSION_CREATED",
         "PLAN_GENERATED",
@@ -79,5 +80,8 @@ def test_mission_event_type_is_exactly_the_thirteen_33_types():
         "REPLAN_TRIGGERED",
         "MISSION_COMPLETED",
         "MISSION_FAILED",
+        "NODE_STARTED",
+        "NODE_SETTLED",
+        "MISSION_PAUSED",
     }
-    assert len(MissionEventType) == 13
+    assert len(MissionEventType) == 16
