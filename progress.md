@@ -69,7 +69,7 @@ hold, failure cases are covered, documentation matches reality, a git checkpoint
 | **V0.1** Core Contracts | `TaskGenome`, `ReliabilityContract`, `MissionState`, `MissionEvent`, `Plan`, `PlanStep`, `AgentTask`. No real agents, no A2A, no MCP, no frontend. In-memory only (D-005). | **Implemented — 165 unit tests passing** (155 at implementation, +10 for D-107/D-108) |
 | **V0.2** Plan DSL | Schema validation, cycle detection, dependency validation, depth limits, node limits, parallel-branch limits, capability validation, policy validation. | **Implemented — 409 unit tests passing** (2026-09-19). Every stage is implemented **except policy validation, which reports `NOT_APPLICABLE`** (D-110): no policy rule exists to check, and none was invented. D-046 (the actual limit values) stays Open — no limits object ships (D-103). D-111 (eight implementation details, Open) awaits the owner. |
 | **V0.3** LangGraph Runtime | Map `SEQUENTIAL`, `PARALLEL`, `ROUTE`, `VERIFY`, `RETRY`, `REPLAN` into runtime nodes. Mock agents. | **Complete as scoped — 2026-09-20 (D-112 to D-130). Step 2 (compiled form and `compile_plan`, 276 tests), Step 3 (runtime types, ports, admission, prior outcomes and the sequential reference executor, 431 tests), Step 4 (the LangGraph extra, the S1–S10 spike, the adapter and conformance with the reference executor, 353 tests) and Step 5 (scenario tests, 49 tests) are done.** Narrowed from §50's list: only `agent` and `VERIFY` compile; `ROUTE`, `RETRY`, `REPLAN`, `TERMINATE`, `HUMAN_APPROVAL` are rejected at compile time and D-012 stays Open. **Not delivered, by scope:** mapping `ROUTE`, `RETRY` and `REPLAN` (D-012 and D-125 stay Open), and any importable mock agent — work is exercised by scripted test doubles only, and no product mock agents exist (see "V0.3 close-out" below). |
-| **V0.4** Real Local Agents | Research, Analysis, Verification. Baseline workflow end-to-end. | **Steps 2 to 8 implemented (2026-09-20 to 21; D-131 to D-148); close-out review prepared, not accepted.** `eidos.agents` (the model seam, the artifact store, Research, Analysis and a deterministic Verification rule set), `eidos.capabilities`, `eidos.baseline` and `eidos.providers`; 2,037 tests pass. The baseline works end to end **with a scripted model** on both backends. **With a real local model it has been tried three times and has not reached the verifier**: at 512 output tokens the first step failed because the reasoning model spent its whole budget before answering (D-149); at 2,048 the first step succeeded and the second failed the same way (D-150, Open). See "V0.4 close-out review". |
+| **V0.4** Real Local Agents | Research, Analysis, Verification. Baseline workflow end-to-end. | **Steps 2 to 8 implemented (2026-09-20 to 21; D-131 to D-148); close-out review prepared, not accepted.** `eidos.agents` (the model seam, the artifact store, Research, Analysis and a deterministic Verification rule set), `eidos.capabilities`, `eidos.baseline` and `eidos.providers`; 2,053 tests pass. The baseline works end to end **with a scripted model** on both backends. **With a real local model it has been tried three times and has not reached the verifier**: at 512 output tokens the first step failed because the reasoning model spent its whole budget before answering (D-149); at 2,048 the first step succeeded and the second failed the same way (D-150, Open). See "V0.4 close-out review". |
 | **V0.5** MissionState + Event Reducer | `MissionEvent`, `MissionState`, `StateReducer`, checkpoints, replay. §50: state handling must be reliable **before** A2A. | Not started — blocked (D-010, D-011) |
 | **V0.6** One A2A Boundary | Move exactly one agent into an independent process. Test: normal completion, timeout, duplicate event, late event, agent restart, partial artifact, failure. | Not started — deferred (D-026) |
 | **V0.7** MCP | 2–3 real tools only (`search_documents`, `retrieve_evidence`). Test: successful call, invalid arguments, timeout, unavailable tool, unauthorized call, duplicate call. | Not started — deferred (D-027) |
@@ -915,6 +915,26 @@ state (model already loaded, a longer prompt) differs from the first's.
 **Not observed:** whether the Analysis call would finish with a larger budget and timeout; reasoning switched off; another model. Nothing was changed on the strength of this result: D-150
 stays Open, with its options, one of which (a) has now been tried once and was not sufficient on its own.
 
+### D-150 option (c): the adapter says when an empty answer stopped at the output limit (owner-directed, 2026-09-21)
+
+**Ruling: D-150 option (c), as its own step, before any further real-model run.** The smallest provider-local change, in `OllamaModel._interpret` (`src/eidos/providers/ollama.py`):
+
+| The runtime's answer | The adapter returns |
+|---|---|
+| `response` empty and `done_reason` exactly `"length"` | `EMPTY_RESPONSE`, message "the model returned no text: generation stopped at the output limit (done_reason 'length') before any answer text" |
+| `response` empty and `done_reason` `"stop"`, absent, or anything that is not exactly the string `"length"` (`null`, a number, a bool, a list, an object, `"LENGTH"`, `" length"`, `"length\n"`, `"lengthy"`, `""`) | `EMPTY_RESPONSE`, message unchanged: "the model returned no text" |
+| `response` with text, whatever `done_reason` says | a `ModelResponse`, unchanged |
+
+The failure **kind** is unchanged, so D-135's closed set of kinds, the ModelPort, the agents' mapping to `NO_RESULT`, the verifier, the runtime, the prompts and the settings are untouched; the
+message reaches the step's reason ("the model call failed (empty_response): …") with no other change. **A non-empty answer cut off at the limit is deliberately still returned as a normal
+response**: whether to flag that is the separate question recorded in D-150.
+
+**Tests:** five test functions (16 cases) in `tests/integration/providers/test_ollama_adapter.py`, against the fake runtime: an empty answer at the limit says so and stays `EMPTY_RESPONSE` (three
+empty forms); an empty answer that stopped normally, and one with no `done_reason`, keep the plain message; ten `done_reason` values that are not exactly `"length"` do not read as a cutoff; a
+non-empty answer at the limit is still a response. **12 of 12 mutations caught** (a dropped, inverted or never-firing check; case-insensitive, whitespace-tolerant and substring matching; a changed
+kind; a message that loses the limit or the plain prefix; a changed plain message; a non-empty answer turned into a failure; the wrong key). The full default suite: **2,053 passed, 2 deselected, in 74.98 s**
+(2,037 before, plus these 16 cases). **No real model was run in this step.**
+
 ### V0.4 known limitations (recorded, not redesigned)
 
 - **Fresh step IDs (D-147).** Within one execution a newly executed work step must use a step ID no earlier-executed work step used, across plan
@@ -936,8 +956,8 @@ quality is claimed beyond them. Only the owner installs the runtime and chooses 
 
 ### V0.4 close-out review
 
-**Status: prepared 2026-09-21; not accepted by the owner; nothing pushed.** Five commits sit on top of the pushed `11829a5`: the stale-cross-reference fix,
-the recorded run with D-149, this review, the D-149 diagnostic, and the D-150 option (a) run.
+**Status: prepared 2026-09-21; not accepted by the owner; nothing pushed.** The commits since the pushed `11829a5` are all local (`git log 11829a5..HEAD`): the stale-cross-reference fix, the recorded run with D-149, this review, the D-149
+diagnostic, the D-150 option (a) run and the D-150 option (c) change.
 
 **Against the handoff's V0.4 line (§50): "Add Research, Analysis, Verification. Make the baseline workflow work end-to-end."**
 
@@ -953,8 +973,9 @@ the recorded run with D-149, this review, the D-149 diagnostic, and the D-150 op
 
 - *Implementation exists:* `eidos.agents`, `eidos.capabilities`, `eidos.baseline`, `eidos.providers`, and one amended core file, `eidos/runtime/context.py` (D-139).
 - *Tests exist:* 1,605 unit (contracts 165, validation 409, compiler 276, runtime 435, backends 48, capabilities 56, agents 171, baseline 30, providers 15), 353 integration
-  (LangGraph 306, providers 47) and 79 scenarios, plus 2 real-model tests deselected by default. The V0.3 close-out was 1,683; the default run is now 2,037.
-- *Tests pass:* the full default run — `python -m pytest`, recorded for this review — **2,037 passed, 2 deselected, in 74.56 s**, and it includes the permanent test that runs the
+  (LangGraph 306, providers 63) and 79 scenarios, plus 2 real-model tests deselected by default. The V0.3 close-out was 1,683; the default run is now 2,053 (2,037 when this review
+  was first written, plus 16 cases for D-150 option (c)).
+- *Tests pass:* the full default run — `python -m pytest`, recorded for this review — **2,053 passed, 2 deselected, in 74.98 s**, and it includes the permanent test that runs the
   whole unit tree with LangGraph, LangChain and LangSmith unimportable and asserts none was loaded. The 2 deselected tests are the real-model tests, run separately by the
   owner (above). Mutation checks over Steps 2 to 8 and the D-147 guard: **97 of 98 caught**; the one that was not is an equivalent mutant (a lock-free read that CPython
   cannot make observable), documented at Step 5.
@@ -964,7 +985,7 @@ the recorded run with D-149, this review, the D-149 diagnostic, and the D-150 op
   verification, an unbound capability, an invalid plan, an unsupported step kind, an admission halt and resume, a reused step id (D-147), and — with a real model — a model
   that returned no text.
 - *Documentation matches reality:* checked by this review, which found and corrected stale statements (below).
-- *Git checkpoint:* one commit per step, and the five above.
+- *Git checkpoint:* one commit per step, and those above.
 
 **Guards, cross-checked independently of the guard tests** (an AST import audit of `src/eidos` run for this review; the script is not committed).
 
@@ -1016,9 +1037,9 @@ model outputs for replay (D-076 stays Open).
 1. **D-150 — what next?** Option (a) has been tried once (2,048 tokens): Research succeeded, Analysis failed the same way, the verifier did not run. Remaining, none adopted:
    (a′) raise the timeout together with the budget (still configuration only; it needs a budget above 2,048 tokens and a timeout above 120 s); (b) let the seam express reasoning, for
    example switch it off (a D-135 change); (c) make the adapter report a length cutoff distinctly (its smallest form is one branch in the adapter's `_interpret` that changes the failure's
-   message, not its kind; not implemented); (d) another model. Options combine.
+   message, not its kind; implemented, see "D-150 option (c)"); (d) another model. Options combine.
 2. **Does V0.4 close with the recorded failed run, or after a real run reaches the verifier?**
-3. **Push?** Five commits are local; nothing has been pushed since `11829a5`.
+3. **Push?** The commits since `11829a5` are local; nothing has been pushed.
 
 ### Carried forward, not decided
 
@@ -1100,6 +1121,7 @@ Full detail for each is in [decisions.md](decisions.md).
 
 | Date | Milestone | Outcome |
 |---|---|---|
+| 2026-09-21 | **D-150 option (c) implemented: an empty answer that stopped at the output limit says so** | Owner ruling. In `OllamaModel._interpret`, an empty `response` with `done_reason` exactly `"length"` is still an `EMPTY_RESPONSE` but its message now states that generation stopped at the output limit; every other empty answer keeps the plain message; a non-empty answer is unchanged. **No new kind, and the ModelPort, D-135, agents, verifier, runtime, prompts and settings are untouched.** Five tests (16 cases); **12 of 12 mutations caught**; full default suite **2,053 passed, 2 deselected, 74.98 s**. No real model was run in this step. D-150 stays Open (option (c) done; (a′), (b), (d) and the truncated-answer question remain). Not pushed. |
 | 2026-09-21 | **D-150 option (a) tried once: Research succeeded, Analysis failed the same way** | One real baseline attempt at `max_output_tokens` 2,048 (everything else unchanged; the two model calls the mission dispatches; no others; the temporary edit and tap reverted, tree equals `HEAD`). **Research: `response` 753 characters citing `doc:1` to `doc:3`, `done_reason` `stop`, 977 of 2,048 tokens, 52.661 s — stored as `artifact:gather`. Analysis: `response` empty, `thinking` 10,790 characters, `done_reason` `length`, 2,048 of 2,048 tokens, 111.010 s (93% of the 120 s timeout).** `check` skipped; mission `failed`, `verified` false; **the verifier did not run.** Recorded exactly; nothing changed to make the model pass. D-150 stays Open (its option (a) tried once; (a′), (b), (c), (d) remain); a related gap found by reading the code is recorded in it. Counts: 101 Accepted, 46 Open, 4 Deferred. Not pushed. |
 | 2026-09-21 | **D-149 resolved by the owner (option 1): the raw response of the baseline's call was printed once** | One real-model run of the baseline test (1 passed in 31.54 s), with a temporary test-only tap on the HTTP layer; the provider, agents, verifier and settings were not touched and the temporary code was reverted (the tree equals its committed state). **Result: `response` empty; `thinking` 2,581 characters ending mid-sentence; `done_reason` `length`; `eval_count` 512 = `num_predict`; `prompt_eval_count` 160; total 30.256 s (load 7.678 s, generation 22.249 s).** The runtime returns this model's reasoning in a separate field and counts it against the output budget; all 512 tokens went to reasoning before any answer, so EIDOS's "the model returned no text" was accurate about the field it reads. The mission outcome was the same as the recorded run (`FAILED`). D-149 moved to Accepted; **D-150 (Open)** logged for what to do about it. Counts: 101 Accepted, 46 Open, 4 Deferred. Not pushed. |
 | 2026-09-21 | **V0.4 Step 9: close-out review prepared (not accepted)** | Ran the full default suite (**2,037 passed, 2 deselected, 74.56 s**), an independent AST import audit of `src/eidos` (no core layer imports a new package; no vendor name outside `eidos.providers` and the LangGraph backend; only `pydantic` and LangGraph third-party) and a frozen-path check (handoff unchanged; one V0.1–V0.3 source file changed, `runtime/context.py`). Wrote "V0.4 close-out review": the definition of done, the guards, the invariants exercised and not, the findings and the decisions requested. **Against the handoff's "baseline workflow works end-to-end", it works with a scripted model and has not been shown with a real one (D-149).** Corrected stale documentation (README status, docs/03, the ladder and "not built yet" table, the test READMEs, and ten "Open" references to D-141 to D-143 in their own commit). No source changed. V0.4 is not closed; nothing pushed. |

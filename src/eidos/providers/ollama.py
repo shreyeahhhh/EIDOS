@@ -84,6 +84,11 @@ def _interpret(raw: bytes, elapsed_seconds: float) -> ModelResult:
         return _failure(ModelFailureKind.MALFORMED_RESPONSE, "the answer had no text field named 'response'")
     text = document["response"]
     if not text.strip():
+        if document.get("done_reason") == "length":  # D-150 (c): still an EMPTY_RESPONSE; only the message says why
+            return _failure(
+                ModelFailureKind.EMPTY_RESPONSE,
+                "the model returned no text: generation stopped at the output limit (done_reason 'length') before any answer text",
+            )
         return _failure(ModelFailureKind.EMPTY_RESPONSE, "the model returned no text")
     return ModelResponse(
         text=text,

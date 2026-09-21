@@ -161,6 +161,48 @@ def test_an_answer_with_no_text_is_empty_never_a_response(text):
     assert failure_of(answers(text)).kind is ModelFailureKind.EMPTY_RESPONSE
 
 
+# --- an empty answer that stopped at the output limit says so (decisions.md D-150, option c) ------------------------------------
+# The failure kind is unchanged, so D-135's set of kinds, the agents' mapping and the verifier are untouched: only the message differs.
+
+PLAIN = "the model returned no text"
+
+
+@pytest.mark.parametrize("text", ["", "   ", "\n\t "])
+def test_an_empty_answer_that_stopped_at_the_output_limit_says_so_and_stays_an_empty_response(text):
+    failure = failure_of(answers(text, done_reason="length"))
+
+    assert failure.kind is ModelFailureKind.EMPTY_RESPONSE
+    assert failure.message.startswith(PLAIN)
+    assert "stopped at the output limit" in failure.message and "'length'" in failure.message
+
+
+def test_an_empty_answer_that_stopped_normally_keeps_the_plain_message():
+    failure = failure_of(answers("", done_reason="stop"))
+    assert failure.kind is ModelFailureKind.EMPTY_RESPONSE and failure.message == PLAIN
+
+
+def test_an_empty_answer_with_no_done_reason_keeps_the_plain_message():
+    failure = failure_of(answers(""))
+    assert failure.kind is ModelFailureKind.EMPTY_RESPONSE and failure.message == PLAIN
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [None, 42, True, ["length"], {"reason": "length"}, "LENGTH", " length", "length\n", "lengthy", ""],
+    ids=["null", "a number", "a bool", "a list", "an object", "upper case", "leading space", "trailing newline", "a longer word", "an empty string"],
+)
+def test_a_done_reason_that_is_not_exactly_the_string_length_is_not_read_as_a_length_cutoff(reason):
+    failure = failure_of(answers("", done_reason=reason))
+    assert failure.kind is ModelFailureKind.EMPTY_RESPONSE and failure.message == PLAIN
+
+
+def test_a_non_empty_answer_is_still_a_response_when_it_stopped_at_the_output_limit():
+    # D-150: unchanged for now. Whether an answer cut off part-way should be flagged is a separate, undecided question, so this pins today's behaviour.
+    with FakeRuntime(answers("The application runs as a single", done_reason="length")) as runtime:
+        result = OllamaModel(base_url=runtime.url).complete(request())
+    assert isinstance(result, ModelResponse) and result.text == "The application runs as a single"
+
+
 def test_the_port_never_raises_whatever_the_runtime_does():
     behaviors = [closes_without_answering, sends_garbage, sends_a_truncated_body, answers(""),
                  lambda handler, body: send_bytes(handler, b"{", status=200)]

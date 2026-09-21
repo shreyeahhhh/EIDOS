@@ -3419,7 +3419,7 @@ one is not.
   (a′) **configuration only, both limits** — raise the timeout (an environment setting of the opt-in test) as well as the budget;
   (b) **let the seam express reasoning** — a request setting that tells the runtime whether to reason, sent by the adapter; a change to D-135's contract and to the adapter;
   (c) **make the adapter report a length cutoff distinctly** — read `done_reason` (and possibly `thinking`) so the failure names its cause; a change to the adapter and, if
-  it adds a failure kind, to D-135's closed set;
+  it adds a failure kind, to D-135's closed set — **implemented as a message-only change with no new kind (below)**;
   (d) **another model**, one that does not reason by default.
   These combine (for example (c) with (a)). Under every option the agents and the verifier are **not** changed to make a model pass.
 - **Owner ruling (2026-09-21): option (a) first, one run only.** For one opt-in run, `max_output_tokens` went from 512 to **2,048** — chosen so that a worst-case generation would
@@ -3437,6 +3437,12 @@ one is not.
   - Not observed: whether Analysis finishes with a larger budget and timeout; reasoning switched off; another model.
 - **Also found, by reading the code (not observed in any run):** the adapter returns a `ModelResponse` whenever `response` has text, whatever `done_reason` says, so an answer cut
   off part-way would be passed on as a normal answer and the verifier would not be told. Option (c), as worded above, does not address this; it is a separate question for the owner.
+- **Owner ruling (2026-09-21): option (c) implemented, as its own step, before any further real-model run.** The smallest provider-local change, in `OllamaModel._interpret`: an
+  empty `response` whose `done_reason` is exactly the string `"length"` is still an `EMPTY_RESPONSE`, but its message now says that generation stopped at the output limit ("the
+  model returned no text: generation stopped at the output limit (done_reason 'length') before any answer text"). An empty `response` with `"stop"`, with no `done_reason`, or
+  with a `done_reason` that is not exactly `"length"` keeps the message "the model returned no text". A non-empty `response` is unchanged whatever `done_reason` says, so the gap
+  noted above stays open. **No new failure kind:** D-135's set, the ModelPort, the agents' mapping to `NO_RESULT`, the verifier, the runtime, the prompts and the settings are
+  unchanged. Five tests (16 cases) were added to the adapter tests and 12 of 12 mutations were caught; nothing was run against a real model in that step.
 
 
 ---
