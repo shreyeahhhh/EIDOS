@@ -2808,7 +2808,8 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
      **D-038 is answered for V0.5 only**; bounding and persisting it stay Open with D-017.
   5. **Terminal states.** `completed` and `failed` reject every later event. The treatment of `paused` and the reducer's effect per event type are in D-160.
 - **Consequences:** D-039 is resolved. The determinism requirement is now observable — an outcome can be counted and asserted — which was the reason D-039 asked for an outcome.
-- **Note (2026-09-21):** the reducer cannot refuse a repeated `NODE_STARTED` or `NODE_SETTLED` for a step, because it holds no per-node state; recorded as a gap in **D-162** item 1 (Open).
+- **Note (2026-09-21):** the reducer holds no per-node state, so it cannot refuse a repeated `NODE_STARTED` or `NODE_SETTLED` for a step; the intake and a fold from scratch refuse it, and the reducer's six outcomes are
+  unchanged (**D-162** item 1).
 
 ### D-156 — Run outcome to mission status, and the counters (D-043, D-059 and D-015 stay Open)
 
@@ -2849,6 +2850,7 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
   6. **A replayable log** is contiguous from sequence 1, belongs to one mission and tenant, and begins with `MISSION_CREATED`. Anything else is a typed rejection, never a partial replay.
 - **Consequences:** D-010b is resolved for V0.5. History survives a restart only if the caller saves the serialized log; strategy memory will need a durable store before V1.0, which is D-017's decision
   and not V0.5's.
+- **Note (2026-09-21):** the intake also refuses a repeated `NODE_STARTED` or `NODE_SETTLED` for the same step of a plan, and a fold from scratch refuses a log that has one (**D-162** item 1).
 
 ### D-158 — Recording adapters and measured facts (D-151 stays Open; `MeasuredFacts` is not modified)
 
@@ -2870,6 +2872,8 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
   7. **A correction to the exploration.** The `Verifier` port returns a verdict and a reason only. Per-rule outcomes exist inside the verifying agent's report, not at the port, so the log records the
      verdict and the reason text; it does **not** claim typed per-rule outcomes (D-148 item 7 already carries `NOT_EVALUATED` as prose).
 - **Consequences:** V0.5 changes one V0.4 module, and only additively: `run_baseline` gains an optional, observational `observer` parameter (D-160, item 8). Nothing else in V0.3 or V0.4 changes.
+- **Note (2026-09-21):** as built, the recorder wraps the agents, the verifier and the model port, and does **not** wrap the admission guard: a halt is read from the run's result. That differs from item 1's wording and
+  is recorded as **D-163 (Open)**; it is not resolved here.
 
 ### D-159 — `ExecutionRecord`: a thin, read-only, derived record
 
@@ -2882,7 +2886,7 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
   2. **Excluded:** any quality, confidence, score, rate or `strategy_signature`. `min_quality` and `max_risk_level` remain `NOT_EVALUATED` (D-146). No aggregation across missions.
   3. **It is not strategy memory** (V1.0) **and not the telemetry platform** (V0.9): it describes one execution.
 - **Consequences:** D-015, D-063 and D-064 are untouched. What "evaluation" means beyond recording the verifier's verdict is a later milestone's decision.
-- **Note (2026-09-21):** as built, `ExecutionRecord` is the function `execution_record(records)` and counts repeated step events; see **D-162** items 1 and 10.
+- **Note (2026-09-21):** as built, `ExecutionRecord` is the function `execution_record(records)`; a log that repeats a step's start or settlement is a typed rejection, never a record; see **D-162** items 1 and 10.
 
 ### D-160 — V0.5 implementation details (approved with eight rulings)
 
@@ -2934,6 +2938,60 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
   7. D-151 stays Open and `MeasuredFacts` is not modified.
   8. Proceed with the implementation sequence, with no further exploration unless a genuine contradiction with an Accepted decision is found.
 - **Effect:** none on existing code until the steps that implement it.
+
+### D-162 — Repeated node events are refused at the intake; the V0.5 implementation details are confirmed
+
+- **Status:** Accepted · **Date:** 2026-09-21 · **Decided by:** human owner · **Item 1 approved (option a); items 2 to 6 and 8 to 10 kept; item 7 moved to D-163 (Open)** (originally Open)
+- **Source:** V0.5 Steps 2 to 7 (D-153 to D-160); invariants 8, 15 and 16; D-010a, D-113, D-155, D-157; CLAUDE.md §7 (a gap is recorded and raised, never resolved silently)
+- **Finding (item 1):** the reducer cannot refuse a repeated `NODE_STARTED` or `NODE_SETTLED` for the same step. **Probe (2026-09-21):** a recorded verified baseline folds to `agent_calls_used == 2`; offering
+  `gather`'s `NODE_SETTLED` a second time, with a new `event_id` and the next sequence, before the terminal event, was **applied** and `agent_calls_used` became **3** (its tokens and duration were folded
+  again). A repeated `event_id` was already refused (D-011); only a repeat under a **new** identity got through. `MissionState` keeps no per-node state (D-010a, D-113), so the reducer had nothing to see it with.
+  Nothing produced such a repeat at V0.5; it becomes reachable with a second producer, a resume or a replan loop.
+- **The owner's ruling (2026-09-21):** the event intake must reject a repeated `NODE_STARTED` or `NODE_SETTLED` for the same execution step. **No per-node state is added to `MissionState`.** Items 2 to 10 are kept as
+  built unless one contradicts an Accepted decision; each was checked against D-135, D-155, D-156, D-157, D-158, D-159 and D-160, and **item 7 does contradict the wording of D-158 item 1**, so it is not kept
+  and is recorded as **D-163 (Open)**. Keeping D-151 Open was restated.
+
+1. **The guard, as built.**
+   - **The key is (event type, plan, step).** "The same execution step" is read as the same step *of the same plan*: a step id used again in another plan version is another step, so a replanned mission can run
+     and verify again (D-147 governs how work step ids are chosen across versions). What is refused is a second event of the *same type* for a step; only the first is ever recorded. *This reading of "same
+     execution step" is an implementation choice, recorded here so the owner can correct it.*
+   - **A seventh outcome, `REPEATED_STEP_EVENT`,** is added to the outcome enum. **The reducer never returns it** and its six outcomes (D-155 item 2) are unchanged; the intake and a fold from scratch do.
+   - **Where:** the intake asks the reducer first and then checks the repeat, so the reducer's own outcomes (a duplicate `event_id`, an event after a terminal state, one that does not fit) take precedence. A
+     refused proposal is not appended, folds nothing, remembers nothing and consumes no sequence; the recorder surfaces it in `refused`.
+   - **A fold from scratch enforces the same rule:** replay, `EventLog.restore`, the JSONL replay and the projection refuse a log that repeats a step's start or settlement, as a typed `not_applicable`
+     rejection naming the sequence and the outcome. So a log the intake wrote always replays, and the live intake and a replay refuse the same record of the same log (tested).
+   - **The memory is the log's own,** a set of keys kept by the log and by the fold. It is not in `MissionState`, in a checkpoint or in the reducer.
+   - **A limit, stated:** `resume(checkpoint, tail)` sees nothing before the checkpoint, because a checkpoint is a value (D-157 item 4), so a repeat of an event from before it is not seen there. This is the
+     same limit as the applied `event_id` set (D-038). For a log that replays, which is what a checkpoint is taken from, `checkpoint + tail == full replay` holds at every sequence (tested).
+   - **`ExecutionRecord.repeated_step_events` was removed:** it counted repeats while the reducer could not refuse them, and a replayed log now has none.
+   - **Not refused, because the ruling covers repeats only:** a `NODE_STARTED` after the same step's `NODE_SETTLED` (D-164, Open). A `NODE_SETTLED` with no `NODE_STARTED` is legitimate and stays accepted: a
+     node that was skipped, not reached, or whose port raised is settled without a start.
+2. **The payload discriminator is `event_type`.** `NODE_STARTED` and `NODE_SETTLED` carry a step `kind`, so `kind` could not also name the payload; `Literal[MissionEventType.X]` discriminates in a strict JSON
+   round trip.
+3. **`NODE_SETTLED` embeds the runtime's own `NodeResult` and states `dispatched` explicitly.** `eidos.state` therefore imports `eidos.runtime`, which the core-layer rule already allows. `dispatched` is what
+   tells a skipped or not-reached node from one a port ran for; it is not inferred. (D-160 item 3 lists the same fields; they are nested, not flattened.)
+4. **Live settlement, with reconciliation.** A node is settled the moment its work returns, so the log reads started then settled, node by node. The `NodeResult` recorded live restates the three-line mapping
+   the executor applies to a port's result; after the run the recorder compares it with the run's own `NodeResult` and reports any disagreement (`RecordedRun.discrepancies`) instead of hiding it. A test
+   runs the real executor over every work status and verdict and compares the two mappings, so a change to either fails it.
+5. **A port that raises is settled after the run.** The wrapper lets the exception pass unchanged and records nothing live; the executor's own `FAILED` result is recorded after the run, together with the
+   duration and the model calls observed before the raise. A model call that itself raises is not recorded as a call: D-135 item 4 makes provider failures typed results that are never raised, so a raise is
+   a port fault, and the log holds no fact for it.
+6. **`PLAN_REJECTED` changes only `state_version` and `updated_at`.** The refused plan stays in `plans` and `active_plan_id` stays absent; the rejection's stage and reasons live in the event.
+7. *(Moved to **D-163 (Open)**: whether the admission guard is wrapped.)*
+8. **`EventProposal` reuses `UtcDateTime` from `eidos.contracts._validators`,** the same validator the envelope uses, so a naive or non-UTC time is refused the same way.
+9. **The mission's `status_reason` is written by the reducer:** `finished and verified`; `finished without a successful VERIFY (verified is false)`; `<cause>: <reason>` for a failure; the halt's reason for a
+   pause. `MISSION_FAILED` carries a cause and a reason and no `step_id` (D-160 item 3 gives it none).
+10. **`ExecutionRecord` (D-159) as built.** It is a function, `execution_record(records)`, that returns a record or the replay's typed rejection, an equivalent form of D-159's `ExecutionRecord(log)`; it
+    replays first, so a log the reducer would refuse, or one that repeats a step event, never yields a record. The plan it describes is the active plan, else the last generated. `run_outcome` is derived from the terminal
+    event and is absent when the plan or the run was refused before anything ran. `responses_missing_token_counts` counts responses that reported no prompt or no output token count, so the folded token counter's lower
+    bound is visible; a failed call carries no provider facts by design (D-150) and is not counted there. `first_occurred_at` and `last_occurred_at` are those of the first and last record by sequence, never a
+    minimum or a maximum.
+
+- **Effect:** `eidos.state.step_events` (the key and the check), the intake and the fold as described, and the tests in `test_state_step_events.py`, with the reducer, projection, recording and scenario tests adjusted.
+  D-155 item 2's six outcomes and D-157's contract are unchanged except that the intake also refuses a repeated step event. `MissionState`, `MeasuredFacts`, the V0.1 envelope and the runtime are untouched.
+- **Not touched:** D-151 stays Open; no per-node state was added anywhere.
+
+---
 
 ### D-126 — `MissionEvent` vocabulary for local node lifecycle events
 
@@ -2989,7 +3047,7 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
 These are ambiguities, contradictions and gaps found in the handoff during the bootstrap read. None
 has been resolved. Work that depends on one of them is blocked until the owner decides.
 
-Count: 44. Highest-impact first is **D-015** (how verification confidence is computed), then
+Count: 45. Highest-impact first is **D-015** (how verification confidence is computed), then
 **D-007** (now V0.4-only, not V0.2 — see D-102) and **D-046** (bound values, mechanism unaffected —
 see D-103) for later V0.2 work. **D-012** (predicate language) was corrected 2026-09-18 to no longer
 be listed as a V0.2 item — it blocks the V0.3 compiler. **D-102** and **D-103**, logged the same day,
@@ -3738,49 +3796,33 @@ one is not.
 ---
 
 
-### D-162 — V0.5 implementation gaps and details found while building (owner confirmation requested)
+### D-163 — The recorder does not wrap the admission guard, and D-158 item 1 says it does
 
-- **Status:** Open · **Date:** 2026-09-21 · **Source:** V0.5 Steps 2–6 (D-153 to D-160); invariants 8, 15 and 16; D-010a, D-113, D-155, D-157; CLAUDE.md §7 (a gap is recorded and raised, never resolved silently)
-- **Question:** item 1 is a gap that needs the owner's choice. Items 2 to 10 are details the accepted decisions left open and the implementation had to settle to be built at all; each is stated as
-  built, so the owner can confirm it or correct it.
+- **Status:** Open · **Date:** 2026-09-21 · **Source:** D-158 item 1, D-160 item 1, D-162 (its former item 7); found while checking D-162 items against the Accepted decisions
+- **Question:** D-158 item 1 lists the admission guard among the injection points the recording adapters wrap ("the agents, the verifier, the admission guard and the model port"). D-160 item 1 fixes the event
+  order, in which `MISSION_PAUSED` is **last**, after a `NODE_SETTLED` for every node that was not reached. Which governs the halt?
+- **Current behaviour (V0.5), recorded as it is:** there is **no wrapper on the guard.** A halt is read from the run's result (`RunResult.halt`) after the run and recorded as `MISSION_PAUSED`, after the
+  not-reached nodes are settled, which is D-160 item 1's order. The admission-halt case is tested on both executors, and the halt's step, level and reason are in the event.
+- **Why the two cannot both be followed to the letter:** a guard wrapper sees each admission decision as it is made, so the only event it could propose at the halt is `MISSION_PAUSED`, **before** the
+  not-reached nodes' settlements, which exist only when the run ends. The other thing a wrapper could record, each admission, has no event type in the vocabulary (D-154 added three types, none for admission).
+- **Effect while Open:** nothing is lost: the behaviour follows D-160 item 1 and the log holds the whole halt. What differs is the wording of D-158 item 1, which lists a wrapper that does not exist.
+- **Needs:** the owner's choice, none adopted: (a) amend D-158 item 1 to say the recorder wraps the agents, the verifier and the model port, and reads a halt from the run's result (recommended: no code
+  change); (b) wrap the guard so the pause is recorded when it happens, and change D-160 item 1's order (a code change and a change to the recorded order); (c) leave both as they are and note the
+  difference.
 
-1. **GAP — the reducer cannot refuse a repeated `NODE_STARTED` or `NODE_SETTLED` for the same step (invariant 8).**
-   - **Evidence (probe, 2026-09-21, not a committed test):** a recorded verified baseline folds to `agent_calls_used == 2`. Offering `gather`'s `NODE_SETTLED` a second time, with a new `event_id` and
-     the next sequence, before the terminal event, is **applied**, and `agent_calls_used` becomes **3**; its tokens and its duration are folded again. A repeated `event_id` is refused as a
-     duplicate (D-011), so only a repeat under a **new** identity gets through.
-   - **Why the reducer cannot see it:** per-node execution state never enters `MissionState` (D-010a, D-113), and the reducer's only memory besides the state is the set of applied `event_id`s
-     (D-155). Nothing it holds says a step has already settled.
-   - **Who can produce one today:** nothing in V0.5. The recorder writes exactly one `NODE_STARTED` and one `NODE_SETTLED` per step (the recording tests assert the sequence and the counters), and
-     replay and JSONL only reproduce what a log holds. It becomes reachable when a second producer, a resumed mission or a replan loop writes to the same log.
-   - **Mitigation in place, not a resolution:** `ExecutionRecord.repeated_step_events` counts such repeats and shows the first record of the step, so the disagreement between the steps and the
-     folded counters is visible. One test pins today's behaviour (`test_a_repeated_settlement_is_counted_and_the_first_is_shown_pinning_the_gap_recorded_in_d162`); it will change
-     deliberately when the owner decides.
-   - **Options (none adopted):** (a) the `EventLog` intake, which holds the records, refuses a repeated start or settlement of a step with a new outcome, and the reducer stays as it is (a
-     D-157 addition); (b) the reducer receives the settled steps as a second input beside the applied event ids (a D-155 change); (c) leave it and rely on the recorder, documenting that a second
-     producer must not repeat a node event; (d) put per-node status into `MissionState` (contradicts D-010a and D-113). Recommendation, for the owner to accept or reject: (a), because it keeps
-     the reducer a pure function of `(state, record, applied)` and puts the check where the whole log already is.
-2. **The payload discriminator is `event_type`.** `NODE_STARTED` and `NODE_SETTLED` carry a step `kind`, so `kind` could not also name the payload; `Literal[MissionEventType.X]` discriminates in a
-   strict JSON round trip.
-3. **`NODE_SETTLED` embeds the runtime's own `NodeResult` and states `dispatched` explicitly.** `eidos.state` therefore imports `eidos.runtime`, which the core-layer rule already allows. `dispatched`
-   is what tells a skipped or not-reached node from one a port ran for; it is not inferred.
-4. **Live settlement, with reconciliation.** A node is settled the moment its work returns, so the log reads started then settled, node by node. The `NodeResult` recorded live restates the three-line
-   mapping the executor applies to a port's result; after the run the recorder compares it with the run's own `NodeResult` and reports any disagreement (`RecordedRun.discrepancies`) instead of
-   hiding it. A test runs the real executor over every work status and verdict and compares the two mappings, so a change to either fails it.
-5. **A port that raises is settled after the run.** The wrapper lets the exception pass unchanged and records nothing live; the executor's own `FAILED` result is recorded after the run, together
-   with the duration and the model calls observed before the raise. A model call that itself raises is not recorded as a call: the log holds no fact for it.
-6. **`PLAN_REJECTED` changes only `state_version` and `updated_at`.** The refused plan stays in `plans` and `active_plan_id` stays absent; the rejection's stage and reasons live in the event.
-7. **There is no admission-guard wrapper.** A halt is read from `RunResult.halt` after the run and recorded as `MISSION_PAUSED`, so the guard is not wrapped or observed.
-8. **`EventProposal` reuses `UtcDateTime` from `eidos.contracts._validators`,** the same validator the envelope uses, so a naive or non-UTC time is refused the same way.
-9. **The mission's `status_reason` is written by the reducer:** `finished and verified`; `finished without a successful VERIFY (verified is false)`; `<cause>: <reason>` for a failure; the halt's
-   reason for a pause. `MISSION_FAILED` carries a cause and a reason and no `step_id`.
-10. **`ExecutionRecord` (D-159) as built.** It is a function, `execution_record(records)`, that returns a record or the replay's typed rejection, rather than a constructor taking the log; it
-    replays first, so a log the reducer would refuse never yields a record. The plan it describes is the active plan, else the last generated. `run_outcome` is derived from the terminal event
-    and is absent when the plan or the run was refused before anything ran. `responses_missing_token_counts` counts responses that reported no prompt or no output token count, so the
-    folded token counter's lower bound is visible; a failed call carries no provider facts by design (D-150) and is not counted there. `first_occurred_at` and `last_occurred_at` are those of the
-    first and last record by sequence, never a minimum or a maximum.
+---
 
-- **Effect while Open:** items 2 to 10 are in the code and tests as described; item 1 leaves the reducer able to double-fold a repeated node event from a producer that does not exist yet.
-- **Needs:** the owner's choice for item 1, and confirmation or correction of items 2 to 10.
+### D-164 — A `NODE_STARTED` recorded after the same step's `NODE_SETTLED`
+
+- **Status:** Open · **Date:** 2026-09-21 · **Source:** D-162 item 1; invariant 8 ("late or out-of-order events are accepted or rejected deterministically against the lifecycle")
+- **Question:** D-162's guard refuses a *repeat* of a step's start or settlement. It does not refuse a `NODE_STARTED` that arrives after the same step's `NODE_SETTLED`, which is not a repeat but is out of
+  lifecycle order: a node cannot start after it has settled.
+- **Current behaviour (V0.5), recorded as it is:** the intake and a replay **accept** it. It folds nothing (a start changes only `state_version` and `updated_at`), so no counter can be corrupted by it.
+  The recorder never produces it, and the recording tests assert the order started, then settled. If it were recorded, the projection would show the step as started although its settlement came first: a wrong
+  chronology, not a wrong count.
+- **Why it is not decided:** the owner's ruling covered repeats only. A `NODE_SETTLED` with no `NODE_STARTED` must stay legal (skipped, not reached, or a raised port), so the rule is one-way and needs a
+  ruling.
+- **Needs:** the owner's choice, none adopted: (a) refuse a start after the same step's settlement, with the same outcome or a new one, in the intake and the fold, as the repeat is; (b) leave it.
 
 ---
 

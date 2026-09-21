@@ -329,7 +329,7 @@ see `decisions.md` **D-017**.
   wall-clock dependence in logic. Timestamps arrive on events; the reducer does not read the clock.
 - Only the reducer writes MissionState. Nothing else, anywhere, at any layer.
 - V0.5 (built): events are produced by recording adapters outside the runtime and enter the log through an intake that assigns the sequence; the event log is authoritative and
-  `ExecutionRecord` is derived from it (D-152 to D-159). One gap is open: the reducer cannot refuse a repeated node event for a step, because `MissionState` keeps no per-node state (D-162 item 1).
+  `ExecutionRecord` is derived from it (D-152 to D-159). The reducer cannot refuse a repeated node event for a step, because `MissionState` keeps no per-node state and none is added; the intake and replay refuse it (D-162 item 1). D-164 (Open) asks whether a start after the same step's settlement is refused too.
 - V0.1 is in-memory only — no persistence (D-005).
 - §50 is explicit: **"Before adding A2A, state handling must already be reliable."** V0.5 precedes
   V0.6 for this reason, and that ordering is not to be shortcut.

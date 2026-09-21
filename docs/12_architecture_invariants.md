@@ -358,7 +358,9 @@ These come from the handoff and are enforced through `CLAUDE.md` rather than thr
 | D-015 | 12, 13 | How verification confidence is computed |
 | ~~D-126~~ | 15 | **Resolved by D-154** (V0.5, built): `NODE_STARTED`, `NODE_SETTLED` and `MISSION_PAUSED` are added to the vocabulary |
 | ~~D-039~~ | 2 | **Resolved by D-155** (V0.5): the reducer returns state and an outcome |
-| D-162 | 8 | The reducer cannot refuse a repeated `NODE_STARTED` or `NODE_SETTLED` for a step (it holds no per-node state), so a second producer could double-fold the counters; nothing produces one at V0.5 |
+| ~~repeated node events~~ | 8 | **Resolved by D-162** (V0.5): the intake and replay refuse a repeated `NODE_STARTED` or `NODE_SETTLED` for the same step of a plan; `MissionState` gains no per-node state |
+| D-164 | 8 | A `NODE_STARTED` recorded after the same step's `NODE_SETTLED` is accepted (out of lifecycle order; no counter is affected) |
+| D-163 | 15 | The recorder does not wrap the admission guard, as D-158 item 1 says it does; the halt is read from the run's result, in D-160 item 1's order |
 | D-036 | 8 | The `AgentTask` lifecycle state machine required for deterministic accept/reject |
 | D-046 | 7 | Numerical bound values (V0.2; none established in V0.1 by decision) |
 | D-043 | 7 | Declared plan limits vs actual execution counters share names but count differently |

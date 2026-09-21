@@ -7,7 +7,7 @@
 
 ## Status
 
-**V0.5 — the event log and the state reducer: implemented, awaiting the owner's acceptance. V0.4 — real local agents: complete as scoped.**
+**V0.5 — the event log and the state reducer: complete as scoped. V0.4 — real local agents: complete as scoped.**
 
 This repository contains the project rules, the architecture knowledge base, the decision record,
 the V0.1 typed contracts (`eidos.contracts`), the V0.2 plan validator (`eidos.validation`), the V0.3
@@ -20,8 +20,8 @@ deterministic rules and measures no quality, and the committed test asserts stru
 planner, no A2A, no MCP, no RAG, no persistence, no API and no frontend.
 
 V0.5 adds the typed event records, a pure state reducer, an in-memory event log with a JSONL round trip, checkpoint and replay (`eidos.state`), recording adapters around the baseline
-(`eidos.recording`) and a derived, read-only `ExecutionRecord`. A recorded baseline replays to the same `MissionState` and the same record with no agent run. One gap is open (D-162): the
-reducer cannot refuse a repeated node event for a step. A real-model recording has not been run.
+(`eidos.recording`) and a derived, read-only `ExecutionRecord`. A recorded baseline replays to the same `MissionState` and the same record with no agent run, and the intake refuses a repeated node event for a step (D-162). Two questions stay open (D-163, D-164), and a
+real-model recording has not been run.
 
 Current status and the milestone ladder: [progress.md](progress.md).
 Decisions and unresolved questions: [decisions.md](decisions.md).
