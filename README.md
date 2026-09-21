@@ -15,8 +15,9 @@ compiler and runtime (`eidos.compiler`, `eidos.runtime` and the LangGraph backen
 `eidos.backends.langgraph`), and the V0.4 capability registry, three read-only agents (Research,
 Analysis and a deterministic Verification rule set), a single-pass baseline runner and one
 local-model adapter. The baseline works end to end with a scripted model. With a real local model it
-has been run and has **not yet reached the verifier**: at the first output budget the first step failed (the reasoning model spent the whole budget before answering); at a larger
-one the first step succeeded and the second failed the same way — see [progress.md](progress.md), D-149 (why) and D-150 (what next). There is no
+has been run: at the first output budget the first step failed (the reasoning model spent the whole budget before answering); at a larger one the second step failed the same
+way; with 4,096 output tokens and a 240 s timeout one attempt finished and the verifier returned PASS (three rules, no quality measured). The opt-in test as committed still sets the smaller
+budget — see [progress.md](progress.md), D-149 and D-150. There is no
 planner, no state reducer, no A2A, no MCP, no RAG, no persistence, no API and no frontend.
 
 Current status and the milestone ladder: [progress.md](progress.md).

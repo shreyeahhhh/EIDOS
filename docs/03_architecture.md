@@ -235,7 +235,7 @@ the architectural map; `progress.md` tracks which of these exist.
 | `eidos.runtime` | Backend-neutral execution: level-synchronous semantics, node and run results, synchronous execution ports, frozen `ExecutionContext` including the frozen `ReliabilityContract` (D-113, D-115, D-117, D-118, D-122, D-139); imports no LangGraph | V0.3 | **yes** — ports, results, `ExecutionContext` and the sequential reference executor (Step 3) |
 | `eidos.backends.langgraph` | The LangGraph adapter — the **only** package that may import LangGraph (D-115); an optional dependency extra, also in `dev` (D-116) | V0.3 | **yes** — `LangGraphExecutor`, held to the reference executor (Step 4) |
 | `eidos.agents` | Research, Analysis and Verification — exactly three logical agents (D-131); owns the synchronous `ModelPort` (D-135) and the in-memory artifact store (D-137); read-only, no tools (D-140); vendor-free | V0.4 | **yes** — the model seam (Step 3), the artifact model and store (Step 5), and the Research, Analysis and deterministic Verification agents (Step 6) |
-| `eidos.providers` | Model-provider adapters — the **only** place a vendor, model or SDK name may appear (D-135); standard-library HTTP, no new dependency (D-136) | V0.4 | **yes** — `OllamaModel`, tested against a local fake runtime and run once against a real local model (Step 8): the baseline mission failed at its first step because the reasoning model spent its whole output budget before answering (D-149 diagnosis); with a larger budget the first step succeeded and the second failed the same way, so the verifier has not run (D-150, Open) |
+| `eidos.providers` | Model-provider adapters — the **only** place a vendor, model or SDK name may appear (D-135); standard-library HTTP, no new dependency (D-136) | V0.4 | **yes** — `OllamaModel`, tested against a local fake runtime and run against a real local model (Step 8): at the first output budget the baseline failed at its first step because the reasoning model spent its whole budget before answering (D-149); at 2,048 tokens the second step failed the same way; at 4,096 tokens with a 240 s timeout one attempt finished and the verifier returned PASS (D-150, Open) |
 | `eidos.baseline` (one module) | The single-pass baseline runner and the work dispatcher: validate, compile, bind, execute on a backend handed to it, report; stops at the first gate that refuses; backend-neutral, no CLI, no API (D-131) | V0.4 | **yes** — `run_baseline`, `WorkDispatcher`, `BaselineReport` (Step 7) |
 | `eidos.state` | Reducer, checkpoints, replay | V0.5 | no |
 | `eidos.policy` | Governance, autonomy levels, budgets | V1.2 (V0.2 has only a `NOT_APPLICABLE` stage in `eidos.validation` — D-110) | no |
@@ -371,7 +371,7 @@ every semantic.
 LangGraph is an optional extra (D-116), heavy for what it does — a closure of 38 distributions, including an HTTP client,
 `websockets` and LangSmith — and the core and its tests run without it.
 
-### The V0.4 boundary — model, agent and capability seams (built; real-model runs have not yet reached the verifier — D-149, D-150)
+### The V0.4 boundary — model, agent and capability seams (built; one real-model attempt at a larger output budget finished with a verifier PASS — D-149, D-150)
 
 Recorded in D-131 to D-148 and implemented in V0.4 Steps 2 to 8; `progress.md` tracks the steps and the close-out review.
 

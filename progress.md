@@ -34,16 +34,18 @@ executors — and closed the milestone. There was **no real agent** at that poin
 
 **V0.4 (Real Local Agents): implemented; the first real-model run is recorded.** The owner ruled on the V0.4 exploration (Q1–Q15) and then on the questions the
 rulings raised; the rulings are **D-131 to D-140 and D-144 to D-148 (Accepted)**, which also resolve **D-006, D-018, D-141, D-142 and D-143**. Steps 2 to 8 are
-implemented. **The owner has run the real-model tests once (`qwen3:4b`): the provider test returned a typed response, but the baseline mission `FAILED` at its
-first step because the model returned no text, so the verifier has not yet seen a real model's output.** The diagnostic the owner directed (D-149) established the cause — the model spent its whole 512-token budget on reasoning, so the answer field was empty — and what to
-do about it is **D-150 (Open)**. Its option (a), a larger output budget, was then tried once: **the Research step succeeded for the first time and the Analysis step failed
-the same way, so the verifier still has not run.** See "The first real baseline run", "The D-149 diagnostic" and "The D-150 option (a) run" below. **The Step 9 close-out review is prepared and awaits the owner's acceptance** ("V0.4 close-out review").
+implemented. **The first real-model run (`qwen3:4b`, owner-run) passed its provider test, but the baseline mission `FAILED` at its first step because the model returned no text.** The
+diagnostic the owner directed (D-149) established the cause — the model spent its whole 512-token budget on reasoning, so the answer field was empty. **D-150 (Open)** followed: option (a)
+(2,048 tokens) got Research through and failed Analysis the same way; after option (c) (the adapter's message names an output-limit cutoff), **option (a′) — 4,096 tokens and a 240 s timeout,
+one attempt — finished: Research and Analysis succeeded, `VERIFY` was dispatched and the verifier returned PASS (outcome `finished`, `verified` true).** That PASS covers the three V0.4 rules
+only and measures no quality, and the committed opt-in test still sets 512 tokens. See "The first real baseline run", "The D-149 diagnostic" and "The D-150 option (a), (c) and (a′)"
+sections below. **The Step 9 close-out review is prepared and awaits the owner's acceptance** ("V0.4 close-out review").
 
 There is still no planner, no state reducer, no A2A, no MCP, no RAG, no persistence,
 no telemetry, no API and no frontend.
 
-One real-model run has been recorded (V0.4; see "The first real baseline run"). It records what happened in that run and is not a benchmark: no quality
-metric exists anywhere in this repository, and the only latencies recorded are that run's one trivial completion and the runtime-reported durations of the one D-149 diagnostic call.
+Real-model runs have been recorded (V0.4; see "The first real baseline run" and the sections after it). They record what happened in those runs and are not a benchmark: no quality
+metric exists anywhere in this repository, and the only latencies recorded are the first run's one trivial completion and the runtime-reported durations of the later runs' calls.
 
 ### Bootstrap deliverables
 
@@ -69,7 +71,7 @@ hold, failure cases are covered, documentation matches reality, a git checkpoint
 | **V0.1** Core Contracts | `TaskGenome`, `ReliabilityContract`, `MissionState`, `MissionEvent`, `Plan`, `PlanStep`, `AgentTask`. No real agents, no A2A, no MCP, no frontend. In-memory only (D-005). | **Implemented — 165 unit tests passing** (155 at implementation, +10 for D-107/D-108) |
 | **V0.2** Plan DSL | Schema validation, cycle detection, dependency validation, depth limits, node limits, parallel-branch limits, capability validation, policy validation. | **Implemented — 409 unit tests passing** (2026-09-19). Every stage is implemented **except policy validation, which reports `NOT_APPLICABLE`** (D-110): no policy rule exists to check, and none was invented. D-046 (the actual limit values) stays Open — no limits object ships (D-103). D-111 (eight implementation details, Open) awaits the owner. |
 | **V0.3** LangGraph Runtime | Map `SEQUENTIAL`, `PARALLEL`, `ROUTE`, `VERIFY`, `RETRY`, `REPLAN` into runtime nodes. Mock agents. | **Complete as scoped — 2026-09-20 (D-112 to D-130). Step 2 (compiled form and `compile_plan`, 276 tests), Step 3 (runtime types, ports, admission, prior outcomes and the sequential reference executor, 431 tests), Step 4 (the LangGraph extra, the S1–S10 spike, the adapter and conformance with the reference executor, 353 tests) and Step 5 (scenario tests, 49 tests) are done.** Narrowed from §50's list: only `agent` and `VERIFY` compile; `ROUTE`, `RETRY`, `REPLAN`, `TERMINATE`, `HUMAN_APPROVAL` are rejected at compile time and D-012 stays Open. **Not delivered, by scope:** mapping `ROUTE`, `RETRY` and `REPLAN` (D-012 and D-125 stay Open), and any importable mock agent — work is exercised by scripted test doubles only, and no product mock agents exist (see "V0.3 close-out" below). |
-| **V0.4** Real Local Agents | Research, Analysis, Verification. Baseline workflow end-to-end. | **Steps 2 to 8 implemented (2026-09-20 to 21; D-131 to D-148); close-out review prepared, not accepted.** `eidos.agents` (the model seam, the artifact store, Research, Analysis and a deterministic Verification rule set), `eidos.capabilities`, `eidos.baseline` and `eidos.providers`; 2,053 tests pass. The baseline works end to end **with a scripted model** on both backends. **With a real local model it has been tried three times and has not reached the verifier**: at 512 output tokens the first step failed because the reasoning model spent its whole budget before answering (D-149); at 2,048 the first step succeeded and the second failed the same way (D-150, Open). See "V0.4 close-out review". |
+| **V0.4** Real Local Agents | Research, Analysis, Verification. Baseline workflow end-to-end. | **Steps 2 to 8 implemented (2026-09-20 to 21; D-131 to D-148); close-out review prepared, not accepted.** `eidos.agents` (the model seam, the artifact store, Research, Analysis and a deterministic Verification rule set), `eidos.capabilities`, `eidos.baseline` and `eidos.providers`; 2,053 tests pass. The baseline works end to end **with a scripted model** on both backends. **With a real local model the baseline has been tried four times**: at 512 output tokens the first step failed because the reasoning model spent its whole budget before answering (D-149); at 2,048 the first step succeeded and the second failed the same way; at 4,096 tokens with a 240 s timeout (D-150 option a′, one attempt) it **finished and the verifier returned PASS** (three V0.4 rules; no quality measured). The committed opt-in test still sets 512 (D-150, Open). See "V0.4 close-out review". |
 | **V0.5** MissionState + Event Reducer | `MissionEvent`, `MissionState`, `StateReducer`, checkpoints, replay. §50: state handling must be reliable **before** A2A. | Not started — blocked (D-010, D-011) |
 | **V0.6** One A2A Boundary | Move exactly one agent into an independent process. Test: normal completion, timeout, duplicate event, late event, agent restart, partial artifact, failure. | Not started — deferred (D-026) |
 | **V0.7** MCP | 2–3 real tools only (`search_documents`, `retrieve_evidence`). Test: successful call, invalid arguments, timeout, unavailable tool, unauthorized call, duplicate call. | Not started — deferred (D-027) |
@@ -772,7 +774,7 @@ Only Step 2 touches V0.1–V0.3 code; every other step is additive.
 | **5** | The in-memory artifact store and the artifact content types | D-137, D-145 | none (D-142 resolved) | Thread-safe under concurrent writers; one artifact per key; a missing predecessor artifact and a cross-execution read are refused **Done** — `Artifact` (ref, content_type, content, source_refs) and the thread-safe in-memory store; 9 of 10 mutations caught, the tenth (a lock-free read) is an equivalent mutant under CPython that no test can observe |
 | **6** | The three agents, against the fake model: Research and Analysis (read supplied or predecessor artifacts, call the model, produce a typed artifact) and the deterministic Verification rule set implementing `Verifier` | D-135, D-137, D-138, D-140, D-145, D-146 | none (D-142, D-143 resolved) | Malformed model output; a model outage; missing input; `PASS`, `FAIL` and `INCONCLUSIVE` each reachable; well-formed output that fails verification (docs/12, invariant 12); a static guard that agents do no I/O beyond their ports **Done** — `ResearchAgent`, `AnalysisAgent` and the deterministic `VerificationAgent` (rules: schema_validity, citation_coverage, minimum_distinct_sources; `min_quality` and `max_risk_level` NOT_EVALUATED); 77 tests (61 behaviour, 16 guard checks; 1,905 in all); 23 of 23 mutations caught |
 | **7** | The dispatcher (a `WorkExecutor` over the registry), `VERIFY` bound by kind, and the single-pass runner (one module, name recorded in docs/03); scenarios on both backends with the fake model | D-131, D-133, D-134, D-140 | none new | Baseline finishes verified; verification fails; a model outage fails one node and the rest is contained; an unbound capability stops the run before dispatch; an admission halt; a second, different-domain mission (invariant 10); one implementation substituted for another (invariant 9); byte-identical results on both backends **Done** — `eidos.baseline`: `run_baseline`, `WorkDispatcher`, `BaselineReport`; 30 unit tests, 24 scenario tests on both backends and 2 determinism tests (1,961 in all); 11 of 11 mutations caught |
-| **8** | `eidos.providers`: one adapter for the local model runtime over standard-library HTTP with explicit configuration, tested against a local fake HTTP server; an opt-in real-model marker; then **one real baseline run** | D-135, D-136 | **owner installs the runtime and chooses a model** | Success, timeout, refused connection, non-success status, malformed body; the real run's model, latency and verdict recorded **only from that run** **Run and recorded (2026-09-21).** The adapter `eidos.providers.OllamaModel`, the fake-runtime tests (47 integration tests, 15 guard checks; 18 of 18 mutations caught), the `real_model` marker and the opt-in tests were written first. The owner then ran the two opt-in tests once against `qwen3:4b`: the provider test passed with a typed response, and **the baseline mission `FAILED` (`verified` false) because the Research step's one model call returned no text (`empty_response`); the verifier was never reached.** Recorded exactly in "The first real baseline run"; the cause was then established by one owner-directed raw-response diagnostic (D-149: the reasoning model spent its whole output budget before answering) and what to do about it is D-150 (Open). Whether this satisfies the step's "verdict recorded" condition is the owner's to say. |
+| **8** | `eidos.providers`: one adapter for the local model runtime over standard-library HTTP with explicit configuration, tested against a local fake HTTP server; an opt-in real-model marker; then **one real baseline run** | D-135, D-136 | **owner installs the runtime and chooses a model** | Success, timeout, refused connection, non-success status, malformed body; the real run's model, latency and verdict recorded **only from that run** **Run and recorded (2026-09-21).** The adapter `eidos.providers.OllamaModel`, the fake-runtime tests (47 integration tests, 15 guard checks; 18 of 18 mutations caught), the `real_model` marker and the opt-in tests were written first. The owner then ran the two opt-in tests once against `qwen3:4b`: the provider test passed with a typed response, and **the baseline mission `FAILED` (`verified` false) because the Research step's one model call returned no text (`empty_response`); the verifier was never reached.** Recorded exactly in "The first real baseline run"; the cause was then established by one owner-directed raw-response diagnostic (D-149: the reasoning model spent its whole output budget before answering) and what to do about it is D-150 (Open). Later, under D-150, one attempt at 4,096 tokens and a 240 s timeout finished and the verifier returned PASS (see "The D-150 option (a′) run"). Whether this satisfies the step's "verdict recorded" condition is the owner's to say. |
 | **9** | Close-out: final guards (a vendor name only in `eidos.providers`; agents read-only; core layers import none of the new packages), docs, this file, the definition of done, and which invariants are and are not exercised | — | — | Full suite; unit suite with LangGraph blocked; import audit; frozen paths untouched **Review prepared (2026-09-21), not accepted** — see "V0.4 close-out review". |
 
 ### The first real baseline run (owner-run, 2026-09-21)
@@ -810,7 +812,7 @@ Both tests together: **2 passed in 38.55 s** (pytest wall-clock, including whate
 - The baseline test passed because it asserts **structure only** (a `RunResult` came back). **It did not show the baseline succeeding and must not be read that way.**
   The mission failed, and correctly: the Research step got no text from the model, so it produced nothing (`NO_RESULT`); EIDOS did not fabricate an answer or count
   "an agent returned something" as success; nothing downstream ran on nothing; `verified` is false. That is invariants 12 and 13 holding against a real model.
-- **The deterministic verifier was never reached.** No real model output has been checked by it: there is no real `PASS`, `FAIL` or `INCONCLUSIVE`, no citation
+- **The deterministic verifier was never reached in this run.** No real model output had been checked by it as of this run (a later run, D-150 option (a′), changed that): there is no real `PASS`, `FAIL` or `INCONCLUSIVE`, no citation
   coverage and no distinct-source count. Nothing about the quality of any model's output exists, and no quality metric was invented.
 - Only the last step's reason was printed, so the Research step's own reason text is not in this record.
 
@@ -902,7 +904,7 @@ then Analysis, so the one attempt made two model calls, and no others were made.
 `check` `skipped` ("not dispatched: predecessor(s) did not succeed: 'analyse' (no_result)"). Outcome `failed`, `verified` false. pytest: 1 passed in 165.25 s (the test asserts structure
 only).
 
-**Was `VERIFY` reached? No.** `check` was never dispatched, so **the verifier did not run and there is no PASS, FAIL or INCONCLUSIVE.** No real model output has yet been judged by it.
+**Was `VERIFY` reached? No.** `check` was never dispatched, so **the verifier did not run and there is no PASS, FAIL or INCONCLUSIVE.** As of this run no real model output had been judged by it (the option (a′) run below changed that).
 
 **What the second call shows.** The Analysis agent's fixed instruction asks the model to cite every claim and to say plainly when the material is not enough. The recorded reasoning drafted
 the same analysis four times (with "Wait" three times), deliberated whether the material supports an "uncertain" section, and was cut off part-way through the fourth draft. That describes the
@@ -935,6 +937,51 @@ non-empty answer at the limit is still a response. **12 of 12 mutations caught**
 kind; a message that loses the limit or the plain prefix; a changed plain message; a non-empty answer turned into a failure; the wrong key). The full default suite: **2,053 passed, 2 deselected, in 74.98 s**
 (2,037 before, plus these 16 cases). **No real model was run in this step.**
 
+### The D-150 option (a′) run (owner-directed, 2026-09-21)
+
+**Ruling: D-150, option (a′), one baseline attempt, after option (c).** For this one opt-in run only: `max_output_tokens` **4,096** and a **240 s** timeout; `qwen3:4b`, temperature 0.0,
+seed 7, the same endpoint (`http://127.0.0.1:11434`) and the same baseline mission; no retry, no re-run, no side or diagnostic model calls; the adapter as changed by option (c). The
+baseline made its two normal model calls. The same temporary test-only tap printed the raw bodies; it and the raised limit were reverted afterwards, the working tree equals its committed
+state, and **the committed opt-in test still sets `max_output_tokens` 512**. The patches and the raw responses are kept outside the repository.
+
+**Result: the baseline finished, and the verifier returned PASS.**
+
+| | Research (`gather`) | Analysis (`analyse`) |
+|---|---|---|
+| `response` | **753 characters** of Markdown: three sections, each citing one supplied document | **842 characters** of Markdown: "What It Takes", "What Drives the Cost", "What Is Uncertain", nine bullets, each citing `doc:1`, `doc:2` or `doc:3` |
+| `thinking` | 4,226 characters (673 words) | 12,588 characters (1,992 words) |
+| `done_reason` | `stop` | `stop` |
+| `eval_count` / limit | 977 / 4,096 | 2,582 / 4,096 |
+| `prompt_eval_count` | 160 | 322 |
+| Elapsed, as the adapter measured it | 53.078 s | 154.234 s |
+| Runtime-reported `total_duration` | 53.049 s (load 5.792 s) | 154.208 s (load 0.006 s): 64% of the 240 s timeout, 85.8 s to spare |
+| Runtime-reported generation rate | 20.8 tokens/s | 16.8 tokens/s |
+| Step status / reason | `succeeded` / none | `succeeded` / none |
+| Artifact | `artifact:gather`, `text/markdown`, 753 characters, `source_refs` `doc:1`, `doc:2`, `doc:3` | `artifact:analyse`, `text/markdown`, 842 characters, `source_refs` `doc:1`, `doc:2`, `doc:3` |
+
+**Was `VERIFY` dispatched? Yes.** `check` `succeeded`, which is the verifier's **PASS**. Its reason, exactly: "schema_validity satisfied (1 artifact(s) well-formed); citation_coverage satisfied
+(every artifact cites sources that exist); minimum_distinct_sources satisfied (3 distinct supplied source(s) reached, 3 required). NOT_EVALUATED: min_quality, max_risk_level (no defined
+deterministic measurement). This verdict covers the V0.4 verification rules only; it is not a claim that the reliability contract is satisfied."
+
+**Final `RunResult`:** outcome **`finished`**, `verified` **true**. pytest: 1 passed in 208.50 s (the test asserts structure only; the outcome above is what the run produced).
+
+**Compared with the earlier runs (from the saved raw responses).** The Research call is **identical, byte for byte in `response` and `thinking`,** to the same call in the 2,048-token run
+(temperature 0.0, seed 7). The Analysis call's cut-off reasoning from that run is an **exact prefix** of this run's reasoning: the model followed the same path and needed **534 more tokens**
+than the 2,048 it had been given. So the output budget was the only thing that separated the failed run from this one.
+
+**What the PASS is, and is not.** The verifier checked three things: the artifacts are well-formed, every cited reference exists, and three distinct supplied documents are reached by
+following citations. It did not check that a cited document supports what it is cited for, and no quality is measured (D-146). For example the Analysis answer's last line,
+"Probability of disk failure [[doc:3]]", cites a document that says only that nightly backups are written to the same disk as the database; the citation passes because `doc:3` exists.
+That illustrates what the rules do not test; it is not a finding about the model.
+
+**Derived, and labelled as derived.** The runtime's counters give 16.8 tokens/s for the 2,582-token Analysis generation (20.8 for Research). At 16.8 tokens/s a generation that ran to the
+full 4,096 tokens would take about 244 s, longer than the 240 s timeout, so a call that ran to the limit could have timed out before finishing. One run, two calls: not a benchmark.
+
+**Not observed:** repeatability beyond the Research comparison above (this is one attempt); other models; reasoning switched off; a budget between 2,048 and 4,096; and the opt-in test as
+committed (512 tokens), which would fail as it did.
+
+**Nothing else was changed on the strength of this result:** D-150 stays Open and V0.4 is not closed; whether either should be is the owner's call.
+
 ### V0.4 known limitations (recorded, not redesigned)
 
 - **Fresh step IDs (D-147).** Within one execution a newly executed work step must use a step ID no earlier-executed work step used, across plan
@@ -957,17 +1004,20 @@ quality is claimed beyond them. Only the owner installs the runtime and chooses 
 ### V0.4 close-out review
 
 **Status: prepared 2026-09-21; not accepted by the owner; nothing pushed.** The commits since the pushed `11829a5` are all local (`git log 11829a5..HEAD`): the stale-cross-reference fix, the recorded run with D-149, this review, the D-149
-diagnostic, the D-150 option (a) run and the D-150 option (c) change.
+diagnostic, the D-150 option (a) run, the D-150 option (c) change and the D-150 option (a′) run.
 
 **Against the handoff's V0.4 line (§50): "Add Research, Analysis, Verification. Make the baseline workflow work end-to-end."**
 
 - **Delivered:** the three agents (`ResearchAgent`, `AnalysisAgent`, the deterministic `VerificationAgent`), a capability registry with typed pre-run binding, a
   single-pass runner and one local-runtime adapter. The baseline runs end to end **with a scripted model** on both backends, and a real `PASS`, `FAIL` and
   `INCONCLUSIVE` verdict is reachable from the verifier.
-- **Not shown: the baseline working end to end with a real model.** Real runs have not reached the verifier: the first two failed at the first step (D-149 diagnosed why: the reasoning model spent its whole 512-token budget), and with 2,048
-  tokens (D-150 option a) the first step succeeded and the second failed the same way. Passing tests do not change that: the baseline test asserts structure only.
-- **A proposal, not a decision:** hold V0.4 open until a real run reaches the verifier. The D-149 diagnostic (option 1, done) found why the first run failed; D-150 option (a), tried once, was not enough on its own, and the next step is the owner's choice among D-150's other options. The
-  alternative — close V0.4 on the strength of the recorded failed run and carry D-150 forward — is the owner's to choose.
+- **Shown once with a real model, under a configuration the committed test does not have.** Real-model attempts: the first two failed at the first step (D-149: the reasoning model spent its
+  whole 512-token budget); at 2,048 tokens the first step succeeded and the second failed the same way (D-150 option a); **at 4,096 tokens with a 240 s timeout (option a′) the baseline
+  finished — Research and Analysis succeeded, `VERIFY` was dispatched and the verifier returned PASS (outcome `finished`, `verified` true).** That is one attempt, and the committed opt-in test
+  still sets 512 tokens, so as committed it would fail again. The PASS covers three V0.4 rules (schema validity, that every cited reference exists, three distinct supplied sources) and
+  measures no quality; it does not check that a cited document supports its claim.
+- **A proposal, not a decision:** make the configuration that worked the committed opt-in test's configuration, run that test as committed once, and close V0.4 on that. The alternative —
+  close V0.4 on the strength of the one successful attempt — is the owner's to choose.
 
 **Definition of done (CLAUDE.md §5), checked.**
 
@@ -1004,7 +1054,7 @@ diagnostic, the D-150 option (a) run and the D-150 option (c) change.
 **Invariants, honestly.** Exercised by V0.4 code and tests: 1 and 2 (MissionState is only read; agents are read-only, D-140), 4 (the compiled DAG, unchanged), 5 (the runner
 stops at the first gate that refuses; nothing executes unvalidated), 9 (the model sits behind a port; another implementation substitutes without a core change; a vendor
 name appears only in `eidos.providers`), 10 (an unrelated-domain scenario needs no core change), 11 (plans request capabilities; the registry binds them), 12 (verification is
-separate from completion: scripted well-formed output that fails verification, and a real model that returned nothing, were not counted as success), 14 (the admission guard
+separate from completion: scripted well-formed output that fails verification, and a real model that returned nothing, were not counted as success; a real run's PASS names what was NOT_EVALUATED and does not claim contract satisfaction), 14 (the admission guard
 is code and fails closed) and 18 (identifiers). **Exercised in part:** 3 (model output is text that is stored and read back, never executed and never run as a plan; the
 model does not emit plans at V0.4, D-131, so the Plan-DSL half is not exercised), 6 (a replan is a new plan version in the same execution, with fresh step ids, D-147;
 lineage across a mission's plans is the V0.5 reducer's concern), 7 (only an admission halt exists at run time; the other budgets stay deferred, D-127), 13 (a real run reported
@@ -1015,9 +1065,9 @@ is no retrieval query, tool or evidence chain). **Not exercised, by ruling:** 8 
 **Findings for the owner.**
 
 1. **D-149 (resolved by the owner's option 1):** the diagnostic established why the first real run failed — the reasoning model spent its whole 512-token budget before
-   answering. **D-150 (new, Open)** asks what to do about it; its option (a) was tried once at 2,048 tokens — Research succeeded, Analysis failed the same way, and the verifier still did not run.
+   answering. **D-150 (new, Open)** asks what to do about it; option (a) at 2,048 tokens got Research through and failed Analysis the same way; after option (c), option (a′) — 4,096 tokens and a 240 s timeout — finished with a verifier PASS.
 2. **The committed opt-in real test is still thin.** It prints each step's status and the last step's reason, not every step's reason and not the raw model response. The D-149
-   diagnostic printed both with a temporary tap (reverted; the patch is kept outside the repository). Whether to keep a permanent version is the owner's call.
+   diagnostic printed both with a temporary tap (reverted; the patch is kept outside the repository). Whether to keep a permanent version — and whether to make 4,096 tokens and a 240 s timeout the committed configuration, since the test as committed still sets 512 and would fail as it did — is the owner's call.
 3. **A failed model call carries no measured facts**, so its latency and token counts are not recorded (part of D-150). Related, by reading the code and not observed in a run: the adapter returns a normal response whenever `response` has text,
    whatever `done_reason` says, so an answer cut off part-way would reach the verifier unmarked (also recorded in D-150).
 4. **Stale documentation found and corrected by this review:** the README status line (it still said V0.2 and "no compiler, no runtime, no agents"); `docs/03`'s "approved, not
@@ -1027,18 +1077,21 @@ is no retrieval query, tool or evidence chain). **Not exercised, by ruling:** 8 
    verification reason, not as a typed field; the provider's timeout bounds each socket operation, not total elapsed time; an analysis step cannot follow a `VERIFY` step; a newly
    executed step needs a fresh id across plan versions.
 6. **Still Open and untouched:** D-007, D-012, D-015 (a scalar), D-017, D-020, D-041, D-043, D-046, D-055, D-059, D-063, D-064, D-125, D-126 and D-129, and now D-150.
+7. **What the first real PASS does and does not show.** It shows the chain working with a real model's output: two artifacts stored with their cited sources, a `VERIFY` step dispatched, a
+   verdict returned, `finished` and `verified`. It does not show that the answers are good or that a cited document supports its claim: for example the Analysis answer's last line,
+   "Probability of disk failure [[doc:3]]", cites a document that says only that nightly backups are written to the same disk as the database, and the citation passes because `doc:3` exists.
+   Claim support is not one of the three rules and no quality is measured (D-146).
 
-**Not measured, not claimed:** throughput or latency beyond the one trivial completion and the runtime-reported durations of the diagnostic calls recorded above (three); any quality of any
-model's output; repeatability beyond two identical mission outcomes; whether the GPU was used in the first recorded run (a later `ollama ps` showed 33% CPU / 67% GPU); recorded
-model outputs for replay (D-076 stays Open).
+**Not measured, not claimed:** throughput or latency beyond the one trivial completion and the runtime-reported durations of the diagnostic and option runs recorded above (four baseline
+attempts); any quality of any model's output; repeatability beyond what the saved responses show (the Research call identical across two runs; the Analysis call's earlier reasoning an exact
+prefix of the later); whether the GPU was used in the first recorded run (a later `ollama ps` showed 33% CPU / 67% GPU); recorded model outputs for replay (D-076 stays Open).
 
 **Decisions requested of the owner:**
 
-1. **D-150 — what next?** Option (a) has been tried once (2,048 tokens): Research succeeded, Analysis failed the same way, the verifier did not run. Remaining, none adopted:
-   (a′) raise the timeout together with the budget (still configuration only; it needs a budget above 2,048 tokens and a timeout above 120 s); (b) let the seam express reasoning, for
-   example switch it off (a D-135 change); (c) make the adapter report a length cutoff distinctly (its smallest form is one branch in the adapter's `_interpret` that changes the failure's
-   message, not its kind; implemented, see "D-150 option (c)"); (d) another model. Options combine.
-2. **Does V0.4 close with the recorded failed run, or after a real run reaches the verifier?**
+1. **D-150 — resolve it?** Option (a′) finished once (4,096 tokens, 240 s): Research and Analysis succeeded and the verifier returned PASS. Option (c) is implemented. Still none adopted: (b) let
+   the seam express reasoning (a D-135 change); (d) another model; and the truncated-answer question (a non-empty answer cut off at the limit is passed on unmarked). Should 4,096 tokens and a
+   240 s timeout become the committed opt-in test's configuration, and should D-150 be resolved on that basis?
+2. **Does V0.4 close on the one successful real attempt, or after the opt-in test as committed has been made to pass?**
 3. **Push?** The commits since `11829a5` are local; nothing has been pushed.
 
 ### Carried forward, not decided
@@ -1080,7 +1133,7 @@ Highest-impact first.
 
 | Item | Blocks | Why it matters |
 |---|---|---|
-| **D-150** what to do when a reasoning model spends its whole output budget | **V0.4's "baseline works end-to-end" with a real model** | D-149 found that `qwen3:4b` spent its whole 512-token budget on reasoning. Option (a), tried once at 2,048 tokens, got the Research step through and failed the Analysis step the same way (`done_reason` `length`), so the verifier still has not run. The 120 s timeout now also bounds the budget. The owner chooses among raising the timeout with the budget, letting the seam express reasoning (a D-135 change), a more informative failure for a length cutoff, or another model. |
+| **D-150** what to do when a reasoning model spends its whole output budget | **making a real-model baseline reproducible from the committed test** | Option (a′), tried once at 4,096 tokens and a 240 s timeout, finished: Research and Analysis succeeded and the verifier returned PASS (three V0.4 rules, no quality measured). The committed opt-in test still sets 512 tokens and would fail as it did. Option (c) is implemented. The owner decides whether the working configuration becomes the committed one, whether D-150 is resolved, and about (b), (d) and the truncated-answer question. |
 | **D-015** verification confidence computation | V0.4 verification, V1.2 | §31 compares a scalar confidence against a threshold while §18 forbids trusting a model-asserted score. Implementing §31 naively builds the exact anti-pattern the handoff warns against. **V0.4 (D-138):** the verifier is a deterministic rule set, no model verdict, no scalar; stays Open for a scalar (V1.2). |
 | **D-039** reducer signature | V0.5 | A determinism requirement that produces no observable output cannot be tested. |
 | **D-010b** checkpoint semantics | V0.5 | Contents, granularity and trigger unspecified. Entangled with D-017. |
@@ -1121,6 +1174,7 @@ Full detail for each is in [decisions.md](decisions.md).
 
 | Date | Milestone | Outcome |
 |---|---|---|
+| 2026-09-21 | **D-150 option (a′) tried once: the baseline finished and the verifier returned PASS** | One real baseline attempt at `max_output_tokens` 4,096 and a 240 s timeout (model, temperature, seed, endpoint and mission unchanged; no retry, re-run or side calls; the adapter as changed by option (c); the temporary edit and tap reverted, tree equals `HEAD`, and the committed test still sets 512). **Research: `response` 753 characters, `thinking` 4,226, `done_reason` `stop`, 977 of 4,096 tokens, 53.049 s — identical to the 2,048-run's Research call. Analysis: `response` 842 characters, `thinking` 12,588, `done_reason` `stop`, 2,582 of 4,096 tokens, 154.208 s (64% of the timeout) — the 2,048-run's cut-off reasoning is an exact prefix of it. `VERIFY` dispatched: PASS (schema validity, citation coverage, 3 distinct sources; `min_quality` and `max_risk_level` NOT_EVALUATED). Outcome `finished`, `verified` true.** The PASS measures no quality and does not check that a citation supports its claim. Recorded exactly; nothing changed on the strength of it. D-150 stays Open; V0.4 is not closed. Not pushed. |
 | 2026-09-21 | **D-150 option (c) implemented: an empty answer that stopped at the output limit says so** | Owner ruling. In `OllamaModel._interpret`, an empty `response` with `done_reason` exactly `"length"` is still an `EMPTY_RESPONSE` but its message now states that generation stopped at the output limit; every other empty answer keeps the plain message; a non-empty answer is unchanged. **No new kind, and the ModelPort, D-135, agents, verifier, runtime, prompts and settings are untouched.** Five tests (16 cases); **12 of 12 mutations caught**; full default suite **2,053 passed, 2 deselected, 74.98 s**. No real model was run in this step. D-150 stays Open (option (c) done; (a′), (b), (d) and the truncated-answer question remain). Not pushed. |
 | 2026-09-21 | **D-150 option (a) tried once: Research succeeded, Analysis failed the same way** | One real baseline attempt at `max_output_tokens` 2,048 (everything else unchanged; the two model calls the mission dispatches; no others; the temporary edit and tap reverted, tree equals `HEAD`). **Research: `response` 753 characters citing `doc:1` to `doc:3`, `done_reason` `stop`, 977 of 2,048 tokens, 52.661 s — stored as `artifact:gather`. Analysis: `response` empty, `thinking` 10,790 characters, `done_reason` `length`, 2,048 of 2,048 tokens, 111.010 s (93% of the 120 s timeout).** `check` skipped; mission `failed`, `verified` false; **the verifier did not run.** Recorded exactly; nothing changed to make the model pass. D-150 stays Open (its option (a) tried once; (a′), (b), (c), (d) remain); a related gap found by reading the code is recorded in it. Counts: 101 Accepted, 46 Open, 4 Deferred. Not pushed. |
 | 2026-09-21 | **D-149 resolved by the owner (option 1): the raw response of the baseline's call was printed once** | One real-model run of the baseline test (1 passed in 31.54 s), with a temporary test-only tap on the HTTP layer; the provider, agents, verifier and settings were not touched and the temporary code was reverted (the tree equals its committed state). **Result: `response` empty; `thinking` 2,581 characters ending mid-sentence; `done_reason` `length`; `eval_count` 512 = `num_predict`; `prompt_eval_count` 160; total 30.256 s (load 7.678 s, generation 22.249 s).** The runtime returns this model's reasoning in a separate field and counts it against the output budget; all 512 tokens went to reasoning before any answer, so EIDOS's "the model returned no text" was accurate about the field it reads. The mission outcome was the same as the recorded run (`FAILED`). D-149 moved to Accepted; **D-150 (Open)** logged for what to do about it. Counts: 101 Accepted, 46 Open, 4 Deferred. Not pushed. |
