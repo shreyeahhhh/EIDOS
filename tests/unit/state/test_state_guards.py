@@ -108,3 +108,39 @@ def test_importing_the_state_package_loads_no_agent_provider_backend_capability_
     result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, cwd=SRC.parents[1])
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "[]"
+
+
+# --- only the reducer writes MissionState (invariants 1 and 2; D-155 item 1) -----------------------------------------------------------
+
+REDUCER = STATE / "reducer.py"
+
+
+def calls_in(path: Path):
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Call):
+            yield node
+
+
+def test_no_module_but_the_reducer_constructs_a_mission_state():
+    for path in sorted(SRC.rglob("*.py")):
+        if path == REDUCER:
+            continue
+        for call in calls_in(path):
+            func = call.func
+            constructs = isinstance(func, ast.Name) and func.id == "MissionState"
+            derives = isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name) and func.value.id == "MissionState"
+            assert not (constructs or derives), f"{path.relative_to(SRC)} builds a MissionState outside the reducer"
+
+
+def test_the_reducer_does_construct_one_so_this_guard_is_looking_at_something():
+    names = [c.func.id for c in calls_in(REDUCER) if isinstance(c.func, ast.Name)]
+    assert names.count("MissionState") == 2  # the creation and the evolved state; nothing else
+
+
+def test_no_module_derives_a_model_without_validation():
+    # model_copy(update=...) and model_construct skip the contract's own validators, so a state could be altered around the reducer.
+    for path in sorted(SRC.rglob("*.py")):
+        for call in calls_in(path):
+            if isinstance(call.func, ast.Attribute):
+                assert call.func.attr not in {"model_copy", "model_construct"}, f"{path.relative_to(SRC)} calls {call.func.attr}"
+
