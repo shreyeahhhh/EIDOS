@@ -7,7 +7,7 @@
 
 ## Status
 
-**V0.4 — real local agents: complete as scoped.**
+**V0.5 — the event log and the state reducer: implemented, awaiting the owner's acceptance. V0.4 — real local agents: complete as scoped.**
 
 This repository contains the project rules, the architecture knowledge base, the decision record,
 the V0.1 typed contracts (`eidos.contracts`), the V0.2 plan validator (`eidos.validation`), the V0.3
@@ -17,7 +17,11 @@ Analysis and a deterministic Verification rule set), a single-pass baseline runn
 local-model adapter. The baseline works end to end with a scripted model. With a real local model (`qwen3:4b`) the committed opt-in test, run once, finished — Research, Analysis and
 verification — with a verifier PASS at 4,096 output tokens and a 240 s timeout; smaller budgets had failed, as recorded in [progress.md](progress.md) (D-149, D-150). The PASS covers three
 deterministic rules and measures no quality, and the committed test asserts structure only. One question is deliberately left open (D-151). There is no
-planner, no state reducer, no A2A, no MCP, no RAG, no persistence, no API and no frontend.
+planner, no A2A, no MCP, no RAG, no persistence, no API and no frontend.
+
+V0.5 adds the typed event records, a pure state reducer, an in-memory event log with a JSONL round trip, checkpoint and replay (`eidos.state`), recording adapters around the baseline
+(`eidos.recording`) and a derived, read-only `ExecutionRecord`. A recorded baseline replays to the same `MissionState` and the same record with no agent run. One gap is open (D-162): the
+reducer cannot refuse a repeated node event for a step. A real-model recording has not been run.
 
 Current status and the milestone ladder: [progress.md](progress.md).
 Decisions and unresolved questions: [decisions.md](decisions.md).

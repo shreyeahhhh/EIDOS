@@ -41,7 +41,7 @@ mcp_calls         replans           human_interventions
 V0.9 adds structured event logging and measures latency, tokens, agent calls, tool calls, A2A
 interactions, RAG rounds, retries and quality (§50).
 
-**V0.5 (D-152, D-158, D-159, approved, not built)** records only the minimum the MissionState counters and a derived `ExecutionRecord` need — dispatches, model calls, provider-reported tokens
+**V0.5 (D-152, D-158, D-159, built)** records only the minimum the MissionState counters and a derived `ExecutionRecord` need — dispatches, model calls, provider-reported tokens
 and recorded durations — as events. It is not the telemetry platform, and no quality or rate is computed.
 
 Intended observability stack: OpenTelemetry plus local structured logs (§51, §76). Not installed.

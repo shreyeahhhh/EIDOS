@@ -237,8 +237,8 @@ the architectural map; `progress.md` tracks which of these exist.
 | `eidos.agents` | Research, Analysis and Verification — exactly three logical agents (D-131); owns the synchronous `ModelPort` (D-135) and the in-memory artifact store (D-137); read-only, no tools (D-140); vendor-free | V0.4 | **yes** — the model seam (Step 3), the artifact model and store (Step 5), and the Research, Analysis and deterministic Verification agents (Step 6) |
 | `eidos.providers` | Model-provider adapters — the **only** place a vendor, model or SDK name may appear (D-135); standard-library HTTP, no new dependency (D-136) | V0.4 | **yes** — `OllamaModel`, tested against a local fake runtime and run against a real local model (Step 8): at the first output budget the baseline failed at its first step because the reasoning model spent its whole budget before answering (D-149); at 2,048 tokens the second step failed the same way; the committed opt-in test (4,096 tokens, 240 s), run once, finished with a verifier PASS (D-150, resolved; the truncated-answer question is D-151, Open) |
 | `eidos.baseline` (one module) | The single-pass baseline runner and the work dispatcher: validate, compile, bind, execute on a backend handed to it, report; stops at the first gate that refuses; backend-neutral, no CLI, no API (D-131) | V0.4 | **yes** — `run_baseline`, `WorkDispatcher`, `BaselineReport` (Step 7) |
-| `eidos.state` | The typed `EventRecord` payloads, the pure reducer, the append-only event log with a JSONL round trip, checkpoint, replay and the derived read-only `ExecutionRecord` (D-152 to D-159); imports the core layers only — never agents, providers, capabilities or baseline; no clock, no I/O | V0.5 | **no** — scope approved, not built |
-| `eidos.recording` | Recording adapters: an injected clock and id source, and wrappers over the existing injection points (agents, verifier, admission guard, model port) that propose events to the log; holds no `MissionState`; the runtime emits nothing (D-158) | V0.5 | **no** — scope approved, not built |
+| `eidos.state` | The typed `EventRecord` payloads, the pure reducer, the append-only event log with a JSONL round trip, checkpoint, replay and the derived read-only `ExecutionRecord` (D-152 to D-159); imports the core layers only — never agents, providers, capabilities or baseline; no clock, no I/O | V0.5 | **yes** — the payloads and `EventRecord` (Steps 2a and 2b), the pure reducer (Step 3), the event log with its intake, checkpoint, replay and strict JSONL form (Step 4) and `ExecutionRecord` (Step 6); one gap is open, D-162 item 1 |
+| `eidos.recording` | Recording adapters: an injected clock and id source, and wrappers over the existing injection points (agents, verifier, model port) that propose events to the log; holds no `MissionState`; the runtime emits nothing (D-158); there is no admission-guard wrapper, a halt is read from the run's result (D-162 item 7) | V0.5 | **yes** — the clock and id ports, the recorder, the wrappers and `record_baseline` (Step 5b), with the observer hook on `run_baseline` (Step 5a) |
 | `eidos.policy` | Governance, autonomy levels, budgets | V1.2 (V0.2 has only a `NOT_APPLICABLE` stage in `eidos.validation` — D-110) | no |
 | `eidos.telemetry` | Structured events, metrics | V0.9 | no |
 | `eidos.memory` | Strategy and execution memory | V1.0 | no |
@@ -404,9 +404,9 @@ No planner, no candidate strategies, no system-driven replan, no events or histo
 tools (D-140). Verification is a deterministic rule set with no model verdict (D-138); the frozen `ReliabilityContract` is in
 `ExecutionContext` (D-139). The `AdmissionGuard` is caller-supplied, with no default.
 
-### The V0.5 boundary — events, state and history (approved, not built)
+### The V0.5 boundary — events, state and history (built)
 
-Recorded in D-152 to D-161. Nothing here exists yet; `progress.md` tracks the steps.
+Recorded in D-152 to D-162 and built in V0.5 (Steps 2 to 7); `progress.md` tracks the steps and the close-out review.
 
 ```text
 V0.4 baseline (unchanged) --existing injection points--> eidos.recording   (injected clock and id source)
@@ -424,10 +424,12 @@ V0.4 baseline (unchanged) --existing injection points--> eidos.recording   (inje
 - **Authority (invariants 1 and 2).** Producers propose, the intake orders, the reducer alone writes state, and every projection is read-only. Recording adapters hold no `MissionState`.
 - **The V0.1 contracts change in one place:** `MissionEventType` gains `NODE_STARTED`, `NODE_SETTLED` and `MISSION_PAUSED` (sixteen types, D-154). `MissionEvent` stays an envelope; a typed payload travels
   beside it in an `EventRecord` (D-153).
-- **Layering.** `eidos.state` imports the core layers and never agents, providers, capabilities or baseline; `eidos.recording` imports `eidos.state` and the ports it wraps. The runtime, executors,
-  compiler, agents and verifier are unchanged, and the runtime emits no event (D-123, D-158).
+- **Layering.** `eidos.state` imports the core layers and never agents, providers, capabilities or baseline; `eidos.recording` imports `eidos.state` and what it wraps (the agents' and the runtime's ports, the
+  baseline runner and the capability registry) and never a provider or a backend. The runtime, executors, compiler, agents and verifier are unchanged, and the runtime emits no event (D-123, D-158). The one
+  change to V0.4 code is the optional, observational `observer` on `run_baseline`, which records the plan and each gate with real times and can neither change the pass nor stop it (D-160 item 8).
 - **Facts only.** Counters are folded from recorded facts and never enforced; a value is provider-reported or recorder-observed, or absent. `MeasuredFacts` is not modified, so no stop reason is recorded
   (D-151, Open).
+- **A gap, open:** the reducer holds no per-node state (D-113), so it cannot refuse a repeated `NODE_STARTED` or `NODE_SETTLED` for a step; nothing produces one today, and `ExecutionRecord` counts them (D-162 item 1).
 - **Not in V0.5:** a durable store (D-017), A2A, MCP, RAG, the telemetry platform, strategy memory, a selector, a planner, adaptive learning and cross-mission aggregation (D-161).
 
 ---

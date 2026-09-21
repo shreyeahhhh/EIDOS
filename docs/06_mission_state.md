@@ -1,6 +1,6 @@
 # 06 — Mission State
 
-**Status:** DERIVED — current · target milestones **V0.1** (contracts) and **V0.5** (reducer, checkpoints, replay)
+**Status:** DERIVED — current · target milestones **V0.1** (contracts) and **V0.5** (reducer, checkpoints, replay — built; see `progress.md`)
 **Derived from:** handoff §8, §9, §10, §11, §15, §32, §33, §73
 **Authority:** This document is derived from `EIDOS_CLAUDE_CODE_HANDOFF.md` and subordinate to it.
 If this document and the handoff conflict, stop and report the conflict to the human owner.
@@ -148,8 +148,8 @@ thirteen inventions no test could exercise. This follows the same reasoning that
 quality-estimate type (**D-016**), `evidence_requirements` (**D-031**), evidence and result fields
 (**D-041**) and the `PLANNING`/`EXECUTING` statuses (**D-052**).
 
-**Intended future direction, recorded but not built:** a **typed, discriminated payload
-representation keyed by event type** — never an untyped mapping.
+**Built at V0.5 (D-153):** a **typed, discriminated payload representation keyed by event type** — never an untyped mapping — as `EventRecord` in `eidos.state`, beside the unchanged
+`MissionEvent` envelope. It covers the types V0.5 emits; the A2A, MCP and RAG payloads stay undefined (D-075, Open).
 
 > **Still open:** **D-037** (one shared event shape vs separate internal/external shapes),
 > **D-075** (per-type payload definitions, resolving incrementally as milestones land),
@@ -206,9 +206,9 @@ to `recorded_at` for EIDOS-internal events, set at acceptance. The reducer never
 - **Timestamps** are timezone-aware **UTC**; naive values are **rejected** (**D-083**).
 - **`MissionEventType`** is **exactly the thirteen types in §33** (**D-090**) — including A2A, MCP and
   RAG types that cannot occur in V0.1. This differs from D-052's exclusion of unreachable *states*;
-  recorded so the difference is visible. **V0.5 (D-154, approved, not built):** three local-execution types are added — `NODE_STARTED`, `NODE_SETTLED` and `MISSION_PAUSED` — so there are sixteen.
+  recorded so the difference is visible. **V0.5 (D-154, built):** three local-execution types are added — `NODE_STARTED`, `NODE_SETTLED` and `MISSION_PAUSED` — so there are sixteen.
 - **`sequence` starts at 1**; **`state_version`** is a non-negative integer equal to the latest applied
-  mission sequence (**D-097**). Reducer and checkpoint semantics are decided for V0.5 by D-155 and D-157 (approved, not built).
+  mission sequence (**D-097**). Reducer and checkpoint semantics are decided for V0.5 by D-155 and D-157 (built).
 
 **The contract lives here — `decisions.md` D-100.** MissionState holds the authoritative
 **`reliability_contract: ReliabilityContract`**; the genome holds only `reliability_contract_id`. This
@@ -241,7 +241,7 @@ It also substantially pre-answers **D-017**: if MissionState is a materialized v
 is the durable artifact and a snapshot is an optimisation. D-017 is *not* resolved — the consequence
 is recorded so it is visible rather than arriving later as a fait accompli.
 
-> **V0.5 (2026-09-21):** **D-039** (the reducer returns state and an outcome) is decided by D-155 and **D-010b** (a checkpoint is a value) by D-157, both approved and not built.
+> **V0.5 (2026-09-21):** **D-039** (the reducer returns state and an outcome) is decided by D-155 and **D-010b** (a checkpoint is a value) by D-157, both built in V0.5.
 >
 > **Still open:** **D-041** (evidence and final mission-result fields — V0.4 and V0.8). None blocks V0.1.
 > **D-040** (the exact MissionState/LangGraph split) is **resolved by D-113**: MissionState never
@@ -278,8 +278,7 @@ any case, since there is no planner, validator or runtime.
 
 The runtime's real need — distinguishing "can still accept events" from "terminal" from "suspended"
 — is met by four: *created and not yet completed, failed or paused* is the active condition. At V0.5
-the reducer will need "terminal" defined for rejecting late events, the same shape of problem
-**D-036** poses for `AgentTask`.
+the reducer defines "terminal" as completed, failed or paused (D-155, D-160) and rejects every later event; **D-036** poses the same problem for `AgentTask`.
 
 **Accepted cost:** `created` names the state a mission occupies for most of its life, which reads
 oddly. Accepted knowingly as a naming consequence, not a correctness one.
@@ -329,8 +328,8 @@ see `decisions.md` **D-017**.
 - The reducer is **deterministic**: no I/O, no network, no LLM calls, no hidden global state, no
   wall-clock dependence in logic. Timestamps arrive on events; the reducer does not read the clock.
 - Only the reducer writes MissionState. Nothing else, anywhere, at any layer.
-- V0.5 (approved, not built): events are produced by recording adapters outside the runtime and enter the log through an intake that assigns the sequence; the event log is authoritative and
-  `ExecutionRecord` is derived from it (D-152 to D-159).
+- V0.5 (built): events are produced by recording adapters outside the runtime and enter the log through an intake that assigns the sequence; the event log is authoritative and
+  `ExecutionRecord` is derived from it (D-152 to D-159). One gap is open: the reducer cannot refuse a repeated node event for a step, because `MissionState` keeps no per-node state (D-162 item 1).
 - V0.1 is in-memory only — no persistence (D-005).
 - §50 is explicit: **"Before adding A2A, state handling must already be reliable."** V0.5 precedes
   V0.6 for this reason, and that ordering is not to be shortcut.
