@@ -12,6 +12,11 @@ unbound capability is refused **before** any agent is called (D-134).
 The runner is backend-neutral: it is handed an executor *factory* (the reference ``SequentialExecutor``, or an execution-backend
 class) and never imports a backend or a provider. It needs no model of its own: the agents it is handed hold the model seam.
 
+An optional **observer** may watch the pass (D-160 item 8): it is told when a plan arrives and when each gate settles, and it is handed only
+frozen values — the plan and the gate's own report — and never the ``MissionState``. It is **observational only**: whatever it does, including
+raising, never changes the pass or its report, so a run with an observer, with a faulting one and with none returns an identical
+``BaselineReport``. The recorder (V0.5) is the observer that turns the stages into events with real times.
+
 It reads ``MissionState`` once, through ``context_from_state`` (D-113), and writes nothing to it (D-123). The **artifact store belongs
 to the caller**: supply documents to it, under the mission's ``execution_id``, before calling (D-145). The ``AdmissionGuard`` is required
 and has no default (D-140). Two things it deliberately does not do: it does not report a "final answer" (D-041 stays Open), and it does
@@ -53,6 +58,31 @@ class Executor(Protocol):
 ExecutorFactory = Callable[..., Executor]  # called with work_executor=, verifier= and admission_guard=
 
 
+class BaselineStage(StrEnum):
+    VALIDATION = "validation"
+    COMPILATION = "compilation"
+    BINDING = "binding"
+    EXECUTION = "execution"
+
+
+class BaselineObserver(Protocol):
+    """Watches one pass. Observational only (D-160 item 8): it receives frozen values and cannot change the pass, and a fault in it is contained."""
+
+    def plan_received(self, plan: Plan) -> None: ...
+
+    def gate_settled(self, stage: BaselineStage, report: PlanValidationReport | CompileReport | BindReport) -> None: ...
+
+
+def _notify(observer: BaselineObserver | None, name: str, *arguments: object) -> None:
+    """Tell the observer, if there is one. Nothing it does can reach the pass: an ordinary exception is contained and ignored."""
+    if observer is None:
+        return
+    try:
+        getattr(observer, name)(*arguments)
+    except Exception:  # noqa: BLE001 — an observer can never change what the pass does (D-160 item 8)
+        pass
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class WorkDispatcher:
     """A ``WorkExecutor`` over the binding: it hands each work node to the agent the binding chose for it."""
@@ -68,13 +98,6 @@ class WorkDispatcher:
         if agent is None:
             return WorkResult.failed(f"agent {str(agent_id)!r}, bound to step {str(node.step_id)!r}, was not supplied")
         return agent.run(context, node)
-
-
-class BaselineStage(StrEnum):
-    VALIDATION = "validation"
-    COMPILATION = "compilation"
-    BINDING = "binding"
-    EXECUTION = "execution"
 
 
 class BaselineReport(EidosModel):
@@ -131,18 +154,23 @@ def run_baseline(
     admission_guard: AdmissionGuard,
     executor_factory: ExecutorFactory,
     prior: PriorOutcomes | None = None,
+    observer: BaselineObserver | None = None,
 ) -> BaselineReport:
     """Drive ``plan`` through validate, compile, bind and execute; stop at the first gate that refuses. Never raises for a bad plan."""
+    _notify(observer, "plan_received", plan)
     validation = validate_plan(plan, state, limits)
+    _notify(observer, "gate_settled", BaselineStage.VALIDATION, validation)
     if not validation.accepted:
         return BaselineReport(plan_id=plan.plan_id, validation=validation)
 
     compilation = compile_plan(plan, validation)
+    _notify(observer, "gate_settled", BaselineStage.COMPILATION, compilation)
     if not compilation.succeeded:
         return BaselineReport(plan_id=plan.plan_id, validation=validation, compilation=compilation)
     compiled = compilation.compiled
 
     binding = bind_plan(compiled, registry)
+    _notify(observer, "gate_settled", BaselineStage.BINDING, binding)
     if not binding.succeeded:
         return BaselineReport(plan_id=plan.plan_id, validation=validation, compilation=compilation, binding=binding)
 
