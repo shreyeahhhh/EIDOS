@@ -2237,7 +2237,7 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
 - **Consequences:**
   - D-127's "a planner and the mission driver loop" row is **split**: the single-pass runner is in V0.4; the planner and
     a replanning loop stay unassigned. **D-020 stays Open.**
-  - The baseline plan's per-step capabilities depend on **D-141 (Open)**.
+  - The baseline plan's per-step capabilities depend on **D-141** (since resolved by D-144).
   - The runner requires an explicit `AdmissionGuard` (D-140).
 
 ### D-132 — V0.4 capability vocabulary: the five capabilities of handoff §43 (V0.4 only)
@@ -2257,9 +2257,9 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
     `required_capabilities` (D-102).
   - §43 lists these five under "Required capabilities", while its strategy diagram uses Research, Security,
     Architecture, Analysis and Verification — Analysis in place of Cost. The ruling follows the "Required
-    capabilities" list. How the diagram's Analysis step is expressed is **D-141 (Open)**.
+    capabilities" list. How the diagram's Analysis step is expressed is **D-141** (since resolved by D-144).
   - Which agent serves which capability, the spelling of the names beyond "as printed", and what `Verification`
-    binds to are **D-141 (Open)**.
+    binds to are **D-141** (since resolved by D-144).
 - **Spelling settled (2026-09-20):** **D-144** fixes the V0.4 spellings as lowercase — `architecture`, `security`, `cost`, `research`,
   `verification` — superseding the capitalised forms above **for spelling only**. The set is unchanged and D-007 stays Open.
 
@@ -2277,7 +2277,7 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
   - The Verification Agent implements the `Verifier` port (D-138). Invariant 11 holds for work steps (capabilities)
     and, for `VERIFY`, binding happens by kind when the run is constructed.
   - If D-055 is later resolved differently, this binding is revisited, at the cost D-124 already accepted.
-  - What the `Verification` capability ID (D-132) binds to, if an `agent` step requested it, is **D-141 (Open)**.
+  - What the `Verification` capability ID (D-132) binds to, if an `agent` step requested it, is **D-141** (since resolved by D-144).
 
 ### D-134 — Capability registry, binding and unbound capabilities (V0.4)
 
@@ -2356,7 +2356,7 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
      tools and no retrieval: MCP is V0.7 and RAG is V0.8.
   5. **Storage is in memory only** (D-005). Nothing is persisted; persistence stays with D-017.
 - **Not decided here:** what an artifact contains, how a supplied document is keyed, and how a step learns what it is for.
-  Those are **D-142 (Open)**. No full artifact model exists (D-098 stands).
+  Those are **D-142** (since resolved by D-145). No full artifact model exists (D-098 stands).
 - **Consequences:**
   - **D-129 is answered for V0.4 and stays Open:** "what an artifact is" and the general data-flow question (for example
     for remote agents at V0.6) remain.
@@ -2386,7 +2386,7 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
   - **D-015 stays Open.** This answers it for V0.4 only. A scalar confidence and §31's threshold-driven replan are V1.2.
     **D-063 and D-064 stay Open and dormant:** no scalar exists to type or compare.
   - The `min_independent_evidence` clause of the reliability contract is a count and can be evaluated (D-139 supplies the
-    contract). `min_quality` has no measure at V0.4: **D-143 (Open).**
+    contract). `min_quality` has no measure at V0.4: **D-143** (since resolved by D-146).
 - **Settled (2026-09-20):** which clauses the rule set evaluates, and that `min_quality` is `NOT_EVALUATED`, are **D-146**.
 
 
@@ -2436,7 +2436,7 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
 - **Original need:** Which capability set exists at V0.4? If three, the §43 demo cannot be run as written.
 - **Resolution:** **D-132.** Five capabilities exist at V0.4 — the five listed under "Required capabilities" in §43 — while the agent set stays three logical agents (D-131). This is a V0.4-only answer.
 - **Not resolved by this:** **D-007** (the cross-mission vocabulary) stays Open. Which agent serves which capability, and
-  the spelling of the five names, are **D-141 (Open)**.
+  the spelling of the five names, are **D-141** (since resolved by D-144).
 
 ### D-018 — Where the model-provider abstraction boundary lives
 
@@ -2701,7 +2701,7 @@ one is not.
   owns it? This blocks capability validation (§14) and capability discovery.
 - **V0.4 (2026-09-20):** **D-132** fixes a V0.4-only, exact-string set of five capabilities (the §43 "Required capabilities").
   **D-007 stays Open:** nothing global, hierarchical, similarity-based or cross-mission is decided. Spelling and the
-  agents behind each capability are **D-141 (Open)**.
+  agents behind each capability are **D-141** (since resolved by D-144).
 
 
 ### D-008 — Lint and type-checking tooling not adopted
@@ -2839,7 +2839,7 @@ one is not.
   is a pass/fail rule set rather than a scalar comparison.
 - **V0.4 (2026-09-20):** **D-138** decides that V0.4 verification is a **deterministic rule set with no model verdict** and no
   scalar. That answers this entry for V0.4 only. **D-015 stays Open** for a scalar confidence and §31's threshold-driven
-  replan (V1.2). **D-063 and D-064 stay Open and dormant.** Clauses of the contract the verifier cannot evaluate: **D-143 (Open).**
+  replan (V1.2). **D-063 and D-064 stay Open and dormant.** Clauses of the contract the verifier cannot evaluate: **D-143** (since resolved by D-146).
 
 
 ### D-063 — The concrete type or structure of a quality estimate
@@ -3371,7 +3371,7 @@ one is not.
   signature is a change to D-122, so it needs the owner.
 - **V0.4 (2026-09-20):** **D-137** answers this for V0.4: predecessors' outputs are fetched from an in-memory artifact store
   under `(execution_id, step_id)`, one primary artifact per work step, and **the `WorkExecutor` signature is unchanged.** **D-129
-  stays Open:** what an artifact contains (**D-142, Open**) and the general data-flow question remain.
+  stays Open:** what an artifact contains (**D-142**, since resolved by D-145) and the general data-flow question remain.
 
 
 ---
