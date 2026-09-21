@@ -1,0 +1,155 @@
+"""Wrappers over the existing injection points: the model port, the work agents and the verifier (decisions.md D-158 item 1).
+
+Each wrapper does what it wraps and returns exactly what it returned. It **observes**: it changes no argument, no result and no exception, so a
+recorded run's ``BaselineReport`` is the report an unrecorded run gives. Nothing here holds or writes a ``MissionState``.
+
+A node's model calls are attributed to it without touching an agent: the agent wrapper opens a per-thread collector while the agent runs, and the
+model wrapper, called synchronously on that same thread, adds to it. A call made outside any node is not attributed to anything.
+
+A node is settled **live**, the moment its work returns, so the log's chronology is the run's — started, then settled, node by node. The
+``NodeResult`` recorded live is built by the same three-line mapping the runtime's executor applies to a port's result; the recorder later
+checks it against the run's own result and reports any disagreement (``discrepancies``) instead of hiding it. If a port *raises*, the wrapper lets
+the exception pass unchanged and records nothing live: the executor's own ``FAILED`` result is recorded after the run, together with what was
+observed.
+"""
+
+import threading
+from types import MappingProxyType
+
+from eidos.agents import ModelFailure, ModelPort, ModelRequest, ModelResponse, ModelResult, WorkAgent
+from eidos.compiler import VerifyNode, WorkNode
+from eidos.contracts import AgentId, PlanStepKind
+from eidos.runtime import (
+    ExecutionContext,
+    NodeResult,
+    NodeStatus,
+    VerificationResult,
+    VerificationVerdict,
+    Verifier,
+    WorkResult,
+    WorkStatus,
+)
+from eidos.state import ModelCallFacts, ModelCallOutcome, NodeStartedPayload, VerificationFacts
+
+from .recorder import Recorder
+
+
+class ModelCallTracker:
+    """Collects, per thread, the model calls made while one node runs."""
+
+    def __init__(self) -> None:
+        self._local = threading.local()
+
+    def begin(self) -> None:
+        self._local.calls = []
+
+    def current(self) -> list[ModelCallFacts] | None:
+        return getattr(self._local, "calls", None)
+
+    def end(self) -> tuple[ModelCallFacts, ...]:
+        calls = getattr(self._local, "calls", None) or []
+        self._local.calls = None
+        return tuple(calls)
+
+
+def facts_of(result: ModelResult) -> ModelCallFacts | None:
+    """What one model call came to, in the recorded vocabulary. ``None`` for anything that is neither a response nor a typed failure."""
+    if isinstance(result, ModelResponse):
+        measured = result.measured
+        return ModelCallFacts(
+            outcome=ModelCallOutcome.RESPONSE,
+            prompt_tokens=measured.prompt_tokens,
+            output_tokens=measured.output_tokens,
+            elapsed_seconds=measured.elapsed_seconds,
+        )
+    if isinstance(result, ModelFailure):
+        return ModelCallFacts(outcome=ModelCallOutcome(result.kind.value))  # a failed call has no provider facts (D-150)
+    return None
+
+
+class RecordingModel:
+    """A ``ModelPort`` that passes every call through and notes what it came to, for the node being run on this thread."""
+
+    def __init__(self, inner: ModelPort, tracker: ModelCallTracker):
+        self.inner, self.tracker = inner, tracker
+
+    def complete(self, request: ModelRequest) -> ModelResult:
+        result = self.inner.complete(request)  # an exception from the port passes through untouched, and records nothing
+        collector = self.tracker.current()
+        if collector is not None:
+            facts = facts_of(result)
+            if facts is not None:
+                collector.append(facts)
+        return result
+
+
+def node_result_of_work(node: WorkNode, result: WorkResult) -> NodeResult:
+    """The runtime's mapping of a work port's result to a node's, restated. The recorder checks it against the run's own result."""
+    if result.status is WorkStatus.PRODUCED:
+        return NodeResult(step_id=node.step_id, kind=node.kind, status=NodeStatus.SUCCEEDED, artifact=result.artifact)
+    status = NodeStatus.FAILED if result.status is WorkStatus.FAILED else NodeStatus.NO_RESULT
+    return NodeResult(step_id=node.step_id, kind=node.kind, status=status, reason=result.reason)
+
+
+_VERDICT_STATUS = MappingProxyType({
+    VerificationVerdict.PASS: NodeStatus.SUCCEEDED,
+    VerificationVerdict.FAIL: NodeStatus.VERIFICATION_FAILED,
+    VerificationVerdict.INCONCLUSIVE: NodeStatus.VERIFICATION_INCONCLUSIVE,
+})
+
+
+def node_result_of_verification(node: VerifyNode, result: VerificationResult) -> NodeResult:
+    return NodeResult(step_id=node.step_id, kind=node.kind, status=_VERDICT_STATUS[result.verdict], reason=result.reason)
+
+
+class RecordingAgent:
+    """A ``WorkAgent`` that records the node starting, runs the agent it wraps, and records the node settling."""
+
+    def __init__(self, agent_id: AgentId, agent: WorkAgent, recorder: Recorder, tracker: ModelCallTracker):
+        self.agent_id, self.agent, self.recorder, self.tracker = agent_id, agent, recorder, tracker
+
+    def run(self, context: ExecutionContext, node: WorkNode) -> WorkResult:
+        self.recorder.record(
+            NodeStartedPayload(
+                plan_id=context.plan_id, step_id=node.step_id, kind=PlanStepKind.AGENT, capability=node.capability, agent_id=self.agent_id
+            )
+        )
+        self.tracker.begin()
+        started = self.recorder.monotonic_ns()
+        try:
+            result = self.agent.run(context, node)
+        except BaseException:
+            self.recorder.note_observation(node.step_id, self.recorder.duration_ms(started), self.tracker.end())
+            raise
+        duration_ms, calls = self.recorder.duration_ms(started), self.tracker.end()
+        self.recorder.note_observation(node.step_id, duration_ms, calls)
+        if isinstance(result, WorkResult):
+            self.recorder.settle_live(context.plan_id, node_result_of_work(node, result), duration_ms, calls, None)
+        return result
+
+
+class RecordingVerifier:
+    """A ``Verifier`` that records the ``VERIFY`` node starting and settling, with the verdict and its reason as the verifier returned them."""
+
+    def __init__(self, verifier: Verifier, recorder: Recorder):
+        self.verifier, self.recorder = verifier, recorder
+
+    def verify(self, context: ExecutionContext, node: VerifyNode, predecessors: tuple[NodeResult, ...]) -> VerificationResult:
+        self.recorder.record(NodeStartedPayload(plan_id=context.plan_id, step_id=node.step_id, kind=PlanStepKind.VERIFY))
+        started = self.recorder.monotonic_ns()
+        try:
+            result = self.verifier.verify(context, node, predecessors)
+        except BaseException:
+            self.recorder.note_observation(node.step_id, self.recorder.duration_ms(started), ())
+            raise
+        duration_ms = self.recorder.duration_ms(started)
+        self.recorder.note_observation(node.step_id, duration_ms, ())
+        if isinstance(result, VerificationResult):
+            self.recorder.settle_live(
+                context.plan_id,
+                node_result_of_verification(node, result),
+                duration_ms,
+                (),
+                VerificationFacts(verdict=result.verdict, reason=result.reason),
+            )
+        return result
