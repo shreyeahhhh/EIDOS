@@ -10,7 +10,7 @@ import pytest
 
 from eidos.backends.langgraph import LangGraphExecutor
 from eidos.runtime import SequentialExecutor
-from eidos.state import replay, replay_jsonl
+from eidos.state import execution_record, replay, replay_jsonl
 
 from eidos_backend_factories import locked_admit_all, locked_halt_when
 from eidos_mission_factories import make_mission, make_mission_plan
@@ -49,6 +49,14 @@ def test_each_executors_log_replays_to_its_own_state_and_to_the_report_of_an_unr
     replayed = replay_jsonl(run.log.to_jsonl())
     assert replayed.rejection is None and replayed.state == run.log.state
     assert replayed.state == replay(run.log.records).state
+
+
+def test_the_execution_record_is_the_same_whichever_executor_ran_the_plan():
+    state, plan = baseline_mission()
+    reference, backend = both(state, plan)
+    record = execution_record(backend.log.records)
+    assert record == execution_record(reference.log.records)
+    assert record.model_dump_json() == execution_record(reference.log.records).model_dump_json()
 
 
 def test_a_run_that_fails_verification_gives_the_same_log_on_both_executors():

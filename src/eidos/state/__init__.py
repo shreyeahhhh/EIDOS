@@ -8,6 +8,7 @@ writes ``MissionState`` (invariants 1 and 2).
 Step 2 — the typed payloads and ``EventRecord`` (D-153, D-154, D-160).
 Step 3 — the pure reducer (D-155, D-156, D-160).
 Step 4 — the event log and intake, checkpoint, replay and the strict JSONL form (D-157).
+Step 6 — ``ExecutionRecord``, the derived read-only projection of a log (D-159).
 """
 
 from .payloads import (
@@ -29,6 +30,7 @@ from .payloads import (
     RejectionReason,
     VerificationFacts,
 )
+from .execution_record import ExecutionRecord, StepRecord, execution_record
 from .log import EventLog, EventProposal, IntakeResult
 from .records import EventRecord, Payload
 from .reducer import ReduceOutcome, ReduceResult, reduce
@@ -54,6 +56,7 @@ __all__ = [
     "EventLog",
     "EventProposal",
     "EventRecord",
+    "ExecutionRecord",
     "IntakeResult",
     "LoadResult",
     "MissionCompletedPayload",
@@ -76,9 +79,11 @@ __all__ = [
     "ReplayRejection",
     "ReplayRejectionCode",
     "ReplayResult",
+    "StepRecord",
     "VerificationFacts",
     "checkpoint_at",
     "dump_jsonl",
+    "execution_record",
     "load_jsonl",
     "records_after",
     "reduce",
