@@ -206,9 +206,9 @@ to `recorded_at` for EIDOS-internal events, set at acceptance. The reducer never
 - **Timestamps** are timezone-aware **UTC**; naive values are **rejected** (**D-083**).
 - **`MissionEventType`** is **exactly the thirteen types in §33** (**D-090**) — including A2A, MCP and
   RAG types that cannot occur in V0.1. This differs from D-052's exclusion of unreachable *states*;
-  recorded so the difference is visible.
+  recorded so the difference is visible. **V0.5 (D-154, approved, not built):** three local-execution types are added — `NODE_STARTED`, `NODE_SETTLED` and `MISSION_PAUSED` — so there are sixteen.
 - **`sequence` starts at 1**; **`state_version`** is a non-negative integer equal to the latest applied
-  mission sequence (**D-097**). Reducer and checkpoint semantics stay deferred to V0.5.
+  mission sequence (**D-097**). Reducer and checkpoint semantics are decided for V0.5 by D-155 and D-157 (approved, not built).
 
 **The contract lives here — `decisions.md` D-100.** MissionState holds the authoritative
 **`reliability_contract: ReliabilityContract`**; the genome holds only `reliability_contract_id`. This
@@ -241,8 +241,9 @@ It also substantially pre-answers **D-017**: if MissionState is a materialized v
 is the durable artifact and a snapshot is an optimisation. D-017 is *not* resolved — the consequence
 is recorded so it is visible rather than arriving later as a fait accompli.
 
-> **Still open:** **D-039** (reducer signature — V0.5), **D-010b** (checkpoint semantics — V0.5),
-> **D-041** (evidence and final mission-result fields — V0.4 and V0.8). None blocks V0.1.
+> **V0.5 (2026-09-21):** **D-039** (the reducer returns state and an outcome) is decided by D-155 and **D-010b** (a checkpoint is a value) by D-157, both approved and not built.
+>
+> **Still open:** **D-041** (evidence and final mission-result fields — V0.4 and V0.8). None blocks V0.1.
 > **D-040** (the exact MissionState/LangGraph split) is **resolved by D-113**: MissionState never
 > enters LangGraph state, LangGraph state holds only `outcomes`, and V0.3 writes nothing to MissionState.
 
@@ -328,6 +329,8 @@ see `decisions.md` **D-017**.
 - The reducer is **deterministic**: no I/O, no network, no LLM calls, no hidden global state, no
   wall-clock dependence in logic. Timestamps arrive on events; the reducer does not read the clock.
 - Only the reducer writes MissionState. Nothing else, anywhere, at any layer.
+- V0.5 (approved, not built): events are produced by recording adapters outside the runtime and enter the log through an intake that assigns the sequence; the event log is authoritative and
+  `ExecutionRecord` is derived from it (D-152 to D-159).
 - V0.1 is in-memory only — no persistence (D-005).
 - §50 is explicit: **"Before adding A2A, state handling must already be reliable."** V0.5 precedes
   V0.6 for this reason, and that ordering is not to be shortcut.
@@ -340,18 +343,18 @@ see `decisions.md` **D-017**.
 |---|---|---|
 | D-059 | Is "could not satisfy the reliability contract" `failed` with a reason, or a fifth terminal state? | V0.4 |
 | D-058 | Should `paused` later become more specific, or split? | V0.3+ |
-| D-039 | The reducer signature — does it return an outcome alongside state? | V0.5 |
-| D-010b | Checkpoint contents, granularity and trigger | V0.5 |
-| D-126 | `MissionEvent` vocabulary for local node lifecycle events — the thirteen §33 types cannot represent them | V0.5, or wherever local node events are first recorded |
+| ~~D-039~~ | **Resolved by D-155** — the reducer returns state and an outcome | V0.5 |
+| ~~D-010b~~ | **Resolved for V0.5 by D-157** — a checkpoint is a value taken on request; storage stays with D-017 | V0.5 |
+| ~~D-126~~ | **Resolved by D-154** — `NODE_STARTED`, `NODE_SETTLED` and `MISSION_PAUSED` are added (sixteen types) | V0.5 |
 | D-041 | Evidence and final mission-result fields | V0.4, V0.8 |
 | D-036 | The `AgentTask` lifecycle state machine "validate against lifecycle" presupposes | V0.6 |
 | D-037 | One shared event shape, or separate internal and external shapes? | V0.6 |
 | D-035 | Do A2A events carry a producer-assigned per-task sequence? | V0.6 |
-| D-038 | Bounding and persisting the processed-`event_id` set | V0.5+ |
-| D-017 | Is the event log or a state snapshot authoritative for persistence and replay? | V0.5+ |
+| D-038 | Bounding and persisting the processed-`event_id` set | V0.5+ — answered for V0.5 only (D-155, D-157); stays Open |
+| D-017 | Is the event log or a state snapshot authoritative for persistence and replay? | V0.5+ — the log is authoritative for V0.5 (D-157); persistence stays Open |
 | D-033 | Does `tenant_id` propagate to nested models, or stay root-only? | V0.1 |
-| D-075 | Per-type payload definitions — §33 names thirteen types and describes none | V0.3–V0.8, incrementally |
-| D-076 | What payloads must carry for faithful replay under invariant 15 | V0.5, with D-039 |
+| D-075 | Per-type payload definitions — §33 names thirteen types and describes none | V0.3–V0.8, incrementally — answered for V0.5's emitted types (D-153); stays Open |
+| D-076 | What payloads must carry for faithful replay under invariant 15 | V0.5 — discharged for the emitted types (D-153, D-157); stays Open |
 
 ## Out of scope for this document
 

@@ -237,7 +237,8 @@ the architectural map; `progress.md` tracks which of these exist.
 | `eidos.agents` | Research, Analysis and Verification — exactly three logical agents (D-131); owns the synchronous `ModelPort` (D-135) and the in-memory artifact store (D-137); read-only, no tools (D-140); vendor-free | V0.4 | **yes** — the model seam (Step 3), the artifact model and store (Step 5), and the Research, Analysis and deterministic Verification agents (Step 6) |
 | `eidos.providers` | Model-provider adapters — the **only** place a vendor, model or SDK name may appear (D-135); standard-library HTTP, no new dependency (D-136) | V0.4 | **yes** — `OllamaModel`, tested against a local fake runtime and run against a real local model (Step 8): at the first output budget the baseline failed at its first step because the reasoning model spent its whole budget before answering (D-149); at 2,048 tokens the second step failed the same way; the committed opt-in test (4,096 tokens, 240 s), run once, finished with a verifier PASS (D-150, resolved; the truncated-answer question is D-151, Open) |
 | `eidos.baseline` (one module) | The single-pass baseline runner and the work dispatcher: validate, compile, bind, execute on a backend handed to it, report; stops at the first gate that refuses; backend-neutral, no CLI, no API (D-131) | V0.4 | **yes** — `run_baseline`, `WorkDispatcher`, `BaselineReport` (Step 7) |
-| `eidos.state` | Reducer, checkpoints, replay | V0.5 | no |
+| `eidos.state` | The typed `EventRecord` payloads, the pure reducer, the append-only event log with a JSONL round trip, checkpoint, replay and the derived read-only `ExecutionRecord` (D-152 to D-159); imports the core layers only — never agents, providers, capabilities or baseline; no clock, no I/O | V0.5 | **no** — scope approved, not built |
+| `eidos.recording` | Recording adapters: an injected clock and id source, and wrappers over the existing injection points (agents, verifier, admission guard, model port) that propose events to the log; holds no `MissionState`; the runtime emits nothing (D-158) | V0.5 | **no** — scope approved, not built |
 | `eidos.policy` | Governance, autonomy levels, budgets | V1.2 (V0.2 has only a `NOT_APPLICABLE` stage in `eidos.validation` — D-110) | no |
 | `eidos.telemetry` | Structured events, metrics | V0.9 | no |
 | `eidos.memory` | Strategy and execution memory | V1.0 | no |
@@ -402,6 +403,32 @@ Four seams:
 No planner, no candidate strategies, no system-driven replan, no events or history, no A2A, MCP or RAG. Agents are read-only with no
 tools (D-140). Verification is a deterministic rule set with no model verdict (D-138); the frozen `ReliabilityContract` is in
 `ExecutionContext` (D-139). The `AdmissionGuard` is caller-supplied, with no default.
+
+### The V0.5 boundary — events, state and history (approved, not built)
+
+Recorded in D-152 to D-161. Nothing here exists yet; `progress.md` tracks the steps.
+
+```text
+V0.4 baseline (unchanged) --existing injection points--> eidos.recording   (injected clock and id source)
+                                                          | event proposals; no access to MissionState
+                                                          v
+                          intake (eidos.state): assigns the sequence, ignores a repeated event_id
+                                                          v
+                          append-only event log (authoritative; strict JSONL round trip)
+                                                          v
+      reducer (eidos.state: pure, no clock, no I/O; the ONLY writer of MissionState) --> MissionState (a view)
+                                                          v   read-only, recomputable
+                          checkpoint (state + last sequence) | replay (log) | ExecutionRecord (log)
+```
+
+- **Authority (invariants 1 and 2).** Producers propose, the intake orders, the reducer alone writes state, and every projection is read-only. Recording adapters hold no `MissionState`.
+- **The V0.1 contracts change in one place:** `MissionEventType` gains `NODE_STARTED`, `NODE_SETTLED` and `MISSION_PAUSED` (sixteen types, D-154). `MissionEvent` stays an envelope; a typed payload travels
+  beside it in an `EventRecord` (D-153).
+- **Layering.** `eidos.state` imports the core layers and never agents, providers, capabilities or baseline; `eidos.recording` imports `eidos.state` and the ports it wraps. The runtime, executors,
+  compiler, agents and verifier are unchanged, and the runtime emits no event (D-123, D-158).
+- **Facts only.** Counters are folded from recorded facts and never enforced; a value is provider-reported or recorder-observed, or absent. `MeasuredFacts` is not modified, so no stop reason is recorded
+  (D-151, Open).
+- **Not in V0.5:** a durable store (D-017), A2A, MCP, RAG, the telemetry platform, strategy memory, a selector, a planner, adaptive learning and cross-mission aggregation (D-161).
 
 ---
 

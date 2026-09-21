@@ -356,8 +356,8 @@ These come from the handoff and are enforced through `CLAUDE.md` rather than thr
 | Id | Invariant affected | Question |
 |---|---|---|
 | D-015 | 12, 13 | How verification confidence is computed |
-| D-126 | 15 | The event vocabulary cannot represent local node lifecycle events (V0.5 or later) |
-| D-039 | 2 | Whether the reducer returns an outcome alongside state (V0.5) |
+| ~~D-126~~ | 15 | **Resolved by D-154** (V0.5, approved, not built): `NODE_STARTED`, `NODE_SETTLED` and `MISSION_PAUSED` are added to the vocabulary |
+| ~~D-039~~ | 2 | **Resolved by D-155** (V0.5): the reducer returns state and an outcome |
 | D-036 | 8 | The `AgentTask` lifecycle state machine required for deterministic accept/reject |
 | D-046 | 7 | Numerical bound values (V0.2; none established in V0.1 by decision) |
 | D-043 | 7 | Declared plan limits vs actual execution counters share names but count differently |

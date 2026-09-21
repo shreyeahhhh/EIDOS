@@ -1206,6 +1206,9 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
   - **D-076 carries the real risk.** Deferring payloads defers the point at which "an event that is
     not recorded is not replayable" becomes testable. That obligation comes from D-010a and
     invariant 15; D-067 postpones the reckoning rather than creating it.
+- **V0.5 (2026-09-21):** the V0.1 `MissionEvent` stays an envelope with no payload field. **D-153** pairs it with a typed payload in an `EventRecord` (`eidos.state`) instead of adding a field to the
+  contract.
+
 
 ### D-073 — The three non-budget ReliabilityContract fields are required
 
@@ -1345,6 +1348,8 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
   - Several of these types cannot occur in V0.1 (A2A, MCP and RAG subsystems do not exist). This
     differs from **D-052**, which excluded unreachable *mission states*; the owner chose to define the
     full §33 vocabulary for the event log regardless. Recorded so the difference is visible.
+- **Superseded in part by D-154 (2026-09-21):** `MissionEventType` gains `NODE_STARTED`, `NODE_SETTLED` and `MISSION_PAUSED` and has **sixteen** members. The thirteen §33 types are unchanged.
+
 
 ### D-091 — MissionState collections and counters
 
@@ -1424,6 +1429,8 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
   event it equals 1. Whether a MissionState can exist before `MISSION_CREATED` is applied is part of
   **D-084**, not this decision. *(D-084 has since established that MissionState is created with its
   genome.)*
+- **V0.5 (2026-09-21):** the reducer semantics deferred here are decided by **D-155** (a contiguous sequence and an outcome-returning reducer) and the checkpoint semantics by **D-157**.
+
 
 ### D-078 — Budget units: integer milliseconds and integer token counts
 
@@ -2142,6 +2149,9 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
   - A run result is **not** an event log. "An event that is not recorded is not replayable" (docs/06)
     remains an obligation on later milestones.
   - The gap itself is recorded as **D-126 (Open).**
+- **V0.5 (2026-09-21):** the runtime still emits no `MissionEvent` and writes no `MissionState`, so this entry stays accurate for it. V0.5 produces events through recording adapters outside the
+  runtime (D-158); a run result is still not an event log.
+
 
 ### D-124 — V0.3 treatment of `VERIFY` and `HUMAN_APPROVAL` (a V0.3 implementation decision; D-055 stays Open)
 
@@ -2735,6 +2745,190 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
     check that a cited document supports the claim it is cited for, and no quality is measured (D-146).
   - Not observed: repeatability beyond the Research call above (one attempt); other models; reasoning switched off; a budget between 2,048 and 4,096; the opt-in test as committed (which then still set 512 tokens; see the committed run above).
 
+### D-152 — V0.5 scope: the event log, the reducer, checkpoint and replay, recording adapters and a thin derived record
+
+- **Status:** Accepted · **Date:** 2026-09-21 · **Decided by:** human owner
+- **Source:** handoff §9, §10, §33, §34, §50, §73; invariants 1, 2, 8, 15; D-010a, D-011, D-097, D-123, D-127; the V0.5 exploration, which found that the handoff's V0.5 line and the
+  telemetry-to-memory chain the owner described place telemetry, memory and learning at different milestones
+- **Decision:** V0.5 is **MissionEvent / MissionState / StateReducer + the event log + checkpoint and replay + recording adapters + a thin, read-only `ExecutionRecord`.**
+  1. **In V0.5:** typed event payloads (D-153); the local-execution event vocabulary (D-154); a pure reducer (D-155); the run-outcome mapping and the counters (D-156); an append-only in-memory
+     event log with a strict JSONL round trip, a checkpoint value and replay (D-157); recording adapters that turn a V0.4 run into events without changing the runtime (D-158); and the derived
+     `ExecutionRecord` (D-159).
+  2. **The ladder does not move.** Telemetry breadth (A2A, RAG, cache, policy and human-intervention measures, aggregation, OpenTelemetry) stays at V0.9; historical strategy memory and ranking at
+     V1.0; adaptive learning at V1.1. `ExecutionRecord` is the only addition to the handoff's V0.5 line, and it is derived, so it is not a second source of truth.
+  3. **Where this sits in §34's loop** (telemetry → evaluation → performance memory → strategy selection): V0.5 builds the first link only — a faithful, replayable record of what an execution did
+     and measured. It scores nothing, remembers nothing across missions and selects nothing.
+  4. **Nothing is scaffolded early.** The new packages are `eidos.state` (pure) and `eidos.recording` (adapters), each created by the step that fills it (CLAUDE.md §3).
+  5. Everything V0.5 excludes is recorded in **D-161**.
+- **Consequences:** the event log is the authoritative history (D-157); the derived record is the raw material a later milestone may use, and V0.5 makes no claim about how it will be used.
+
+### D-153 — Typed payloads through `EventRecord`; the V0.1 envelope is unchanged
+
+- **Status:** Accepted · **Date:** 2026-09-21 · **Decided by:** human owner
+- **Source:** D-067, D-075, D-076, D-090, D-154; CLAUDE.md §8; the V0.5 exploration
+- **Decision:**
+  1. **`MissionEvent` (V0.1) is unchanged:** the envelope only, with no payload field. D-067 stays true of the contract, and `test_no_payload_field_exists` stays true.
+  2. **`EventRecord`**, defined in `eidos.state`, pairs one `MissionEvent` with **one typed payload** from a discriminated union keyed by the envelope's `type`. A record whose payload kind does not
+     match its envelope's type is rejected at construction.
+  3. **Payload classes exist only for the types V0.5 emits** (D-154, D-160). A type with no payload class (`A2A_TASK_STARTED`, `A2A_TASK_COMPLETED`, `MCP_TOOL_CALLED`, `RAG_SEARCH`,
+     `EVIDENCE_REJECTED`, `REPLAN_TRIGGERED`, and `VERIFICATION_FAILED` unless D-160 changes it) cannot form an `EventRecord` in V0.5 and is refused at intake. No placeholder payloads are invented.
+  4. **A payload carries only what the reducer and the `ExecutionRecord` need.** Artifacts appear as an `ArtifactRef`, never as content.
+  5. **Layering:** payload types live in `eidos.state`, which may import the core layers (contracts, runtime) and never agents, providers, capabilities or baseline. The recorded model-call outcome is
+     therefore an enum owned by `eidos.state` and mirrored from the agents' failure kinds by the recording adapter, with a guard test that the two value sets match.
+- **Consequences:** the concrete payload fields are recorded in **D-160**, pending the owner's confirmation. **D-075** is answered for the emitted types only; **D-076** is discharged for them but
+  stays Open (see the annotations on both).
+
+### D-154 — The local-execution event vocabulary: `NODE_STARTED`, `NODE_SETTLED`, `MISSION_PAUSED` (resolves D-126; supersedes D-090's "exactly thirteen")
+
+- **Status:** Accepted · **Date:** 2026-09-21 · **Decided by:** human owner
+- **Source:** handoff §33; invariants 2 and 15; D-052, D-090, D-118, D-123, D-126; the V0.5 exploration
+- **Decision:** `MissionEventType` gains exactly **three** members, so it has **sixteen**. The thirteen §33 types are unchanged, including the ones V0.5 does not emit.
+  1. **`NODE_STARTED`** — a compiled node was dispatched: a port was invoked for it.
+  2. **`NODE_SETTLED`** — a compiled node reached a settled state, carrying the typed `NodeStatus` (D-118: all seven, including `skipped` and `not_reached`, which have no `NODE_STARTED`). In a
+     completed pass every compiled node has exactly one `NODE_SETTLED`.
+  3. **`MISSION_PAUSED`** — a run halted at an admission guard, so the mission becomes `paused` (D-052). Until now `paused` was a status with no event that could cause it.
+  4. **Local nodes are not `AgentTask`s,** and the `A2A_TASK_*` types are not reused for them: remote state stays remote (invariant 2), and D-036 is unaffected.
+  5. **This is the only change to the V0.1 contracts:** an enum extension. `MissionEvent`, `MissionState` and `MissionStatus` are unchanged.
+  6. **Tests that pin the old set change because the specification changed, not to get green:** `test_mission_event_type_is_exactly_the_thirteen_33_types` now expects the sixteen, and the test that
+     rejects an unknown type keeps rejecting one. Nothing is weakened, deleted or skipped.
+- **Not decided here:** whether `VERIFICATION_FAILED` is emitted in V0.5 (D-160, item 2).
+- **Consequences:** D-126 is resolved; D-090 is superseded in part; D-123 stays accurate about the runtime (D-158).
+
+### D-155 — The reducer contract (resolves D-039)
+
+- **Status:** Accepted · **Date:** 2026-09-21 · **Decided by:** human owner
+- **Source:** handoff §9, §10; invariants 1, 2 and 8; D-010a, D-011, D-052, D-097; docs/06
+- **Decision:**
+  1. **A pure function.** The reducer lives in `eidos.state` and does no I/O, no network, no LLM call, reads no clock and holds no hidden state. A timestamp on the state comes from the applied event
+     (`updated_at` is the applied event's `recorded_at`). **Only the reducer writes `MissionState`** (invariants 1 and 2); nothing else, at any layer, constructs or updates one.
+  2. **It returns the new state and an outcome.** Expected traffic is an outcome, never an exception: *applied*, *duplicate* (ignored), *out of order* (rejected), *stale or late* (rejected), *after a
+     terminal state* (rejected) and *invalid for the current state* (rejected), each with a reason. A non-applied outcome leaves the state **byte-identical**.
+  3. **Sequence.** An event applies only if its `sequence` is `state_version + 1`; the sequence begins at 1 and `state_version` is the latest applied sequence (D-097).
+  4. **Idempotency.** `event_id` is the idempotency key (D-011). A repeated `event_id` is ignored, not re-applied. The set of applied ids is derived from the log with full retention in memory —
+     **D-038 is answered for V0.5 only**; bounding and persisting it stay Open with D-017.
+  5. **Terminal states.** `completed` and `failed` reject every later event. The treatment of `paused` and the reducer's effect per event type are in D-160.
+- **Consequences:** D-039 is resolved. The determinism requirement is now observable — an outcome can be counted and asserted — which was the reason D-039 asked for an outcome.
+
+### D-156 — Run outcome to mission status, and the counters (D-043, D-059 and D-015 stay Open)
+
+- **Status:** Accepted · **Date:** 2026-09-21 · **Decided by:** human owner
+- **Source:** D-052, D-091, D-118, D-119, D-121, D-131, D-146; invariants 7, 12 and 13; the V0.5 exploration
+- **Decision:**
+  1. **One recorded pass is the mission's execution at V0.5.** There is no planner, no replan and no retry (D-119, D-131), so the single pass's end is the mission's end. A later milestone that adds
+     recovery must revisit this mapping.
+  2. **Completion and verification stay separate** (invariants 12 and 13; D-118, D-121). A terminal event records the outcome and a typed `verified` fact; nothing collapses "the run finished" into
+     "the mission succeeded". The exact mapping is D-160, item 5.
+  3. **A failure carries a typed cause and a reason.** V0.5 adds **no** fifth status and **no** event for "could not satisfy the reliability contract": a verifier FAIL or INCONCLUSIVE is recorded as
+     such, and V0.5 makes no claim about contract satisfaction (D-146). **D-059 stays Open**; a typed cause keeps either later answer non-breaking.
+  4. **Counters (D-091) are folded by the reducer from recorded facts, never estimated:**
+     - `agent_calls_used` counts dispatched work nodes (a dispatched node is one agent call; `VERIFY` dispatches are not agent calls);
+     - `tokens_used` counts the prompt and output tokens the **provider reported** for the node's model calls. A call whose tokens were not reported is counted separately in the payload, so the
+       counter is a visible **lower bound**;
+     - `execution_time_used_ms` follows the rule in D-160, item 6;
+     - `retries_used`, `replans_used` and `tool_calls_used` stay 0, because nothing produces them.
+  5. **Counters are recorded, not enforced.** No limit is checked at V0.5 (invariant 7's enforcement stays deferred, D-127). **D-043, D-044 and D-046 stay Open.**
+  6. **D-015 stays Open:** only a verdict and a reason are recorded; there is no scalar and no confidence.
+
+### D-157 — The event log, checkpoint and replay (resolves D-010b for V0.5; D-017 and D-038 stay Open)
+
+- **Status:** Accepted · **Date:** 2026-09-21 · **Decided by:** human owner
+- **Source:** handoff §9, §11, §73; invariants 1, 8 and 15; D-010a, D-010b, D-017, D-038, D-113; docs/06
+- **Decision:**
+  1. **The event log is authoritative.** `MissionState` is only its materialized view (a fold), and `ExecutionRecord` is purely derived (D-159). A checkpoint or snapshot is an optimisation and never a
+     source of truth.
+  2. **The log** is append-only and per mission. An **intake** step orders events: it assigns the sequence at acceptance (D-011) and ignores a repeated `event_id`. Producers propose events and hold
+     no `MissionState`.
+  3. **Storage in V0.5 is in memory plus a strict JSONL round trip** — one `EventRecord` per line, deterministic field order, UTC timestamps, and a parsed log equal to the original. **No SQLite, no file
+     store and no durable persistence is built** (the owner's ruling); **D-017 stays Open** for persistence, its schema and its interface.
+  4. **A checkpoint is a value:** the mission state and the last applied sequence. It is taken only when the caller asks, never automatically. Resuming restores it and applies the events after its
+     sequence; the tested invariant is that **a checkpoint plus the tail equals a full replay**. It is not a LangGraph checkpointer: MissionState never enters LangGraph state (D-113), and LangGraph
+     checkpointing and interrupts are not part of V0.5 (D-127); resume of an execution stays by prior `SUCCEEDED` outcomes (D-120).
+  5. **Replay** consumes recorded events only and re-runs no agent (invariant 15). It reconstructs the mission state, the node outcomes and the measured facts. It imports no agent, provider or model.
+     **Artifact content is not in the log** (`ArtifactRef` only), so replay does not reconstruct artifact text: D-129 and D-017 stay Open.
+  6. **A replayable log** is contiguous from sequence 1, belongs to one mission and tenant, and begins with `MISSION_CREATED`. Anything else is a typed rejection, never a partial replay.
+- **Consequences:** D-010b is resolved for V0.5. History survives a restart only if the caller saves the serialized log; strategy memory will need a durable store before V1.0, which is D-017's decision
+  and not V0.5's.
+
+### D-158 — Recording adapters and measured facts (D-151 stays Open; `MeasuredFacts` is not modified)
+
+- **Status:** Accepted · **Date:** 2026-09-21 · **Decided by:** human owner
+- **Source:** D-113, D-122, D-123, D-135, D-137, D-148, D-150, D-151; invariants 1, 2, 9, 15 and 17; CLAUDE.md §7 and §8; the V0.5 exploration
+- **Decision:**
+  1. **Events are produced by recording adapters** in `eidos.recording`, outside the runtime. They wrap the existing injection points — the agents, the verifier, the admission guard and the model
+     port — and propose events to the log. **The runtime, the executors, the compiler, the agents, the verifier and the D-122 and D-137 signatures are unchanged**, and the runtime itself emits no
+     event, so D-123 stays accurate for it.
+  2. **Adapters hold no `MissionState` and cannot write it.** They propose; the intake orders; only the reducer writes state (invariants 1 and 2).
+  3. **The clock and the id source are injected.** Deterministic components read neither, and the adapters are not deterministic components.
+  4. **Facts only.** A value is either what the provider reported (`MeasuredFacts`: prompt tokens, output tokens, elapsed seconds) or what the recorder observed with its injected clock; `None` stays
+     `None`. Nothing is guessed, and nothing a model asserted is recorded as a measurement. A failed call has no provider facts (D-150) and is recorded as such. Latencies are labelled by source and
+     never combined.
+  5. **`MeasuredFacts` is not modified** (the owner's ruling), so the log records **no stop reason.** **D-151 stays Open.** The consequence is recorded so it is visible: history cannot tell a
+     non-empty answer cut off at the output limit from a complete one.
+  6. **Concurrent nodes.** LangGraph runs a level's nodes on worker threads, so two live runs of a plan with parallel nodes may log those nodes in either order (acceptance order). Replay of a recorded
+     log is deterministic, and backend conformance is asserted for the linear baseline.
+  7. **A correction to the exploration.** The `Verifier` port returns a verdict and a reason only. Per-rule outcomes exist inside the verifying agent's report, not at the port, so the log records the
+     verdict and the reason text; it does **not** claim typed per-rule outcomes (D-148 item 7 already carries `NOT_EVALUATED` as prose).
+- **Consequences:** V0.5 changes no V0.3 or V0.4 source unless the owner confirms D-160, item 8.
+
+### D-159 — `ExecutionRecord`: a thin, read-only, derived record
+
+- **Status:** Accepted · **Date:** 2026-09-21 · **Decided by:** human owner
+- **Source:** handoff §21, §33, §34; invariants 1, 12, 13, 16 and 17; D-015, D-063, D-064, D-146; the V0.5 exploration
+- **Decision:** `ExecutionRecord(log)` is a **pure, read-only projection** of a mission's event log. It is recomputable at any time, never stored as truth and never written to `MissionState`.
+  1. **Contents (facts only):** identity (tenant, mission, execution, plan ids and versions); the plan's structure as recorded (ordered steps, kinds, capabilities, bound agent ids); each node's
+     typed status, artifact reference, reason and recorded duration; the model-call facts; the `VERIFY` verdict and reason; the run outcome; the terminal mission status and typed cause; the folded
+     counters; and the log's own bounds (event count, first and last timestamps).
+  2. **Excluded:** any quality, confidence, score, rate or `strategy_signature`. `min_quality` and `max_risk_level` remain `NOT_EVALUATED` (D-146). No aggregation across missions.
+  3. **It is not strategy memory** (V1.0) **and not the telemetry platform** (V0.9): it describes one execution.
+- **Consequences:** D-015, D-063 and D-064 are untouched. What "evaluation" means beyond recording the verifier's verdict is a later milestone's decision.
+
+### D-126 — `MissionEvent` vocabulary for local node lifecycle events
+
+- **Status:** Accepted · **Date:** 2026-09-21 · **Decided by:** human owner · **Resolved by D-154** (originally Open) · **Source:** handoff §33; invariant 15; D-067, D-075, D-076, D-090, D-123; raised in V0.3 exploration
+- **Finding:** §33 says every meaningful execution event should be structured, and invariant 15 makes
+  replay from recorded events a requirement. D-090 fixed the vocabulary at exactly the thirteen §33
+  types. None of them represents a **local** node — a work step run by a locally hosted agent, or a
+  `VERIFY` step — being started, completed, failed, skipped or not reached. The `A2A_TASK_*` types
+  describe remote tasks; `VERIFICATION_FAILED` exists but there is no type for a verification that
+  passed or was inconclusive; and `MissionEvent` has no payload (D-067; D-075 and D-076 Open), so the
+  existing types cannot carry the distinction either.
+- **Effect while Open:** V0.3 emits no events (D-123) and invariant 15 is not exercised. Any later claim
+  that local execution is replayable is blocked until this is decided.
+- **Needs:** whether to add event types, to carry lifecycle in typed payloads (D-075), or something
+  else. Any change to the thirteen types supersedes D-090's "exactly thirteen" and needs its own
+  decision. Material at V0.5 (reducer, replay) or wherever local node events are first recorded.
+- **Resolution (V0.5, 2026-09-21):** resolved by **D-154.** `MissionEventType` gains `NODE_STARTED`, `NODE_SETTLED` and `MISSION_PAUSED` (sixteen types); D-090's "exactly thirteen" is superseded in
+  part; local nodes are not `AgentTask`s.
+
+### D-039 — The reducer signature
+
+- **Status:** Accepted · **Date:** 2026-09-21 · **Decided by:** human owner · **Resolved by D-155** (originally Open) · **Source:** handoff §9, §10 · **Split out of D-010a, left Open by the owner**
+- **Finding:** §10 requires duplicates to be ignored and late or out-of-order events to be accepted
+  or rejected **deterministically**. A signature of `(state, event) -> state` makes a rejection
+  indistinguishable from a no-op, leaving §33's telemetry nothing to count and making the
+  determinism requirement untestable. A signature returning state **plus an outcome** makes it
+  observable. Raising on duplicate or late events was considered and is a poor fit: §10 treats both
+  as expected traffic rather than errors, and exceptions would be awkward to drive from a replay
+  loop.
+- **Effect while Open:** none on V0.1 — the reducer is V0.5 work; V0.1 needs only the contract.
+- **Needs:** Decide at V0.5, alongside the reducer itself.
+- **Resolution (V0.5, 2026-09-21):** decided by **D-155.** The reducer returns the new state **and an outcome**; expected traffic — duplicates, late and out-of-order events — is an outcome, never
+  an exception.
+
+### D-010b — Checkpoint semantics
+
+- **Status:** Accepted · **Date:** 2026-09-21 · **Decided by:** human owner · **Resolved by D-157** (originally Open) · **Source:** handoff §9, §11 · **Split out of D-010; deliberately not resolved**
+- **Finding:** §11 lists checkpoints among LangGraph's responsibilities and §9's diagram terminates
+  at "LangGraph checkpoint/state", but checkpoint **granularity**, **trigger** and **contents** are
+  never specified. D-010a settles the MissionState field set; it does not settle what a checkpoint
+  is.
+- **Effect while Open:** none on V0.1. Blocks V0.5.
+- **Needs:** What a checkpoint contains, when one is taken, and whether resuming from a checkpoint
+  replays events forward from it or restores a snapshot directly. Entangled with **D-017**.
+- **Resolution (V0.5, 2026-09-21):** decided for V0.5 by **D-157.** A checkpoint is a value — the mission state and the last applied sequence — taken only when the caller asks and never
+  automatically. Resuming restores it and applies the events after its sequence, and the tested invariant is that a checkpoint plus the tail equals a full replay. It is not a LangGraph
+  checkpointer, and where a checkpoint is stored stays with **D-017 (Open)**.
+
 ---
 
 ## Open — require the human owner
@@ -2742,7 +2936,7 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
 These are ambiguities, contradictions and gaps found in the handoff during the bootstrap read. None
 has been resolved. Work that depends on one of them is blocked until the owner decides.
 
-Count: 46. Highest-impact first is **D-015** (how verification confidence is computed), then
+Count: 44. Highest-impact first is **D-015** (how verification confidence is computed), then
 **D-007** (now V0.4-only, not V0.2 — see D-102) and **D-046** (bound values, mechanism unaffected —
 see D-103) for later V0.2 work. **D-012** (predicate language) was corrected 2026-09-18 to no longer
 be listed as a V0.2 item — it blocks the V0.3 compiler. **D-102** and **D-103**, logged the same day,
@@ -2816,30 +3010,6 @@ one is not.
 - **Action taken:** Neither is declared in `pyproject.toml`. `.gitignore` already ignores their
   caches so adding them later is frictionless.
 - **Needs:** Owner to decide whether to adopt, and which.
-
-### D-010b — Checkpoint semantics
-
-- **Status:** Open · **Source:** handoff §9, §11 · **Split out of D-010; deliberately not resolved**
-- **Finding:** §11 lists checkpoints among LangGraph's responsibilities and §9's diagram terminates
-  at "LangGraph checkpoint/state", but checkpoint **granularity**, **trigger** and **contents** are
-  never specified. D-010a settles the MissionState field set; it does not settle what a checkpoint
-  is.
-- **Effect while Open:** none on V0.1. Blocks V0.5.
-- **Needs:** What a checkpoint contains, when one is taken, and whether resuming from a checkpoint
-  replays events forward from it or restores a snapshot directly. Entangled with **D-017**.
-
-### D-039 — The reducer signature
-
-- **Status:** Open · **Source:** handoff §9, §10 · **Split out of D-010a, left Open by the owner**
-- **Finding:** §10 requires duplicates to be ignored and late or out-of-order events to be accepted
-  or rejected **deterministically**. A signature of `(state, event) -> state` makes a rejection
-  indistinguishable from a no-op, leaving §33's telemetry nothing to count and making the
-  determinism requirement untestable. A signature returning state **plus an outcome** makes it
-  observable. Raising on duplicate or late events was considered and is a poor fit: §10 treats both
-  as expected traffic rather than errors, and exceptions would be awkward to drive from a replay
-  loop.
-- **Effect while Open:** none on V0.1 — the reducer is V0.5 work; V0.1 needs only the contract.
-- **Needs:** Decide at V0.5, alongside the reducer itself.
 
 ### D-041 — Evidence and final mission-result fields in MissionState
 
@@ -2943,6 +3113,8 @@ one is not.
 - **V0.4 (2026-09-20):** **D-138** decides that V0.4 verification is a **deterministic rule set with no model verdict** and no
   scalar. That answers this entry for V0.4 only. **D-015 stays Open** for a scalar confidence and §31's threshold-driven
   replan (V1.2). **D-063 and D-064 stay Open and dormant.** Clauses of the contract the verifier cannot evaluate: **D-143** (since resolved by D-146).
+- **V0.5 (2026-09-21):** not resolved. The `ExecutionRecord` stores the verifier's verdict and reason only — no scalar and no confidence (D-159).
+
 
 
 ### D-063 — The concrete type or structure of a quality estimate
@@ -2987,6 +3159,9 @@ one is not.
   D-005 settles V0.1 only.
 - **Needs:** When persistence enters, what it stores (events? state snapshots? both — and which is
   authoritative for replay per §73), and the storage interface.
+- **V0.5 (2026-09-21):** **D-157** answers the *authority* question for V0.5 — the **event log is authoritative** and a snapshot is an optimisation — and keeps V0.5 to an in-memory log
+  with a strict JSONL round trip. **No durable store (no SQLite, no file store) is built; D-017 stays Open** for persistence, its schema and its interface.
+
 
 ### D-020 — "Strategy" and "Plan" are used interchangeably
 
@@ -3173,6 +3348,8 @@ one is not.
 - **Needs:** A bounding strategy (window, watermark, or full retention) and a decision on whether the
   set is derived from the persisted event log or stored separately. Should be settled alongside
   D-017.
+- **V0.5 (2026-09-21):** answered for V0.5 only — the applied-`event_id` set is derived from the in-memory log with full retention (D-155, D-157). Bounding and persisting it stay Open with D-017.
+
 
 ### D-072 — Should "omitted" and "explicitly at the ceiling" be distinguishable?
 
@@ -3216,6 +3393,9 @@ one is not.
   enforcement points share. Not required to build V0.2's own declared-count check.
 - **V0.3 note (2026-09-19):** V0.3 performs **no runtime counting** (D-127) and dispatches each node at most once per
   run (D-119), so this item stays dormant at V0.3. It is **not** resolved and remains Open.
+- **V0.5 (2026-09-21):** the reducer now folds the MissionState counters (D-156), counting **actual** recorded facts (agent dispatches, provider-reported tokens, recorded node durations); nothing is
+  enforced against a limit. **D-043 stays Open:** which number a limit bounds, and its reconciliation with V0.2's declared-step check, are undecided.
+
 
 ### D-044 — Does `max_tokens` formally belong to the §14 and §32 bound lists?
 
@@ -3303,6 +3483,9 @@ one is not.
 - **Effect while Open:** none on V0.1 — no verification exists to produce the outcome. Material at
   V0.4 when verification lands, and at V1.2 for governance.
 - **Needs:** Owner decision, ideally before verification is built at V0.4.
+- **V0.5 (2026-09-21):** not resolved. `MISSION_FAILED` carries a typed cause and a reason, and no new status or event is added for "could not satisfy the reliability contract" (D-156). A verifier
+  FAIL or INCONCLUSIVE is recorded as such and V0.5 makes no claim about contract satisfaction (D-146). A typed cause keeps either later answer non-breaking.
+
 
 ### D-046 — Numerical bound values
 
@@ -3333,6 +3516,9 @@ one is not.
 - **Effect while Open:** none on V0.1 — no payload field exists and V0.1 emits no events.
 - **Needs:** Per-type payload shapes, defined at the milestone that first emits each type. The types
   span V0.3 through V0.8, so this resolves incrementally rather than in one decision.
+- **V0.5 (2026-09-21):** answered for the types V0.5 emits by **D-153** (typed payloads in an `EventRecord`, the V0.1 envelope unchanged; the concrete fields are D-160). **Stays Open** for the types
+  V0.5 does not emit (`A2A_TASK_*`, `MCP_TOOL_CALLED`, `RAG_SEARCH`, `EVIDENCE_REJECTED`, `REPLAN_TRIGGERED` and, unless D-160 changes it, `VERIFICATION_FAILED`).
+
 
 ### D-076 — Event-log completeness: what payloads must carry for faithful replay
 
@@ -3350,6 +3536,9 @@ one is not.
   reckoning is postponed.
 - **Needs:** Settle alongside **D-039** (reducer signature) at V0.5, and verify at the milestone
   where replay is first exercised.
+- **V0.5 (2026-09-21):** discharged for the emitted types — the payloads carry what the reducer and the `ExecutionRecord` need, and replay reconstructs the state from the log alone (D-153, D-157) —
+  **but stays Open**: artifact content is not in the log (refs only), no stop reason is recorded (D-151, D-158), and the obligation continues for every later event type.
+
 
 ### D-071 — Will detached or reusable genome representations ever be needed?
 
@@ -3440,23 +3629,6 @@ one is not.
   counts against (`max_retries`, and D-043's declared-versus-actual counting); and whether failure
   classification is part of the runtime or the plan.
 
-### D-126 — `MissionEvent` vocabulary for local node lifecycle events
-
-- **Status:** Open · **Source:** handoff §33; invariant 15; D-067, D-075, D-076, D-090, D-123; raised in V0.3 exploration
-- **Finding:** §33 says every meaningful execution event should be structured, and invariant 15 makes
-  replay from recorded events a requirement. D-090 fixed the vocabulary at exactly the thirteen §33
-  types. None of them represents a **local** node — a work step run by a locally hosted agent, or a
-  `VERIFY` step — being started, completed, failed, skipped or not reached. The `A2A_TASK_*` types
-  describe remote tasks; `VERIFICATION_FAILED` exists but there is no type for a verification that
-  passed or was inconclusive; and `MissionEvent` has no payload (D-067; D-075 and D-076 Open), so the
-  existing types cannot carry the distinction either.
-- **Effect while Open:** V0.3 emits no events (D-123) and invariant 15 is not exercised. Any later claim
-  that local execution is replayable is blocked until this is decided.
-- **Needs:** whether to add event types, to carry lifecycle in typed payloads (D-075), or something
-  else. Any change to the thirteen types supersedes D-090's "exactly thirteen" and needs its own
-  decision. Material at V0.5 (reducer, replay) or wherever local node events are first recorded.
-
-
 ### D-129 — How a work node receives its predecessors' outputs
 
 - **Status:** Open · **Source:** handoff §13, §16, §43; D-098, D-121, D-122; raised implementing V0.3 Step 3
@@ -3475,6 +3647,9 @@ one is not.
 - **V0.4 (2026-09-20):** **D-137** answers this for V0.4: predecessors' outputs are fetched from an in-memory artifact store
   under `(execution_id, step_id)`, one primary artifact per work step, and **the `WorkExecutor` signature is unchanged.** **D-129
   stays Open:** what an artifact contains (**D-142**, since resolved by D-145) and the general data-flow question remain.
+- **V0.5 (2026-09-21):** not resolved. The log records an `ArtifactRef` only, never content, so replay reconstructs state, outcomes and facts, not artifact text (D-157); the `WorkExecutor`
+  signature is unchanged.
+
 
 
 ### D-151 — Handling non-empty model responses terminated by `done_reason=length`
@@ -3504,7 +3679,48 @@ one is not.
   (b) carry the stop reason in `ModelResponse` or `MeasuredFacts` and let the agents record it with the artifact, leaving the verifier alone (a D-135 and D-137 change);
   (c) carry it and add a deterministic verifier rule that returns `INCONCLUSIVE` for a truncated artifact (a D-138 and D-146 change);
   (d) leave it as it is and document it.
+- **V0.5 (2026-09-21):** stays Open by the owner's ruling. `MeasuredFacts` is **not** modified to improve replay, so the log records no stop reason, and history cannot tell a non-empty answer cut
+  off at the output limit from a complete one (D-158). Recorded so the blind spot is visible.
 
+
+### D-160 — V0.5 implementation details (Open until the owner confirms them)
+
+- **Status:** Open · **Date:** 2026-09-21 · **Source:** D-152 to D-159; recorded at the end of V0.5 Step 1 — none touches an invariant
+- **Finding:** the approved rulings fix the shape of V0.5 but leave concrete details that implementation would otherwise have to choose. They are recorded here, as D-148 was for V0.4, so that none is
+  chosen silently. **Each step that depends on an item waits for its confirmation.**
+- **The details, as proposed:**
+  1. **Event order for the baseline mission.** `MISSION_CREATED`; `PLAN_GENERATED`; then either `PLAN_REJECTED` (a refused gate) or `PLAN_COMPILED`; then, for each dispatched node, `NODE_STARTED`
+     followed by `NODE_SETTLED`, in level order and, within a level, in acceptance order; nodes that were never dispatched (`skipped`, `not_reached`) have a `NODE_SETTLED` only, emitted after the run in
+     plan order; and finally exactly one of `MISSION_COMPLETED`, `MISSION_FAILED` or `MISSION_PAUSED`.
+  2. **`VERIFICATION_FAILED` is not emitted in V0.5** (the type stays defined). `NODE_SETTLED` already carries the typed verdict, so emitting it would record one fact twice; emitting it for
+     `INCONCLUSIVE` would misname it; and a mission-level recovery trigger belongs to the milestone that adds recovery. **This departs from the exploration's proposal**, which had it emitted after a
+     `FAIL` or `INCONCLUSIVE` verdict; it is flagged for the owner's confirmation.
+  3. **Payload fields**, all frozen and strict, for the emitted types:
+     - `MISSION_CREATED`: `task_genome`, `reliability_contract`, `execution_id`.
+     - `PLAN_GENERATED`: `plan`. `PLAN_REJECTED`: `plan_id`, `stage` (validation, compilation or binding), `reasons` (a tuple of code and message). `PLAN_COMPILED`: `plan_id`, `plan_version`.
+     - `NODE_STARTED`: `plan_id`, `step_id`, `kind`, `capability` and `agent_id` (absent for `VERIFY`).
+     - `NODE_SETTLED`: `plan_id`, `step_id`, `kind`, `status` (`NodeStatus`), `artifact` or `reason`, `duration_ms` (absent when not dispatched), `model_calls` (a tuple of outcome, prompt tokens, output
+       tokens and elapsed seconds, each absent if unreported), and for `VERIFY` the verdict and its reason. **No stop reason** (D-158).
+     - `MISSION_PAUSED`: `plan_id`, `step_id`, `level`, `reason`. `MISSION_COMPLETED`: `plan_id`, `verified`. `MISSION_FAILED`: `plan_id` (absent if no plan was accepted), a typed `cause`, `reason`.
+  4. **Reducer effects.** `MISSION_CREATED` creates the state (status `created`, counters 0). `PLAN_GENERATED` appends the plan (the `MissionState` validators check uniqueness and lineage; a violation is
+     "invalid for the current state"). `PLAN_COMPILED` sets `active_plan_id`, and the plan must exist. `NODE_STARTED` changes only `state_version` and `updated_at` (per-node state never enters
+     `MissionState`, D-010a). `NODE_SETTLED` folds the counters. The three terminal and pause events set `status` and `status_reason`.
+  5. **Terminal mapping (D-156).** A finished, verified run is `MISSION_COMPLETED` with `verified` true; a finished run without a successful `VERIFY` is `MISSION_COMPLETED` with `verified` false; a
+     failed run is `MISSION_FAILED` with a typed cause taken from the node statuses; a halted run is `MISSION_PAUSED`; a refused plan is `PLAN_REJECTED` then `MISSION_FAILED` with cause `plan_rejected`.
+  6. **`execution_time_used_ms`** is the sum of the recorded per-node `duration_ms` over dispatched nodes, in integer milliseconds from the recorder's monotonic clock. Nodes in one level add up, so it can
+     exceed elapsed wall-clock time; it is not a wall-clock span, and what a limit should bound is D-043 and D-046 (Open).
+  7. **Duplicates and ordering.** The intake ignores a repeated `event_id` and assigns the next sequence; the reducer enforces contiguity and lifecycle and returns the outcome. Both outcomes reach
+     the caller. The recorder supplies the `event_id` from an injected id source.
+  8. **Plan-stage timestamps.** The validate, compile and bind stages happen inside one `run_baseline` call. Either the plan-stage events are emitted after the call with the times the recorder observed,
+     **or** `run_baseline` gains an optional, additive `observer` parameter (default none) so they carry real times. The proposal is the observer parameter, which modifies a V0.4 module and so
+     **needs the owner's confirmation**; without it, the events are emitted after the call.
+  9. **`paused` is terminal in V0.5.** No resume event exists, so a paused log ends there and the reducer rejects later events. Resume is deferred (D-161).
+  10. **JSONL.** One `EventRecord` per line, produced by the strict JSON serialization, with the sequence as the only ordering.
+  11. **Model-call attribution.** A recording model port attributes each call to the node being dispatched in the same thread; no agent changes are needed. The state-owned outcome enum mirrors the
+      agents' failure kinds plus `response`, with a guard test.
+  12. **Packages.** `eidos.state` holds the records, reducer, intake and log, checkpoint, replay and `ExecutionRecord`; `eidos.recording` holds the clock and id ports, the wrappers and the run recorder.
+- **Effect while Open:** none on existing code. The steps that depend on an item wait for its confirmation.
+- **Needs:** the owner to confirm each item as written or change it; items 2 and 8 depart from, or go beyond, what the exploration proposed.
 
 ---
 
@@ -3558,4 +3774,29 @@ one is not.
   capability registry and binding are scheduled for V0.4 (**D-134**). The question recorded above — whether real agents may
   execute before a policy exists — is **answered for V0.4 by D-140** (they are read-only and cannot act); policy semantics
   stay deferred.
+- **V0.5 (2026-09-21):** the reducer and the event log are scheduled for V0.5 (**D-152** to **D-159**). **LangGraph checkpointing and interrupts are not part of V0.5:** a V0.5 checkpoint is a value,
+  not a LangGraph checkpointer (D-157), and resume stays by prior `SUCCEEDED` outcomes (D-120). Runtime budget accounting stays unassigned: V0.5 records counters but enforces nothing (D-156).
 
+
+### D-161 — V0.5 explicit deferrals
+
+- **Status:** Deferred · **Date:** 2026-09-21 · **Source:** the V0.5 exploration and the owner's rulings (D-152 to D-160)
+- Recorded so that nothing below can become part of V0.5 by accident. **Items that are Open decisions stay Open; deferral is not resolution.**
+
+  | Deferred item | Governing entry | Not before |
+  |---|---|---|
+  | Durable persistence: SQLite, a file store, PostgreSQL, and where a checkpoint is stored | **D-017 (stays Open)** | an owner decision |
+  | A stop reason in `MeasuredFacts`, and any policy for a non-empty answer cut off at the output limit | **D-151 (stays Open)** | when the model seam is next changed |
+  | A2A events, the `AgentTask` lifecycle and producer-assigned sequences | D-026, D-035, D-036, D-037 | V0.6 |
+  | MCP and RAG events | D-027, D-028 | V0.7, V0.8 |
+  | The telemetry platform: OpenTelemetry, dashboards, aggregation, and the A2A, RAG, cache, policy-violation and human-intervention measures | handoff §33, §50 | V0.9 |
+  | Quality, confidence, estimates and prediction error | **D-015, D-063, D-064 (stay Open)** | later milestones |
+  | A distinct "contract not satisfied" status or event | **D-059 (stays Open)** | an owner decision |
+  | Historical strategy memory, ranking, the selector, pilots, exploration and adaptive learning | handoff §21, §22, §50 | V1.0, V1.1 |
+  | A planner, a replan or retry loop, and a mission driver | D-119, D-125, D-127 | not assigned |
+  | Resume of a paused mission, and a resume event | D-085, D-120 | not assigned |
+  | Cross-mission storage, indexing and aggregation | — | V1.0 |
+  | Artifact persistence and the general question of how a node receives its predecessors' outputs | **D-129, D-017 (stay Open)** | not assigned |
+  | LangGraph checkpointing and interrupts | D-113, D-120, D-127 | not assigned |
+  | Enforcement of any budget or limit against the counters | D-043, D-044, D-046 | V1.2 |
+  | Reinforcement learning, DSPy optimisation, a vector database and an AI planner | handoff §22, §24 | outside V0.5 |
