@@ -19,7 +19,7 @@ tests that prove the *product* behaves as specified, not just that the parts wor
 | Tool budget exhausted | Invariant 7 | V1.2 |
 | Policy violation | Invariant 14 — deterministic refusal, not a prompt-level refusal (§29) | V1.2 |
 | Bad retrieval / conflicting evidence | §63; evidence rejected rather than used | V0.8 |
-| Replay from recorded events | Invariant 15 — the mission timeline reconstructs with **no agent invoked** (§73) | V0.5 |
+| Replay from recorded events | Invariant 15 — the mission timeline reconstructs with **no agent invoked** (§73) | V0.5 (built) |
 | Evidence lineage | Invariant 16 — conclusion walks back to source and retrieval query (§74) | V0.8 |
 
 ## Rules
@@ -28,7 +28,7 @@ tests that prove the *product* behaves as specified, not just that the parts wor
   something" is not a passing condition (invariant 12). **No event history exists until V0.5**
   (D-123: V0.3 emits no `MissionEvent`; invariant 15 is not exercised), so V0.3 scenarios assert on the
   `RunResult` — every node's status and reason, and the dispatch order — and on what the ports were asked.
-  Once events exist, scenarios assert on them.
+  Since V0.5 events exist (`eidos.state`, `eidos.recording`), and the V0.5 scenarios assert on them.
 - No fabricated fixtures presented as measurements. A scenario may use fixed inputs; it may not
   bake in a quality score and call it measured (CLAUDE.md §7).
 
@@ -59,6 +59,20 @@ Real Research, Analysis and Verification agents over a **scripted** model, run t
 | `test_v04_baseline.py` | The baseline finishes verified from supplied documents; a PASS names what was NOT_EVALUATED and never claims contract satisfaction; well-formed output that cites a source that does not exist fails verification; too few sources, no citations and a failed verification gating what follows; a model outage, an empty answer and a raising adapter are contained; nothing supplied means nothing to research; an unbound capability stops at binding, an invalid plan at validation and an unsupported kind at compilation, each before any agent is called; halt then resume without asking the research model again; a replan needs fresh step ids, and reuse is refused before any model call and never overwritten (D-147), while same-plan resume is unaffected; the recorded limitation that an analysis step cannot follow a `VERIFY` step (D-148); a different research implementation and an unrelated domain need no core change | 3, 5, 9, 10, 11, 12, 14; D-131 to D-140, D-144 to D-146 |
 | `test_v04_determinism.py` | A whole V0.4 mission (verified, failed verification, unbound, halt and resume) serializes to identical bytes under different `PYTHONHASHSEED`s | CLAUDE.md §8 (deterministic components) |
 
-**Not exercised by these, by scope:** replay (invariant 15, V0.5), evidence lineage (invariant 16, V0.8), the reliability
+**Not exercised by the V0.3 and V0.4 scenarios, by scope:** replay (invariant 15; the V0.5 scenarios below do), evidence lineage (invariant 16, V0.8), the reliability
 contract being unmet (invariant 13 as a mission outcome, V1.2), and real budgets and policy (V1.2). The halt scenarios use a
 guard the test wrote; no budget is enforced by the runtime.
+
+### V0.5 scenarios (built)
+
+The recorder (`eidos.recording`) runs the real V0.4 agents over a **scripted** model with a fixed clock and sequential ids, and every case is run on **both** executors
+(`tests/support/eidos_v05_cases.py` holds the cases, so the scenarios and the hash-seed story cannot drift apart). The cases: the verified baseline, an unverified finish, a failed verification,
+a model timeout, an empty response, a plan refused at each of the three gates, and an admission halt. No real model is involved, and every number here is a fixed test value, not a measurement.
+
+| File | Scenarios | Invariants and decisions exercised |
+|---|---|---|
+| `test_v05_recording_backends.py` | The reference and LangGraph executors give a byte-identical serialized log for a linear plan, a failed verification and an admission halt, and the same *set* of events (contiguous sequence) for parallel branches; the recorded report equals an unrecorded run's; the execution record is the same on both | 1, 2, 8, 15; D-152, D-158, D-159, D-160 |
+| `test_v05_chain.py` | For every case on both executors: the log is the whole story (nothing refused, nothing contradicted, one terminal event, contiguous sequence); it folds to the expected status, cause, verified flag and counters; it serializes and replays to the live state; a checkpoint at every sequence plus the tail equals the full replay; the `ExecutionRecord` is the same live and replayed; a refused plan records no node; a paused mission is resumed by a new pass over its successes; a fresh interpreter replays the text without loading an agent, provider, backend, baseline runner, capability registry or recorder; the whole story is byte-identical under different `PYTHONHASHSEED`s | 1, 2, 8, 12, 15; D-152 to D-160, CLAUDE.md §8 |
+
+**Not exercised by the V0.5 scenarios, by scope:** evidence lineage (invariant 16: no evidence, source or retrieval query is recorded until V0.8), estimates and prediction error (invariant 17), a real model (recording it is an opt-in test the owner has not asked for), a mission driver, a replan loop, `AgentTask` mirroring and A2A events, and any budget
+enforced against the counters.
