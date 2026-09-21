@@ -7,7 +7,7 @@ Status only. Rules live in [CLAUDE.md](CLAUDE.md). Decisions and open questions 
 
 ## Current state
 
-**Milestone: V0.3 LangGraph Runtime — complete as scoped (D-112 to D-130), on top of V0.1 Core Contracts and V0.2 Plan Validation.**
+**Milestone: V0.4 Real Local Agents — implemented, close-out review awaiting the owner (D-131 to D-149), on top of V0.1 Core Contracts, V0.2 Plan Validation and V0.3 LangGraph Runtime (complete as scoped, D-112 to D-130).**
 
 All seven V0.1 contracts (`ReliabilityContract`, `TaskGenome`, `Plan`, `PlanStep`, `MissionEvent`,
 `MissionState`, `AgentTask`) are implemented in `src/eidos/contracts/`, immutable, in-memory only
@@ -28,7 +28,7 @@ D-112 to D-130 (2026-09-19 to 2026-09-20; D-130 accepted 2026-09-20). Step 2 add
 Step 3 added `src/eidos/runtime/` — result types, `ExecutionContext`, the synchronous ports, the admission
 hook, and the **sequential reference executor**. Step 4 added `src/eidos/backends/langgraph/` — the LangGraph adapter, the **only** importer of LangGraph — and the
 optional `langgraph` extra. Step 5 added `tests/scenarios/` — whole missions driven through validation, compilation and both
-executors — and closed the milestone. There is **no real agent yet**. See "V0.3 LangGraph Runtime" below. **1,683 tests pass**
+executors — and closed the milestone. There was **no real agent** at that point (V0.4 added them). See "V0.3 LangGraph Runtime" below. **1,683 tests pass**
 (165 in `tests/unit/contracts/`, 409 in `tests/unit/validation/`, 276 in `tests/unit/compiler/`, 431 in
 `tests/unit/runtime/`, 48 in `tests/unit/backends/`, 305 in `tests/integration/langgraph/`, 49 in `tests/scenarios/`).
 
@@ -36,9 +36,9 @@ executors — and closed the milestone. There is **no real agent yet**. See "V0.
 rulings raised; the rulings are **D-131 to D-140 and D-144 to D-148 (Accepted)**, which also resolve **D-006, D-018, D-141, D-142 and D-143**. Steps 2 to 8 are
 implemented. **The owner has run the real-model tests once (`qwen3:4b`): the provider test returned a typed response, but the baseline mission `FAILED` at its
 first step because the model returned no text, so the verifier has not yet seen a real model's output.** The cause is not established (**D-149, Open**). See
-"The first real baseline run" below.
+"The first real baseline run" below. **The Step 9 close-out review is prepared and awaits the owner's acceptance** ("V0.4 close-out review").
 
-There is still no planner, no agents, no state reducer, no A2A, no MCP, no RAG, no persistence,
+There is still no planner, no state reducer, no A2A, no MCP, no RAG, no persistence,
 no telemetry, no API and no frontend.
 
 One real-model run has been recorded (V0.4; see "The first real baseline run"). It records what happened in that run and is not a benchmark: no quality
@@ -68,7 +68,7 @@ hold, failure cases are covered, documentation matches reality, a git checkpoint
 | **V0.1** Core Contracts | `TaskGenome`, `ReliabilityContract`, `MissionState`, `MissionEvent`, `Plan`, `PlanStep`, `AgentTask`. No real agents, no A2A, no MCP, no frontend. In-memory only (D-005). | **Implemented — 165 unit tests passing** (155 at implementation, +10 for D-107/D-108) |
 | **V0.2** Plan DSL | Schema validation, cycle detection, dependency validation, depth limits, node limits, parallel-branch limits, capability validation, policy validation. | **Implemented — 409 unit tests passing** (2026-09-19). Every stage is implemented **except policy validation, which reports `NOT_APPLICABLE`** (D-110): no policy rule exists to check, and none was invented. D-046 (the actual limit values) stays Open — no limits object ships (D-103). D-111 (eight implementation details, Open) awaits the owner. |
 | **V0.3** LangGraph Runtime | Map `SEQUENTIAL`, `PARALLEL`, `ROUTE`, `VERIFY`, `RETRY`, `REPLAN` into runtime nodes. Mock agents. | **Complete as scoped — 2026-09-20 (D-112 to D-130). Step 2 (compiled form and `compile_plan`, 276 tests), Step 3 (runtime types, ports, admission, prior outcomes and the sequential reference executor, 431 tests), Step 4 (the LangGraph extra, the S1–S10 spike, the adapter and conformance with the reference executor, 353 tests) and Step 5 (scenario tests, 49 tests) are done.** Narrowed from §50's list: only `agent` and `VERIFY` compile; `ROUTE`, `RETRY`, `REPLAN`, `TERMINATE`, `HUMAN_APPROVAL` are rejected at compile time and D-012 stays Open. **Not delivered, by scope:** mapping `ROUTE`, `RETRY` and `REPLAN` (D-012 and D-125 stay Open), and any importable mock agent — work is exercised by scripted test doubles only, and no product mock agents exist (see "V0.3 close-out" below). |
-| **V0.4** Real Local Agents | Research, Analysis, Verification. Baseline workflow end-to-end. | **Scope approved 2026-09-20 — decisions D-131 to D-140 recorded; no code yet.** A fixed, hand-authored plan (Research, Analysis, `VERIFY`) over a supplied genome, run once on LangGraph with a local model behind a model seam; read-only agents; a deterministic verifier. D-006 and D-018 resolved. **D-141 to D-143 resolved by D-144 to D-146: lowercase ids with a fixed agent mapping, a four-field artifact model, and `min_quality` explicitly NOT_EVALUATED.** |
+| **V0.4** Real Local Agents | Research, Analysis, Verification. Baseline workflow end-to-end. | **Steps 2 to 8 implemented (2026-09-20 to 21; D-131 to D-148); close-out review prepared, not accepted.** `eidos.agents` (the model seam, the artifact store, Research, Analysis and a deterministic Verification rule set), `eidos.capabilities`, `eidos.baseline` and `eidos.providers`; 2,037 tests pass. The baseline works end to end **with a scripted model** on both backends. **With a real local model it has been run once and failed at its first step**: the model returned no text, so the verifier has not yet seen a real output (D-149, Open). See "V0.4 close-out review". |
 | **V0.5** MissionState + Event Reducer | `MissionEvent`, `MissionState`, `StateReducer`, checkpoints, replay. §50: state handling must be reliable **before** A2A. | Not started — blocked (D-010, D-011) |
 | **V0.6** One A2A Boundary | Move exactly one agent into an independent process. Test: normal completion, timeout, duplicate event, late event, agent restart, partial artifact, failure. | Not started — deferred (D-026) |
 | **V0.7** MCP | 2–3 real tools only (`search_documents`, `retrieve_evidence`). Test: successful call, invalid arguments, timeout, unavailable tool, unauthorized call, duplicate call. | Not started — deferred (D-027) |
@@ -723,7 +723,7 @@ predecessor outputs (D-129, Open); no capability registry (D-007); no policy eng
 
 ---
 
-## V0.4 Real Local Agents — scope approved, decisions recorded, no code (2026-09-20)
+## V0.4 Real Local Agents — implemented; first real run recorded; close-out review awaiting the owner (2026-09-21)
 
 **Step 1 — the exploration and the decision record — is done.** The exploration was read-only. The owner accepted Q1–Q15 with rulings, and
 they are recorded as **D-131 to D-140 (Accepted)**. **D-006** (which capabilities exist) and **D-018** (where the model boundary lives) are
@@ -772,7 +772,7 @@ Only Step 2 touches V0.1–V0.3 code; every other step is additive.
 | **6** | The three agents, against the fake model: Research and Analysis (read supplied or predecessor artifacts, call the model, produce a typed artifact) and the deterministic Verification rule set implementing `Verifier` | D-135, D-137, D-138, D-140, D-145, D-146 | none (D-142, D-143 resolved) | Malformed model output; a model outage; missing input; `PASS`, `FAIL` and `INCONCLUSIVE` each reachable; well-formed output that fails verification (docs/12, invariant 12); a static guard that agents do no I/O beyond their ports **Done** — `ResearchAgent`, `AnalysisAgent` and the deterministic `VerificationAgent` (rules: schema_validity, citation_coverage, minimum_distinct_sources; `min_quality` and `max_risk_level` NOT_EVALUATED); 77 tests (61 behaviour, 16 guard checks; 1,905 in all); 23 of 23 mutations caught |
 | **7** | The dispatcher (a `WorkExecutor` over the registry), `VERIFY` bound by kind, and the single-pass runner (one module, name recorded in docs/03); scenarios on both backends with the fake model | D-131, D-133, D-134, D-140 | none new | Baseline finishes verified; verification fails; a model outage fails one node and the rest is contained; an unbound capability stops the run before dispatch; an admission halt; a second, different-domain mission (invariant 10); one implementation substituted for another (invariant 9); byte-identical results on both backends **Done** — `eidos.baseline`: `run_baseline`, `WorkDispatcher`, `BaselineReport`; 30 unit tests, 24 scenario tests on both backends and 2 determinism tests (1,961 in all); 11 of 11 mutations caught |
 | **8** | `eidos.providers`: one adapter for the local model runtime over standard-library HTTP with explicit configuration, tested against a local fake HTTP server; an opt-in real-model marker; then **one real baseline run** | D-135, D-136 | **owner installs the runtime and chooses a model** | Success, timeout, refused connection, non-success status, malformed body; the real run's model, latency and verdict recorded **only from that run** **Run and recorded (2026-09-21).** The adapter `eidos.providers.OllamaModel`, the fake-runtime tests (47 integration tests, 15 guard checks; 18 of 18 mutations caught), the `real_model` marker and the opt-in tests were written first. The owner then ran the two opt-in tests once against `qwen3:4b`: the provider test passed with a typed response, and **the baseline mission `FAILED` (`verified` false) because the Research step's one model call returned no text (`empty_response`); the verifier was never reached.** Recorded exactly in "The first real baseline run"; the cause is not established (D-149, Open). Whether this satisfies the step's "verdict recorded" condition is the owner's to say. |
-| **9** | Close-out: final guards (a vendor name only in `eidos.providers`; agents read-only; core layers import none of the new packages), docs, this file, the definition of done, and which invariants are and are not exercised | — | — | Full suite; unit suite with LangGraph blocked; import audit; frozen paths untouched |
+| **9** | Close-out: final guards (a vendor name only in `eidos.providers`; agents read-only; core layers import none of the new packages), docs, this file, the definition of done, and which invariants are and are not exercised | — | — | Full suite; unit suite with LangGraph blocked; import audit; frozen paths untouched **Review prepared (2026-09-21), not accepted** — see "V0.4 close-out review". |
 
 ### The first real baseline run (owner-run, 2026-09-21)
 
@@ -841,6 +841,87 @@ The D-147 guard is implemented (`refuse_a_reused_step`, used by the Research and
 installed Ollama 0.34.2 and pulled `qwen3:4b` (see "The first real baseline run"). The only model figures in this repository are the ones recorded there; no speed or
 quality is claimed beyond them. Only the owner installs the runtime and chooses the model (D-136).
 
+### V0.4 close-out review
+
+**Status: prepared 2026-09-21; not accepted by the owner; nothing pushed.** Three commits sit on top of the pushed `11829a5`: the stale-cross-reference fix,
+the recorded run with D-149, and this review.
+
+**Against the handoff's V0.4 line (§50): "Add Research, Analysis, Verification. Make the baseline workflow work end-to-end."**
+
+- **Delivered:** the three agents (`ResearchAgent`, `AnalysisAgent`, the deterministic `VerificationAgent`), a capability registry with typed pre-run binding, a
+  single-pass runner and one local-runtime adapter. The baseline runs end to end **with a scripted model** on both backends, and a real `PASS`, `FAIL` and
+  `INCONCLUSIVE` verdict is reachable from the verifier.
+- **Not shown: the baseline working end to end with a real model.** The one real run failed at its first step and never reached the verifier (D-149, Open). Passing tests
+  do not change that: the baseline test asserts structure only.
+- **A proposal, not a decision:** hold V0.4 open until a real run reaches the verifier, starting with D-149 option (1), which needs no code change. The alternative —
+  close V0.4 on the strength of the recorded failed run and carry D-149 forward — is the owner's to choose.
+
+**Definition of done (CLAUDE.md §5), checked.**
+
+- *Implementation exists:* `eidos.agents`, `eidos.capabilities`, `eidos.baseline`, `eidos.providers`, and one amended core file, `eidos/runtime/context.py` (D-139).
+- *Tests exist:* 1,605 unit (contracts 165, validation 409, compiler 276, runtime 435, backends 48, capabilities 56, agents 171, baseline 30, providers 15), 353 integration
+  (LangGraph 306, providers 47) and 79 scenarios, plus 2 real-model tests deselected by default. The V0.3 close-out was 1,683; the default run is now 2,037.
+- *Tests pass:* the full default run — `python -m pytest`, recorded for this review — **2,037 passed, 2 deselected, in 74.56 s**, and it includes the permanent test that runs the
+  whole unit tree with LangGraph, LangChain and LangSmith unimportable and asserts none was loaded. The 2 deselected tests are the real-model tests, run separately by the
+  owner (above). Mutation checks over Steps 2 to 8 and the D-147 guard: **97 of 98 caught**; the one that was not is an equivalent mutant (a lock-free read that CPython
+  cannot make observable), documented at Step 5.
+- *Integration works:* with a scripted model, the whole baseline on both backends with byte-identical reports; the adapter against a local fake runtime over real sockets
+  (success, timeout, refused connection, non-success status, malformed body). With a real model, **one real round trip works and the mission failed** (above).
+- *Failure cases covered:* malformed and empty model output, a model outage, missing input, `PASS` / `FAIL` / `INCONCLUSIVE` each reachable, well-formed output that fails
+  verification, an unbound capability, an invalid plan, an unsupported step kind, an admission halt and resume, a reused step id (D-147), and — with a real model — a model
+  that returned no text.
+- *Documentation matches reality:* checked by this review, which found and corrected stale statements (below).
+- *Git checkpoint:* one commit per step, and the three above.
+
+**Guards, cross-checked independently of the guard tests** (an AST import audit of `src/eidos` run for this review; the script is not committed).
+
+- No core layer (`contracts`, `validation`, `compiler`, `runtime`, `backends`) imports `agents`, `capabilities`, `providers` or `baseline`. Nothing imports `providers`,
+  `baseline` or `backends`; `providers` imports only `agents`.
+- The only third-party imports are `pydantic` everywhere and LangGraph / LangSmith inside `eidos.backends.langgraph`. The base dependency is still `pydantic>=2`; V0.4
+  added no dependency and no extra.
+- No model, vendor or SDK name appears in `agents`, `capabilities` or `baseline`. Outside `providers` and `backends`, the only matches are prose references to
+  `CLAUDE.md` and the V0.1 A2A identifiers (`A2ATaskId`, `A2AContextId`, D-095) — a protocol name, unchanged since V0.1.
+- Agents are read-only: the static guard forbids I/O, network, clock, randomness, process state, opening files, printing and executing generated code, and allows only a short
+  list of standard-library modules; no agent imports a provider.
+- Frozen paths: the handoff is unchanged since the V0.3 tip (empty diff). Of the V0.1 to V0.3 source, exactly one file changed, `runtime/context.py` (D-139). Two groups of
+  tests changed because the specification changed: the context's field set (D-139), updated and extended with four new tests, and a late "could not be recorded" that became an
+  early refusal (D-147), now asserting that no model was called. None was weakened, deleted or skipped.
+
+**Invariants, honestly.** Exercised by V0.4 code and tests: 1 and 2 (MissionState is only read; agents are read-only, D-140), 4 (the compiled DAG, unchanged), 5 (the runner
+stops at the first gate that refuses; nothing executes unvalidated), 9 (the model sits behind a port; another implementation substitutes without a core change; a vendor
+name appears only in `eidos.providers`), 10 (an unrelated-domain scenario needs no core change), 11 (plans request capabilities; the registry binds them), 12 (verification is
+separate from completion: scripted well-formed output that fails verification, and a real model that returned nothing, were not counted as success), 14 (the admission guard
+is code and fails closed) and 18 (identifiers). **Exercised in part:** 3 (model output is text that is stored and read back, never executed and never run as a plan; the
+model does not emit plans at V0.4, D-131, so the Plan-DSL half is not exercised), 6 (a replan is a new plan version in the same execution, with fresh step ids, D-147;
+lineage across a mission's plans is the V0.5 reducer's concern), 7 (only an admission halt exists at run time; the other budgets stay deferred, D-127), 13 (a real run reported
+failure instead of manufacturing an answer; only three reliability clauses are evaluated, `min_quality` and `max_risk_level` are `NOT_EVALUATED` and a `PASS` never claims
+contract satisfaction; "the contract cannot be met" as a run outcome is not exercised, D-059 Open) and 16 (a citation is recorded as a `source_ref`, one link of the chain; there
+is no retrieval query, tool or evidence chain). **Not exercised, by ruling:** 8 and 15 (no events and no replay, D-123, D-126) and 17 (no estimates).
+
+**Findings for the owner.**
+
+1. **D-149 (new, Open):** the first real run failed at its first step; cause not established. Options are in the entry.
+2. **The opt-in real test is thin.** It prints each step's status and the last step's reason, not every step's reason and not the raw model response, so the Research step's own
+   reason is missing from the record. A test-only change to print every step's reason would make the next run more informative. Not made; it is the owner's call whether to run again.
+3. **A failed model call carries no measured facts**, so its latency and token counts are not recorded (part of D-149).
+4. **Stale documentation found and corrected by this review:** the README status line (it still said V0.2 and "no compiler, no runtime, no agents"); `docs/03`'s "approved, not
+   built" heading and its "no real model has been run"; the V0.4 rows in this file's ladder and "not built yet" table; ten references that still called D-141 to D-143 "Open"
+   (their own commit, annotations only); the opt-in test's docstring (comment only); and the two test READMEs.
+5. **Carried from earlier steps, already recorded in D-148 and D-147:** "distinct" sources are not "independent" sources; `NOT_EVALUATED` clauses appear as prose in a
+   verification reason, not as a typed field; the provider's timeout bounds each socket operation, not total elapsed time; an analysis step cannot follow a `VERIFY` step; a newly
+   executed step needs a fresh id across plan versions.
+6. **Still Open and untouched:** D-007, D-012, D-015 (a scalar), D-017, D-020, D-041, D-043, D-046, D-055, D-059, D-063, D-064, D-125, D-126 and D-129, and now D-149.
+
+**Not measured, not claimed:** throughput or latency beyond the one trivial completion; any quality of any model's output; repeatability; whether the GPU was used; recorded
+model outputs for replay (D-076 stays Open).
+
+**Decisions requested of the owner:**
+
+1. **D-149 — which option?** (1) diagnose first with one read-only call that prints the raw response (recommended: no code change, and it tells us whether this is configuration
+   or the seam); (2) a configuration-only re-run; (3) let the seam express reasoning (a D-135 change); (4) another model.
+2. **Does V0.4 close with the recorded failed run, or after a real run reaches the verifier?**
+3. **Push?** Three commits are local; nothing has been pushed since `11829a5`.
+
 ### Carried forward, not decided
 
 LangGraph runs a level's nodes on worker threads, so the agents, the store and the fake model must be thread-safe, and one small
@@ -851,15 +932,11 @@ GPU may serialise concurrent model calls; V0.5 replay will need model outputs re
 ## Intentionally not built yet
 
 Per CLAUDE.md §3, a package is created only when the milestone that fills it begins. These
-architectural components are **documented in `docs/03_architecture.md` but not scaffolded**:
+architectural components are **documented in `docs/03_architecture.md` but not scaffolded** (V0.4's four packages now exist and are no longer listed):
 
 | Component | Arrives at |
 |---|---|
-| `capabilities/` — the V0.4 capability set and agent registry | V0.4 Step 4 (V0.2 needed neither — D-102) |
 | `planning/` — candidate strategy generation | V0.2+ |
-| `agents/` — `ModelPort`, the artifact store, Research, Analysis, Verification | V0.4 Steps 3, 5 and 6 |
-| `providers/` — model-provider adapters; the only place a vendor name may appear (D-135) | V0.4 Step 8 |
-| the single-pass runner (one module) | V0.4 Step 7 |
 | `state/` — reducer, checkpoints, replay | V0.5 |
 | `policy/` — governance, autonomy, budgets | V1.2 engine (V0.2 has only a `NOT_APPLICABLE` stage in `validation/` — D-110) |
 | `telemetry/` — structured events, metrics | V0.9 |
@@ -925,6 +1002,7 @@ Full detail for each is in [decisions.md](decisions.md).
 
 | Date | Milestone | Outcome |
 |---|---|---|
+| 2026-09-21 | **V0.4 Step 9: close-out review prepared (not accepted)** | Ran the full default suite (**2,037 passed, 2 deselected, 74.56 s**), an independent AST import audit of `src/eidos` (no core layer imports a new package; no vendor name outside `eidos.providers` and the LangGraph backend; only `pydantic` and LangGraph third-party) and a frozen-path check (handoff unchanged; one V0.1–V0.3 source file changed, `runtime/context.py`). Wrote "V0.4 close-out review": the definition of done, the guards, the invariants exercised and not, the findings and the decisions requested. **Against the handoff's "baseline workflow works end-to-end", it works with a scripted model and has not been shown with a real one (D-149).** Corrected stale documentation (README status, docs/03, the ladder and "not built yet" table, the test READMEs, and ten "Open" references to D-141 to D-143 in their own commit). No source changed. V0.4 is not closed; nothing pushed. |
 | 2026-09-21 | **V0.4 Step 8, part 2: the first real baseline run recorded** | The owner ran the two opt-in tests once against `qwen3:4b` (Ollama 0.34.2; temperature 0.0, seed 7, 512 output tokens, 120 s timeout): **2 passed in 38.55 s**. The provider test returned a typed 5-character response (30 prompt tokens, 154 output tokens, 10.156 s). **The baseline mission ended `FAILED`, `verified` false: the Research step's one model call returned no text (`empty_response`) so the step was `no_result`, Analysis and `VERIFY` were skipped, and the verifier was never reached** — no real verdict or quality figure exists. Recorded as printed; the agents, verifier, adapter and tests were not changed to make the model pass. Cause not established; a candidate (reasoning tokens consuming the budget) is unverified and is logged as Open **D-149**. Counts: 100 Accepted, 46 Open, 4 Deferred. Not pushed. |
 | 2026-09-20 | **A test-structure defect found and fixed: the unit suite reached LangGraph** | Running the unit suite with the LangGraph family blocked (D-116) failed at collection: `tests/unit/baseline/test_baseline.py`, added in V0.4 Step 7, imported shared helpers that import the LangGraph backend. No product code was affected (`eidos.baseline` and the core never imported it), but the claim that core unit tests run without LangGraph had been true only at V0.3 and was not re-checked at V0.4 Steps 2 to 8 until now. Fixed by moving the pure mission, plan and registry helpers into `eidos_mission_factories` and `eidos_v04_registry` and pointing the unit tests at the reference-executor doubles. **All 1,605 unit tests now pass with LangGraph, LangChain and LangSmith unimportable and none loaded**, and a permanent test (`tests/integration/langgraph/test_unit_suite_without_langgraph.py`) runs that check on every default run; it was shown to fail when the defect is reintroduced. |
 | 2026-09-20 | **D-147 guard implemented** | `refuse_a_reused_step` in `eidos.agents.base`, called by the Research and Analysis agents before anything else: if the step's artifact exists under `(execution_id, step_id)`, or `artifact:<step_id>` is already taken (for example by a supplied document), the step is refused with a `FAILED` result whose reason begins `step_id_reused:` and **no model call is made**. The write-once store remains the backstop for a race. Same-plan resume is unaffected: carried-over steps are not dispatched and a failed step wrote nothing. Tests changed because the specification changed (a late "could not be recorded" became an early refusal) and strengthened to assert no model call; new tests cover both halves of the identity, other executions, a failed step running again, resume, the race backstop, and the pinned VERIFY-predecessor limitation. Mutation-checked 10 of 10. No real-model test was run. Not pushed. |

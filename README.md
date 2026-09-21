@@ -7,20 +7,25 @@
 
 ## Status
 
-**V0.2 — typed contracts and deterministic plan validation. No orchestration runtime exists yet.**
+**V0.4 — real local agents; close-out review awaiting the owner.**
 
 This repository contains the project rules, the architecture knowledge base, the decision record,
-the V0.1 typed contracts (`eidos.contracts`) and the V0.2 plan validator (`eidos.validation`). There
-is no planner, no compiler, no runtime, no agents, no A2A, no MCP, no RAG, no persistence and no
-frontend.
+the V0.1 typed contracts (`eidos.contracts`), the V0.2 plan validator (`eidos.validation`), the V0.3
+compiler and runtime (`eidos.compiler`, `eidos.runtime` and the LangGraph backend
+`eidos.backends.langgraph`), and the V0.4 capability registry, three read-only agents (Research,
+Analysis and a deterministic Verification rule set), a single-pass baseline runner and one
+local-model adapter. The baseline works end to end with a scripted model. With a real local model it
+has been run once and **failed at its first step** (the model returned no text), so the verifier has
+not yet checked a real model's output — see [progress.md](progress.md) and D-149. There is no
+planner, no state reducer, no A2A, no MCP, no RAG, no persistence, no API and no frontend.
 
 Current status and the milestone ladder: [progress.md](progress.md).
 Decisions and unresolved questions: [decisions.md](decisions.md).
 Rules every contributor (human or agent) follows: [CLAUDE.md](CLAUDE.md).
 
-No performance, quality or latency numbers appear anywhere in this repository, because no
-measurement has been taken. Per the project rules, every metric published must come from an actual
-recorded run.
+No quality metric appears anywhere in this repository. One real-model run is recorded in
+[progress.md](progress.md) as a record of what happened, not as a benchmark. Per the project rules,
+every metric published must come from an actual recorded run.
 
 ## What EIDOS is
 
@@ -82,3 +87,6 @@ python -m pytest
 ```
 
 Runs every test root. The current test state and counts are recorded in [progress.md](progress.md).
+The two real-model tests are excluded from that run and never skipped; they are selected explicitly
+with `-m real_model` and need a local model runtime the owner has installed
+(see `tests/integration/providers/test_ollama_real.py`).

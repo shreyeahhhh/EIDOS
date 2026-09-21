@@ -13,7 +13,7 @@ and from `tests/scenarios/`, which tests whole missions.
 | Compiled plan executing on the LangGraph runtime with mock agents | V0.3 — `tests/integration/langgraph/` (Step 4: the spike, the adapter, and conformance with the reference executor) |
 | The whole core unit suite run with the LangGraph family unimportable (D-116) | V0.3, re-established at V0.4 — `tests/integration/langgraph/test_unit_suite_without_langgraph.py` |
 | The local-runtime provider adapter against a local fake runtime over real sockets; real-model tests are an explicit opt-in (`-m real_model`), deselected by default and never skipped | V0.4 — `tests/integration/providers/` (Step 8) |
-| Local agents wired into the runtime end-to-end | V0.4 |
+| Local agents wired into the runtime end-to-end | V0.4 — with a scripted model in `tests/scenarios/`; with a real model in `tests/integration/providers/test_ollama_real.py` (opt-in, run once: the baseline mission failed at its first step, progress.md and D-149) |
 | Checkpointing and replay against real state storage | V0.5 |
 | Qdrant retrieval, embeddings, reranking | V0.8 |
 | Database/storage layer, once persistence exists | open — decision D-017 |

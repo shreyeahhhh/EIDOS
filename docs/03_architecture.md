@@ -371,16 +371,16 @@ every semantic.
 LangGraph is an optional extra (D-116), heavy for what it does — a closure of 38 distributions, including an HTTP client,
 `websockets` and LangSmith — and the core and its tests run without it.
 
-### The V0.4 boundary — model, agent and capability seams (approved, not built)
+### The V0.4 boundary — model, agent and capability seams (built; the first real-model run failed at its first step, D-149)
 
-Recorded in D-131 to D-140. Nothing here exists yet; `progress.md` tracks the steps.
+Recorded in D-131 to D-148 and implemented in V0.4 Steps 2 to 8; `progress.md` tracks the steps and the close-out review.
 
 ```text
 eidos.baseline (runner) ---> validation, compiler, runtime, capabilities, agents   (handed a backend; imports none)
 agents                ---> runtime ports (it implements them), contracts, ModelPort (it owns it)
 capabilities          ---> contracts, compiler          (binding reads a CompiledPlan)
 providers             ---> agents' ModelPort         (the only vendor-aware layer)
-core: contracts, validation, compiler, runtime     (unchanged; import none of the above)
+core: contracts, validation, compiler, runtime     (import none of the above; the one change is the frozen contract on ExecutionContext, D-139)
 ```
 
 Four seams:

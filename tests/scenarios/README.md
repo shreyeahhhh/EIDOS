@@ -51,7 +51,8 @@ mock agents — so they prove the pipeline and the meaning of a run, not any age
 ### V0.4 scenarios (built)
 
 Real Research, Analysis and Verification agents over a **scripted** model, run through `eidos.baseline.run_baseline` on both executors;
-`drive_baseline` (`tests/support/eidos_v04_factories.py`) asserts the two reports are byte-identical. No real model is involved.
+`drive_baseline` (`tests/support/eidos_v04_factories.py`) asserts the two reports are byte-identical. No real model is involved; the one real-model baseline run is an opt-in integration test, not a scenario
+(`tests/integration/providers/test_ollama_real.py`), and its recorded result is in progress.md.
 
 | File | Scenarios | Invariants and decisions exercised |
 |---|---|---|
