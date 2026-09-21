@@ -51,7 +51,7 @@ metric exists anywhere in this repository, and the only latencies recorded are t
 
 - [x] `CLAUDE.md` — permanent rules, 18 architecture invariants
 - [x] `progress.md` — this file
-- [x] `decisions.md` — 101 Accepted, 46 Open, 4 Deferred (counts current as of the latest decision below)
+- [x] `decisions.md` — 102 Accepted, 46 Open, 4 Deferred (counts current as of the latest decision below)
 - [x] `README.md`, `pyproject.toml`, `.gitignore`
 - [x] `docs/01`–`docs/12` — the twelve documents required by handoff §81
 - [x] `src/eidos/` and `src/eidos/contracts/` — docstring only, no code
@@ -980,7 +980,39 @@ full 4,096 tokens would take about 244 s, longer than the 240 s timeout, so a ca
 **Not observed:** repeatability beyond the Research comparison above (this is one attempt); other models; reasoning switched off; a budget between 2,048 and 4,096; and the opt-in test as
 committed (512 tokens), which would fail as it did.
 
-**Nothing else was changed on the strength of this result:** D-150 stays Open and V0.4 is not closed; whether either should be is the owner's call.
+**Nothing else was changed on the strength of this result:** D-150 stayed Open and V0.4 was not closed; whether either should be was the owner's call.
+
+**Later the same day:** the owner adopted (a′) as the committed configuration and the committed test was run once (next section); D-150 was then resolved and D-151 logged.
+
+### The committed real-model run (owner-directed, 2026-09-21)
+
+**Ruling: adopt D-150 option (a′), then run the committed test once.** The committed opt-in test's configuration was changed to `max_output_tokens` **4,096** and a **240 s** timeout (the
+timeout is now a committed constant, `TIMEOUT_SECONDS`, instead of an environment variable); `qwen3:4b`, temperature 0.0, seed 7, the endpoint, the mission and all other behaviour
+were unchanged. That change is its own commit, made **before** the run, so the run tested exactly what is committed. The run then executed **the baseline node of the committed test,
+once, from a clean tree**: no tap, no retry, no re-run and no side or diagnostic call (the trivial-completion test in the same file was not selected, because it would have been an extra
+model call). Only `EIDOS_REAL_MODEL_URL` (`http://127.0.0.1:11434`) and `EIDOS_REAL_MODEL_NAME` were set.
+
+**Result, as printed:**
+
+| | Research (`gather`) | Analysis (`analyse`) |
+|---|---|---|
+| Call result | `response`, 753 characters | `response`, 842 characters |
+| Prompt / output tokens | 160 / 977 | 322 / 2,582 |
+| Elapsed, as the adapter measured it | 59.531 s | 172.203 s (72% of the 240 s timeout, 67.8 s to spare) |
+| Step status | `succeeded` | `succeeded` |
+
+`check` (`VERIFY`) `succeeded` — the verifier's **PASS** — with the reason "schema_validity satisfied (1 artifact(s) well-formed); citation_coverage satisfied (every artifact cites sources
+that exist); minimum_distinct_sources satisfied (3 distinct supplied source(s) reached, 3 required). NOT_EVALUATED: min_quality, max_risk_level (no defined deterministic measurement).
+This verdict covers the V0.4 verification rules only; it is not a claim that the reliability contract is satisfied." Final `RunResult`: outcome **`finished`**, `verified` **true**. pytest:
+1 passed in 232.93 s.
+
+**Read against the earlier attempt.** The response lengths and token counts equal the (a′) run's (753 / 977 and 842 / 2,582), so the run reproduced under temperature 0.0 and seed 7. The
+timings differ (59.531 s and 172.203 s against 53.078 s and 154.234 s): this run was about 12% slower on both calls. Two runs of the same configuration is all the repeatability there is.
+The committed test prints neither `done_reason` nor `thinking`, so they were not captured; the (a′) run's raw bodies showed `stop` for both calls.
+
+**Still true, and stated again.** The committed baseline test asserts structure only: pytest's green result does not by itself say the mission succeeded; the printed outcome, `verified`
+and step statuses do. The PASS covers three V0.4 rules and measures no quality; it does not check that a cited document supports its claim. A call that ran to the full 4,096 tokens at the
+slowest recorded rate could exceed the 240 s timeout, which would be a typed timeout failure.
 
 ### V0.4 known limitations (recorded, not redesigned)
 
@@ -1133,7 +1165,6 @@ Highest-impact first.
 
 | Item | Blocks | Why it matters |
 |---|---|---|
-| **D-150** what to do when a reasoning model spends its whole output budget | **making a real-model baseline reproducible from the committed test** | Option (a′), tried once at 4,096 tokens and a 240 s timeout, finished: Research and Analysis succeeded and the verifier returned PASS (three V0.4 rules, no quality measured). The committed opt-in test still sets 512 tokens and would fail as it did. Option (c) is implemented. The owner decides whether the working configuration becomes the committed one, whether D-150 is resolved, and about (b), (d) and the truncated-answer question. |
 | **D-015** verification confidence computation | V0.4 verification, V1.2 | §31 compares a scalar confidence against a threshold while §18 forbids trusting a model-asserted score. Implementing §31 naively builds the exact anti-pattern the handoff warns against. **V0.4 (D-138):** the verifier is a deterministic rule set, no model verdict, no scalar; stays Open for a scalar (V1.2). |
 | **D-039** reducer signature | V0.5 | A determinism requirement that produces no observable output cannot be tested. |
 | **D-010b** checkpoint semantics | V0.5 | Contents, granularity and trigger unspecified. Entangled with D-017. |
@@ -1150,6 +1181,7 @@ Highest-impact first.
 | **D-125** plan-level `RETRY` vs a runtime retry policy | none at V0.3 | Retry appears both as a §13 step kind and as §32 runtime recovery; the handoff never relates them. `RETRY` is compile-rejected and V0.3 has no automatic retry. |
 | **D-126** `MissionEvent` vocabulary for local node lifecycle | V0.5 or later | The thirteen §33 types (D-090) cannot represent a local node starting, finishing, failing or being skipped, and there is no payload (D-067). Invariant 15 is not exercised in V0.3 (D-123). |
 | **D-129** how a work node receives its predecessors' outputs | V0.4 (none at V0.3) | The specified work port `execute(context, node)` passes a node no upstream results, so an edge into a work node carries ordering only; only the verifier receives its predecessors' results. `ArtifactRef` is opaque and no artifact model exists (D-098). **V0.4 (D-137):** answered for V0.4 by an in-memory artifact store; stays Open — a minimal four-field artifact model is defined for V0.4 (D-145). |
+| **D-151** non-empty model responses that stopped at the output limit | later: when the model seam is next changed, or V0.5 (D-076) | The adapter returns a normal response whenever `response` has text, whatever `done_reason` says; the seam carries no stop reason; the three V0.4 verifier rules do not detect a cut-off answer. Not observed in any captured non-empty response (all `stop`). Deferred by the owner: not redesigned in V0.4, since no existing contract requires it. |
 | **D-071** detached/reusable genome representations | V1.0 | §21 stores derived characteristics, not the genome, so the detached case may never arise. |
 | **D-074** is §30's approval wording exactly `autonomy_level >= 3`? | V1.2 | §30 scopes to actions, §29 to the mission. If not equivalent, D-069 dropped a capability rather than a duplicate. |
 | **D-059** contract-unsatisfied as `failed` or a fifth state | V0.4 | Invariant 13 requires it distinguishable from a crash; the handoff gives it no event name and no status value. |
@@ -1174,6 +1206,7 @@ Full detail for each is in [decisions.md](decisions.md).
 
 | Date | Milestone | Outcome |
 |---|---|---|
+| 2026-09-21 | **The committed real-model test run once: `finished`, verifier PASS. D-150 resolved; D-151 logged (Open)** | Owner ruling: adopt option (a′). The committed opt-in test now carries `max_output_tokens` 4,096 and a committed 240 s timeout (own commit, made before the run); everything else unchanged. The baseline node of the committed test was run **once from a clean tree** (no tap, retry, re-run or side call; the trivial-completion test not selected): **outcome `finished`, `verified` true; `gather`, `analyse`, `check` all `succeeded`; VERIFY dispatched, verifier PASS; Research 753 characters, 977 tokens, 59.531 s; Analysis 842 characters, 2,582 tokens, 172.203 s (72% of the timeout); pytest 1 passed in 232.93 s.** Counts equal the earlier (a′) run's. **D-150 moved to Accepted:** (a′) and (c) adopted, (b) and (d) not adopted. **D-151 (Open) logged:** a non-empty response that stopped at the output limit is returned as a normal response and can pass verification unmarked; not observed in any run; deferred by the owner, not redesigned in V0.4. Counts: 102 Accepted, 46 Open, 4 Deferred. Not pushed. |
 | 2026-09-21 | **D-150 option (a′) tried once: the baseline finished and the verifier returned PASS** | One real baseline attempt at `max_output_tokens` 4,096 and a 240 s timeout (model, temperature, seed, endpoint and mission unchanged; no retry, re-run or side calls; the adapter as changed by option (c); the temporary edit and tap reverted, tree equals `HEAD`, and the committed test still sets 512). **Research: `response` 753 characters, `thinking` 4,226, `done_reason` `stop`, 977 of 4,096 tokens, 53.049 s — identical to the 2,048-run's Research call. Analysis: `response` 842 characters, `thinking` 12,588, `done_reason` `stop`, 2,582 of 4,096 tokens, 154.208 s (64% of the timeout) — the 2,048-run's cut-off reasoning is an exact prefix of it. `VERIFY` dispatched: PASS (schema validity, citation coverage, 3 distinct sources; `min_quality` and `max_risk_level` NOT_EVALUATED). Outcome `finished`, `verified` true.** The PASS measures no quality and does not check that a citation supports its claim. Recorded exactly; nothing changed on the strength of it. D-150 stays Open; V0.4 is not closed. Not pushed. |
 | 2026-09-21 | **D-150 option (c) implemented: an empty answer that stopped at the output limit says so** | Owner ruling. In `OllamaModel._interpret`, an empty `response` with `done_reason` exactly `"length"` is still an `EMPTY_RESPONSE` but its message now states that generation stopped at the output limit; every other empty answer keeps the plain message; a non-empty answer is unchanged. **No new kind, and the ModelPort, D-135, agents, verifier, runtime, prompts and settings are untouched.** Five tests (16 cases); **12 of 12 mutations caught**; full default suite **2,053 passed, 2 deselected, 74.98 s**. No real model was run in this step. D-150 stays Open (option (c) done; (a′), (b), (d) and the truncated-answer question remain). Not pushed. |
 | 2026-09-21 | **D-150 option (a) tried once: Research succeeded, Analysis failed the same way** | One real baseline attempt at `max_output_tokens` 2,048 (everything else unchanged; the two model calls the mission dispatches; no others; the temporary edit and tap reverted, tree equals `HEAD`). **Research: `response` 753 characters citing `doc:1` to `doc:3`, `done_reason` `stop`, 977 of 2,048 tokens, 52.661 s — stored as `artifact:gather`. Analysis: `response` empty, `thinking` 10,790 characters, `done_reason` `length`, 2,048 of 2,048 tokens, 111.010 s (93% of the 120 s timeout).** `check` skipped; mission `failed`, `verified` false; **the verifier did not run.** Recorded exactly; nothing changed to make the model pass. D-150 stays Open (its option (a) tried once; (a′), (b), (c), (d) remain); a related gap found by reading the code is recorded in it. Counts: 101 Accepted, 46 Open, 4 Deferred. Not pushed. |
