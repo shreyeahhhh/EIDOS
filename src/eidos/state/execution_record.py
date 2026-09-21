@@ -2,7 +2,8 @@
 
 ``execution_record(records)`` is a **pure projection of an event log**. It is recomputed from the records every time, is never stored as truth
 and never written to ``MissionState``: the log is authoritative (D-157) and this is one more view of it, next to the state the reducer folds.
-It first replays the records, so a log the reducer would refuse gives that typed rejection and never a record built on a log that does not hold.
+It first replays the records, so a log the reducer would refuse, or one that repeats a step's start or settlement (D-162 item 1), gives that typed
+rejection and never a record built on a log that does not hold. A record therefore has at most one start and one settlement per step.
 
 What it holds is facts, each one a value the log recorded: identity; the plan's structure as recorded, with the agent each step was bound to;
 per step, the typed result, whether a port was dispatched, the recorded duration, the model calls and the ``VERIFY`` verdict with its reason;
@@ -107,7 +108,6 @@ class ExecutionRecord(EidosModel):
     model_calls: int = Field(ge=0)
     responses_missing_token_counts: int = Field(ge=0)  # responses whose provider reported no prompt or output tokens: ``tokens_used`` may fall short by these
 
-    repeated_step_events: int = Field(ge=0)  # NODE_STARTED / NODE_SETTLED records for a step beyond its first: always 0 in a log the recorder wrote
     event_count: int = Field(ge=1)
     first_occurred_at: UtcDateTime  # of the first and the last record by sequence: bounds of the log, never an ordering
     last_occurred_at: UtcDateTime
@@ -125,18 +125,11 @@ def execution_record(records: Iterable[EventRecord]) -> ExecutionRecord | Replay
     plan = next((p for p in state.plans if p.plan_id == state.active_plan_id), state.plans[-1] if state.plans else None)
     started: dict[StepId, NodeStartedPayload] = {}
     settled: dict[StepId, NodeSettledPayload] = {}
-    repeated = 0
     rejected: PlanRejectedPayload | None = None
     if plan is not None:
-        # The first record of a step is the one shown. The reducer keeps no per-node state (D-113), so it cannot refuse a repeat; a repeat is
-        # therefore counted and reported, never dropped without a trace (decisions.md D-162 item 1).
-        for p in payloads:
-            if isinstance(p, NodeStartedPayload) and p.plan_id == plan.plan_id:
-                repeated += p.step_id in started
-                started.setdefault(p.step_id, p)
-            elif isinstance(p, NodeSettledPayload) and p.plan_id == plan.plan_id:
-                repeated += p.result.step_id in settled
-                settled.setdefault(p.result.step_id, p)
+        # A replayed log holds at most one start and one settlement per step of a plan: replay refuses a repeat (D-162 item 1).
+        started = {p.step_id: p for p in payloads if isinstance(p, NodeStartedPayload) and p.plan_id == plan.plan_id}
+        settled = {p.result.step_id: p for p in payloads if isinstance(p, NodeSettledPayload) and p.plan_id == plan.plan_id}
         rejected = next(
             (p for p in reversed(payloads) if isinstance(p, PlanRejectedPayload) and p.plan_id == plan.plan_id), None
         )
@@ -173,7 +166,6 @@ def execution_record(records: Iterable[EventRecord]) -> ExecutionRecord | Replay
         responses_missing_token_counts=sum(
             1 for call in calls if call.outcome is ModelCallOutcome.RESPONSE and (call.prompt_tokens is None or call.output_tokens is None)
         ),
-        repeated_step_events=repeated,
         event_count=len(materialized),
         first_occurred_at=materialized[0].event.occurred_at,
         last_occurred_at=materialized[-1].event.occurred_at,

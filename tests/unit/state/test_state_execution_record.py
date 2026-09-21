@@ -27,6 +27,7 @@ from eidos.state import (
     PlanCompiledPayload,
     PlanGeneratedPayload,
     PlanRejectionStage,
+    ReduceOutcome,
     ReplayRejection,
     ReplayRejectionCode,
     StepRecord,
@@ -97,7 +98,7 @@ def test_the_counters_are_the_folded_ones_and_the_counts_are_of_recorded_things(
     assert record.tokens_used == state.tokens_used == (160 + 977) + (322 + 2582)
     assert record.execution_time_used_ms == state.execution_time_used_ms == 1200 + 3400 + 5
     assert (record.tool_calls_used, record.retries_used, record.replans_used) == (0, 0, 0)
-    assert (record.model_calls, record.responses_missing_token_counts, record.repeated_step_events) == (2, 0, 0)
+    assert (record.model_calls, record.responses_missing_token_counts) == (2, 0)
     assert record.status_reason == state.status_reason
 
 
@@ -298,29 +299,16 @@ def test_a_log_the_reducer_would_refuse_is_a_typed_rejection_and_never_a_record(
     assert isinstance(empty, ReplayRejection)
 
 
-def test_a_repeated_settlement_is_counted_and_the_first_is_shown_pinning_the_gap_recorded_in_d162():
-    """Today the reducer applies a second NODE_SETTLED for the same step and folds its counters again (D-162 item 1, Open). The record must not
-    hide that: the repeat is counted, so the disagreement between the steps and the counters is visible. If the owner decides the log or the
-    reducer refuses a repeat, this test changes deliberately."""
-    log = verified_baseline()
-    settled_again = log.records[4].payload.model_copy(update={"duration_ms": 9999})  # gather's NODE_SETTLED, again, with a different duration
-    log.records.pop()  # drop the terminal event so the mission is still open
-    log.add(settled_again)
-    record = project(log)
-    assert record.repeated_step_events == 1
-    assert step(record, "gather").duration_ms == 1200  # the first record of the step is the one shown
-    assert record.agent_calls_used == 3  # the folded counter includes the repeat: the reducer cannot see it (no per-node state, D-113)
-    assert record.execution_time_used_ms == 1200 + 3400 + 5 + 9999
-
-
-def test_a_repeated_start_is_counted_and_the_first_binding_is_shown():
-    log = verified_baseline()
-    started_again = log.records[3].payload.model_copy(update={"agent_id": ANALYSIS_AGENT})  # gather started again, bound to another agent
-    log.records.pop()
-    log.add(started_again)
-    record = project(log)
-    assert record.repeated_step_events == 1
-    assert step(record, "gather").agent_id == RESEARCH_AGENT
+def test_a_log_that_repeats_a_steps_settlement_or_start_is_a_typed_rejection_and_never_a_record():
+    """A record has at most one start and one settlement per step because the replay it starts with refuses a repeat (D-162 item 1)."""
+    for index, changed in ((4, {"duration_ms": 9999}), (3, {"agent_id": ANALYSIS_AGENT})):  # gather's NODE_SETTLED, then its NODE_STARTED, again
+        log = verified_baseline()
+        again = log.records[index].payload.model_copy(update=changed)
+        log.records.pop()  # drop the terminal event so the mission is still open
+        log.add(again)
+        rejected = execution_record(log.records)
+        assert isinstance(rejected, ReplayRejection) and rejected.code is ReplayRejectionCode.NOT_APPLICABLE
+        assert rejected.outcome is ReduceOutcome.REPEATED_STEP_EVENT and rejected.sequence == len(log.records)
 
 
 # --- a replanned mission: the record is of the active plan and of its nodes only ---------------------------------------------------
@@ -350,7 +338,8 @@ def test_the_record_is_of_the_active_plan_and_takes_only_that_plans_node_events(
     gather = step(record, "gather")
     assert (gather.duration_ms, gather.agent_id, gather.model_calls) == (777, ANALYSIS_AGENT, ())  # the second plan's node, not the first plan's gather
     assert not step(record, "check").started
-    assert record.repeated_step_events == 0  # the same step name in another plan is not a repeat
+    # the same step name settled in the first plan too, and that is not a repeat: a step is identified by its plan and its step id
+    assert step(record, "gather").result is not None
 
 
 def test_a_plan_generated_but_not_yet_compiled_does_not_displace_the_active_plan():

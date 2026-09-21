@@ -26,6 +26,7 @@ from eidos.contracts import EidosModel, EventId, MissionState
 
 from .records import EventRecord
 from .reducer import ReduceOutcome, reduce
+from .step_events import StepEventKey, repeated_step_event, step_event_key
 
 
 class ReplayRejectionCode(StrEnum):
@@ -81,10 +82,21 @@ class Checkpoint(EidosModel):
         return self
 
 
-def _fold(state: MissionState | None, applied: frozenset[EventId], records: Iterable[EventRecord]) -> tuple[MissionState | None, ReplayRejection | None]:
+def _fold(
+    state: MissionState | None, applied: frozenset[EventId], seen: frozenset[StepEventKey], records: Iterable[EventRecord]
+) -> tuple[MissionState | None, ReplayRejection | None]:
     for record in records:
         result = reduce(state, record, applied)
-        if not result.applied:
+        if result.applied:
+            repeated = repeated_step_event(seen, record)  # the intake refuses this live, so a log it wrote never has one (D-162 item 1)
+            if repeated is not None:
+                return state, ReplayRejection(
+                    code=ReplayRejectionCode.NOT_APPLICABLE,
+                    reason=repeated,
+                    sequence=record.event.sequence,
+                    outcome=ReduceOutcome.REPEATED_STEP_EVENT,
+                )
+        else:
             return state, ReplayRejection(
                 code=ReplayRejectionCode.NOT_APPLICABLE,
                 reason=result.reason or "not applied",
@@ -92,6 +104,9 @@ def _fold(state: MissionState | None, applied: frozenset[EventId], records: Iter
                 outcome=result.outcome,
             )
         state, applied = result.state, applied | {record.event.event_id}
+        key = step_event_key(record)
+        if key is not None:
+            seen = seen | {key}
     return state, None
 
 
@@ -100,7 +115,7 @@ def replay(records: Iterable[EventRecord]) -> ReplayResult:
     materialized = tuple(records)
     if not materialized:
         return ReplayResult(rejection=ReplayRejection(code=ReplayRejectionCode.EMPTY_LOG, reason="there are no events to replay"))
-    state, rejection = _fold(None, frozenset(), materialized)
+    state, rejection = _fold(None, frozenset(), frozenset(), materialized)
     return ReplayResult(rejection=rejection) if rejection is not None else ReplayResult(state=state)
 
 
@@ -123,8 +138,13 @@ def records_after(records: Iterable[EventRecord], checkpoint: Checkpoint) -> tup
 
 
 def resume(checkpoint: Checkpoint, tail: Iterable[EventRecord]) -> ReplayResult:
-    """Restore ``checkpoint`` and apply ``tail`` — the events after its sequence, contiguous from the next one."""
-    state, rejection = _fold(checkpoint.state, frozenset(), tail)
+    """Restore ``checkpoint`` and apply ``tail`` — the events after its sequence, contiguous from the next one.
+
+    A checkpoint is a value — the state and a sequence — so it does not carry which ``event_id``s or which steps' events came before it, and a tail
+    is judged against nothing earlier: a repeat of an event from before the checkpoint is not seen here. For a log that replays, which is what a
+    checkpoint is taken from, ``checkpoint + tail == full replay`` holds; to check a log end to end, replay it (D-157 item 4).
+    """
+    state, rejection = _fold(checkpoint.state, frozenset(), frozenset(), tail)
     return ReplayResult(rejection=rejection) if rejection is not None else ReplayResult(state=state)
 
 

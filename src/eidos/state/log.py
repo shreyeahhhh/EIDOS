@@ -9,6 +9,11 @@ whether the event fits, and appends it only if it does. A proposal that does not
 does not fit the state) is returned with its outcome and is not appended: **ordering is the EIDOS-assigned sequence and nothing else**, and no
 order is inferred from a timestamp (D-160 item 7).
 
+The intake also refuses a **repeated ``NODE_STARTED`` or ``NODE_SETTLED`` for the same step** of the same plan, under a new ``event_id`` or not, with
+``REPEATED_STEP_EVENT`` (D-162 item 1). The reducer cannot: ``MissionState`` keeps no per-node state, and none is added. The check runs after the
+reducer has accepted the event, so the reducer's own outcomes (a duplicate, one after a terminal state, one that does not fit) take precedence, and
+a refused proposal consumes no sequence.
+
 The log is not thread-safe, and this module imports no threading: whoever feeds it from several threads serializes access, and the order in which
 they get through is the order the log records. Nothing here reads a clock or draws an identifier; the producer supplies both.
 """
@@ -21,6 +26,7 @@ from eidos.contracts._validators import UtcDateTime
 from .records import EventRecord, Payload
 from .reducer import ReduceOutcome, reduce
 from .replay import Checkpoint, ReplayRejection, dump_jsonl, replay
+from .step_events import StepEventKey, repeated_step_event, step_event_key, step_event_keys
 
 
 class EventProposal(EidosModel):
@@ -51,6 +57,7 @@ class EventLog:
     def __init__(self) -> None:
         self._records: list[EventRecord] = []
         self._applied: frozenset[EventId] = frozenset()
+        self._step_events: frozenset[StepEventKey] = frozenset()  # the log's own memory of which steps started and settled; never in MissionState
         self._state: MissionState | None = None
 
     @classmethod
@@ -63,6 +70,7 @@ class EventLog:
         log = cls()
         log._records = list(materialized)
         log._applied = frozenset(r.event.event_id for r in materialized)
+        log._step_events = step_event_keys(materialized)
         log._state = folded.state
         return log
 
@@ -104,8 +112,14 @@ class EventLog:
         result = reduce(self._state, record, self._applied)
         if not result.applied:
             return IntakeResult(outcome=result.outcome, reason=result.reason, state=self._state)
+        repeated = repeated_step_event(self._step_events, record)
+        if repeated is not None:  # the reducer would have applied it; the intake will not (D-162 item 1)
+            return self._refused(ReduceOutcome.REPEATED_STEP_EVENT, repeated)
         self._records.append(record)
         self._applied = self._applied | {record.event.event_id}
+        key = step_event_key(record)
+        if key is not None:
+            self._step_events = self._step_events | {key}
         self._state = result.state
         return IntakeResult(outcome=ReduceOutcome.APPLIED, record=record, state=self._state)
 

@@ -17,6 +17,10 @@ Checks run in a fixed order, and the first that fails decides the outcome:
    deferred (D-160 item 9);
 5. **the event's own rules** — a plan or step the event names must exist in the state, and the state's own validators must accept the result.
 
+One more check is **not the reducer's**: a repeated ``NODE_STARTED`` or ``NODE_SETTLED`` for the same step. The reducer cannot see it, because per-node
+state never enters ``MissionState`` (D-010a, D-113) and none is added; the intake and a fold from scratch refuse it, after the reducer has accepted
+the event (``eidos.state.step_events``, D-162 item 1). A record offered to ``reduce`` directly is therefore judged by the five checks above only.
+
 What each event does to the state (D-160 item 4). Per-node execution state never enters ``MissionState`` (D-010a, D-113), so ``NODE_STARTED``
 changes only ``state_version`` and ``updated_at``; ``NODE_SETTLED`` folds the counters (D-156):
 
@@ -68,6 +72,9 @@ class ReduceOutcome(StrEnum):
     STALE = "stale"  # a sequence already applied, by a different event: rejected
     POST_TERMINAL = "post_terminal"  # the mission is completed, failed or paused: rejected
     INVALID_FOR_STATE = "invalid_for_state"  # the event does not fit the state it was offered to: rejected
+    # Not returned by ``reduce``, which holds no per-node state (D-113): the intake and a fold from scratch return it when a step's start or
+    # settlement is recorded a second time (D-162 item 1; ``step_events``).
+    REPEATED_STEP_EVENT = "repeated_step_event"
 
 
 class ReduceResult(EidosModel):

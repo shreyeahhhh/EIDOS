@@ -33,7 +33,7 @@ def test_a_recorded_verified_baseline_projects_to_its_bound_agents_facts_and_ver
     assert [s.agent_id for s in result.steps] == [RESEARCH_AGENT_ID, ANALYSIS_AGENT_ID, None]
     assert [s.result.status for s in result.steps] == [NodeStatus.SUCCEEDED] * 3
     assert (result.agent_calls_used, result.tokens_used, result.execution_time_used_ms) == (2, 600, 3000)  # the fixed test values of the scripted model and clock
-    assert (result.model_calls, result.responses_missing_token_counts, result.repeated_step_events) == (2, 0, 0)
+    assert (result.model_calls, result.responses_missing_token_counts) == (2, 0)
     verdict = result.steps[2].verification
     assert verdict.verdict is VerificationVerdict.PASS and verdict.reason == result.steps[2].result.reason
     assert "NOT_EVALUATED: min_quality, max_risk_level" in verdict.reason  # the clauses nothing measures stay named (D-146)

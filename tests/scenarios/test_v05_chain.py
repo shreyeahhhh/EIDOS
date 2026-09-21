@@ -94,7 +94,7 @@ def test_the_execution_record_says_what_the_case_came_to_and_is_the_same_live_an
     assert (live.mission_status.value, live.failure_cause, live.verified) == (case.status, case.cause, case.verified)
     assert (live.run_outcome.value if live.run_outcome else None) == case.run_outcome
     assert tuple(s.result.status.value for s in live.steps if s.result) == case.node_statuses
-    assert live.event_count == len(run.log) and live.repeated_step_events == 0
+    assert live.event_count == len(run.log)
     assert all((s.agent_id is not None) == (s.kind is PlanStepKind.AGENT and s.started) for s in live.steps)  # each agent step that started names its agent; nothing else does
     assert (live.agent_calls_used, live.tokens_used, live.execution_time_used_ms) == (case.agent_calls, case.tokens, case.time_ms)
     state = run.log.state

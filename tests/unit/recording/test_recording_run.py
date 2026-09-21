@@ -18,7 +18,7 @@ import eidos.recording.adapters as adapters
 import eidos.recording.run as run_module
 from eidos.agents import ModelFailure, ModelFailureKind, ModelRequest
 from eidos.baseline import BaselineStage
-from eidos.contracts import MissionEventType, MissionStatus, PlanStepKind, StepId
+from eidos.contracts import CapabilityId, MissionEventType, MissionStatus, PlanStepKind, StepId
 from eidos.recording import Recorder, RecordingModel
 from eidos.runtime import NodeResult, NodeStatus, PriorOutcomes, RunOutcome, RunRejection, WorkResult
 from eidos.state import (
@@ -321,6 +321,22 @@ def test_a_live_settlement_the_run_contradicts_is_reported_as_a_discrepancy_not_
     assert run.discrepancies and all("settled live as failed but the run reports succeeded" in d for d in run.discrepancies)
 
 
+def test_a_second_settlement_of_a_step_is_refused_surfaced_and_does_not_replace_the_first():
+    state, plan = baseline_mission()
+    log = EventLog()
+    recorder = Recorder(log=log, clock=FixedClock(), ids=SequentialIds(), tenant_id=state.tenant_id, mission_id=state.mission_id)
+    recorder.record(MissionCreatedPayload(task_genome=state.task_genome, reliability_contract=state.reliability_contract, execution_id=state.execution_id))
+    recorder.record(PlanGeneratedPayload(plan=plan))
+    recorder.record(PlanCompiledPayload(plan_id=plan.plan_id, plan_version=plan.version))
+    first = NodeResult(step_id=StepId("gather"), kind=PlanStepKind.AGENT, status=NodeStatus.SUCCEEDED, artifact="artifact:gather")
+    second = NodeResult(step_id=StepId("gather"), kind=PlanStepKind.AGENT, status=NodeStatus.FAILED, reason="a second, different answer")
+    assert recorder.settle_live(plan.plan_id, first, 1000, (), None).applied
+    again = recorder.settle_live(plan.plan_id, second, 5, (), None)
+    assert again.outcome is ReduceOutcome.REPEATED_STEP_EVENT
+    assert recorder.live_result(StepId("gather")) == first  # what the log holds is remembered, not the refused offer
+    assert [r.outcome for r in recorder.refused] == [ReduceOutcome.REPEATED_STEP_EVENT] and len(log) == 4
+
+
 def test_a_fault_inside_the_recorders_own_observer_is_visible_and_never_reaches_the_pass(monkeypatch):
     state, plan = baseline_mission()
 
@@ -337,18 +353,19 @@ def test_a_fault_inside_the_recorders_own_observer_is_visible_and_never_reaches_
 
 
 def test_many_threads_recording_at_once_lose_nothing_and_leave_the_sequence_contiguous():
-    state, plan = baseline_mission()
+    state, _ = baseline_mission()
+    plan = make_mission_plan(state, {f"s{n}": "" for n in range(400)})  # 400 independent steps: each node starts once, so nothing is a repeat
     log = EventLog()
     recorder = Recorder(log=log, clock=FixedClock(), ids=SequentialIds(), tenant_id=state.tenant_id, mission_id=state.mission_id)
     recorder.record(MissionCreatedPayload(task_genome=state.task_genome, reliability_contract=state.reliability_contract, execution_id=state.execution_id))
     recorder.record(PlanGeneratedPayload(plan=plan))
     recorder.record(PlanCompiledPayload(plan_id=plan.plan_id, plan_version=plan.version))
 
-    def worker():
-        for _ in range(50):
-            recorder.record(NodeStartedPayload(plan_id=plan.plan_id, step_id=StepId("check"), kind=PlanStepKind.VERIFY))
+    def worker(first):
+        for n in range(first, first + 50):
+            recorder.record(NodeStartedPayload(plan_id=plan.plan_id, step_id=StepId(f"s{n}"), kind=PlanStepKind.AGENT, capability=CapabilityId("research"), agent_id=RESEARCH_AGENT_ID))
 
-    threads = [threading.Thread(target=worker) for _ in range(8)]
+    threads = [threading.Thread(target=worker, args=(50 * t,)) for t in range(8)]
     for t in threads:
         t.start()
     for t in threads:

@@ -434,8 +434,21 @@ def test_an_applied_result_needs_a_state_and_no_reason_and_a_non_applied_one_nee
                 ReduceResult(state=state, outcome=outcome)
 
 
-def test_the_outcomes_are_exactly_these_six():
-    assert {o.value for o in ReduceOutcome} == {"applied", "duplicate", "out_of_order", "stale", "post_terminal", "invalid_for_state"}
+def test_the_outcomes_are_the_reducers_six_and_the_one_the_intake_and_replay_add():
+    reducer_outcomes = {"applied", "duplicate", "out_of_order", "stale", "post_terminal", "invalid_for_state"}
+    assert {o.value for o in ReduceOutcome} == reducer_outcomes | {"repeated_step_event"}  # D-155 item 2's six, and D-162 item 1's
+
+
+def test_the_reducer_holds_no_per_node_state_so_it_never_returns_the_repeated_step_outcome():
+    """D-162 item 1: the intake and replay refuse a repeated start or settlement; the reducer, offered one directly, judges it by its five checks."""
+    log = verified_baseline()
+    state, applied = None, frozenset()
+    for r in log.records[:5]:  # created, generated, compiled, gather started, gather settled
+        result = reduce(state, r, applied)
+        state, applied = result.state, applied | {r.event.event_id}
+    again = make_record(log.records[4].payload, state=log.state, sequence=6, number=999)  # gather's settlement, once more, under a new event_id
+    result = reduce(state, again, applied)
+    assert result.outcome is ReduceOutcome.APPLIED and result.state.agent_calls_used == 2  # the counters fold twice: only the intake stops this
 
 
 def test_the_folded_state_is_identical_across_hash_seeds():
