@@ -2340,7 +2340,7 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
 - **Recorded fact (measured during the V0.4 exploration, on the owner's machine):** no local model runtime is installed;
   the GPU has 4 GB of memory and the machine 15.7 GB of RAM. Nothing about model speed or quality has been measured.
 - **First use (2026-09-21, owner-run):** the model is `qwen3:4b` on Ollama 0.34.2. The owner ran the two opt-in tests once; the exact printed result and
-  the runtime's own description of the model are recorded in progress.md ("The first real baseline run"). The baseline mission ended `FAILED`; see D-149.
+  the runtime's own description of the model are recorded in progress.md ("The first real baseline run"). The baseline mission ended `FAILED`; see D-149 (the diagnosis) and D-150 (what next).
 - **Consequences:** a dependency needed later is a new decision and an optional extra (D-116). The opt-in marker's
   mechanics are pinned at implementation and registered in `pyproject.toml`.
 
@@ -2633,6 +2633,33 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
   agent looks for its predecessor's artifact, a `VERIFY` node produces none, and the step fails with "predecessor '<id>' has no artifact to analyse". An
   analysis step's predecessors are work steps. Nothing was changed to work around this, and a plan of that shape is a **later decision** if it is wanted.
 - **Consequences:** items 3 (`artifact:<step_id>`) and 4 (write-once, refused writes) stand as accepted and are what D-147's rule rests on.
+
+### D-149 — The first real run's failure: diagnosed with one raw-response call (option 1)
+
+- **Status:** Accepted · **Date:** 2026-09-21 · **Decided by:** human owner · **Resolved by the owner's ruling** (originally Open; option 1 chosen)
+- **Source:** D-135, D-136, D-148 (items 6 and 9); the first real baseline run (owner-run, V0.4 Step 8)
+- **Original finding (measured, one run):** with `qwen3:4b` through the local runtime (temperature 0.0, seed 7, `max_output_tokens` 512, timeout 120 s), a direct
+  completion of "Reply with the single word: ready." returned a 5-character response while the runtime reported **154 output tokens**; and in the baseline
+  run the Research step's one model call returned **no text** (`empty_response`), so the step was `NO_RESULT`, the Analysis and `VERIFY` steps were
+  `SKIPPED`, and the mission ended `FAILED` with `verified` false. The runtime lists a `thinking` capability for this model and the adapter reads only the `response`
+  field; the candidate explanation was that reasoning used the output budget. That was a hypothesis until the diagnostic below.
+- **Ruling (option 1):** diagnose first. One real-model run of the same baseline test, with a **test-only** change that prints the raw response of the baseline's own
+  call. The provider, the agents, the verifier, the model settings and production behaviour are not changed, and the temporary code is removed afterwards.
+- **What was done (2026-09-21):** Claude Code ran the baseline test once, at the owner's direction, with the same model and settings as the recorded run, at the runtime's
+  default local address `http://127.0.0.1:11434` (the address of the owner's own run was not printed, so that is an assumption about it; the runtime answered there). A
+  temporary tap on the HTTP layer inside the test recorded the request and the raw response body of the call the provider made. It was reverted afterwards: the working tree
+  equals its committed state. The raw response is kept outside the repository. The full result is in progress.md ("The D-149 diagnostic").
+- **Result (one run):** the request was the Research agent's own: its system instruction and a prompt of the mission goal, the three supplied documents and the task line
+  (160 prompt tokens). The response was HTTP 200, 6,081 bytes, with **`response` empty**, **`thinking` 2,581 characters (406 words) of reasoning that ends mid-sentence**,
+  `done` true, **`done_reason` `length`** and **`eval_count` 512, equal to `num_predict`**. The runtime reported `total_duration` 30.256 s, of which `load_duration` 7.678 s,
+  `prompt_eval_duration` 0.316 s and `eval_duration` 22.249 s. EIDOS read it as before: `gather` `no_result` ("the model call failed (empty_response): the model returned no
+  text"), `analyse` and `check` skipped, outcome `failed`, `verified` false.
+- **Cause, established for this call:** the runtime returns this model's reasoning in a separate `thinking` field and counts it against `num_predict`. The whole 512-token
+  budget was spent reasoning, generation stopped at the limit before any answer text, and the `response` field the adapter reads was empty. The adapter's `empty_response`
+  was accurate about that field and silent about why; `thinking` and `done_reason` are in the body, and the adapter discards both.
+- **Not observed:** the raw body of the trivial "ready" call (its 154 output tokens for a 5-character answer are consistent with the same mechanism, which is an inference and
+  not an observation); what a larger budget, or reasoning switched off, would return; whether the reasoning would have finished and the answer been usable and verifiable.
+- **Consequences:** no production code, model setting or test expectation changed. Option 1 decided only to diagnose; **what to do about the finding is D-150 (Open).**
 
 ---
 
@@ -3376,26 +3403,23 @@ one is not.
   stays Open:** what an artifact contains (**D-142**, since resolved by D-145) and the general data-flow question remain.
 
 
-### D-149 — How the model seam treats a reasoning model's output budget: found by the first real run
+### D-150 — What to do when a reasoning model spends its whole output budget before answering (follows D-149)
 
-- **Status:** Open · **Date:** 2026-09-21 · **Source:** D-135, D-136, D-148 (items 6 and 9); the first real baseline run (owner-run, V0.4 Step 8)
-- **Finding (measured, one run):** with `qwen3:4b` through the local runtime (temperature 0.0, seed 7, `max_output_tokens` 512, timeout 120 s), a direct
-  completion of "Reply with the single word: ready." returned a 5-character response while the runtime reported **154 output tokens**; and in the baseline
-  run the Research step's one model call returned **no text** (`empty_response`), so the step was `NO_RESULT`, the Analysis and `VERIFY` steps were
-  `SKIPPED`, and the mission ended `FAILED` with `verified` false. The printed result is recorded in progress.md ("The first real baseline run").
-- **Cause: not established.** The runtime lists a `thinking` capability for this model. A candidate explanation, **unverified**: the model spends output
-  tokens on reasoning that the adapter does not read (it reads only the `response` field), so a small budget can be used up before any answer text appears.
-  Neither the raw response nor any reasoning field has been inspected, so this is a hypothesis and not a finding.
-- **What the seam cannot express today:** `GenerationParameters` and `ModelSettings` (D-135) have no notion of reasoning; `output_tokens` is the provider's
-  count and does not separate reasoning from answer; `OllamaModel` reads only `response`; and a `ModelFailure` carries no measured facts, so the latency and
-  token counts of a failed call are not recorded.
-- **Effect while Open:** none on the code or the default suite. The failed run is the specified behaviour (invariants 12 and 13; D-148 item 6 maps
-  `EMPTY_RESPONSE` to `NO_RESULT`). It **does** mean the handoff's V0.4 line, "make the baseline workflow work end-to-end", has not been shown with a
-  real model: no real model output has yet reached the verifier, so no real verdict, citation coverage or source count exists.
-- **Needs:** the owner's direction. Options, none adopted: (1) establish the cause first with one read-only diagnostic call that prints the raw response
-  (no code change); (2) change only the opt-in run's configuration (for example a larger `max_output_tokens`) and run the same test again; (3) let the seam
-  express reasoning (a request setting and/or reading the reasoning field), which changes D-135's contract and the adapter and is the owner's to decide;
-  (4) another model. Under every option the agents and the verifier are **not** changed to make a model pass.
+- **Status:** Open · **Date:** 2026-09-21 · **Source:** D-135, D-136, D-148, D-149 (the diagnostic's result)
+- **Finding:** D-149's diagnostic established that, with `qwen3:4b` and `max_output_tokens` 512, the runtime spent the whole budget on the model's reasoning, stopped at the
+  limit (`done_reason` `length`) and returned an empty `response`. The provider then reported `empty_response`, so a length cutoff and a model that genuinely said nothing are
+  indistinguishable in a typed failure, and the reasoning and the stop reason are discarded. The seam (`ModelSettings`, `GenerationParameters`, D-135) has no notion of
+  reasoning, and a `ModelFailure` carries no measured facts, so a failed call's token counts and latency are lost too.
+- **Not known:** whether a larger budget, or reasoning turned off, yields an answer the agents can use and the verifier can judge. None of it has been tested.
+- **Effect while Open:** none on the code or the default suite. The baseline with this model still fails at its first step, so the handoff's V0.4 line ("make the baseline
+  workflow work end-to-end") has not been shown with a real model, and no real model output has reached the verifier.
+- **Needs:** the owner's choice, none adopted:
+  (a) **configuration only** — raise `max_output_tokens` in the opt-in test (the value is fixed there, explicitly, per D-135) and run it once more; no production change;
+  (b) **let the seam express reasoning** — a request setting that tells the runtime whether to reason, sent by the adapter; a change to D-135's contract and to the adapter;
+  (c) **make the adapter report a length cutoff distinctly** — read `done_reason` (and possibly `thinking`) so the failure names its cause; a change to the adapter and, if
+  it adds a failure kind, to D-135's closed set;
+  (d) **another model**, one that does not reason by default.
+  These combine (for example (c) with (a)). Under every option the agents and the verifier are **not** changed to make a model pass.
 
 
 ---
