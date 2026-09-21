@@ -1,19 +1,20 @@
 """Real-model tests: an explicit opt-in, excluded from the default run (decisions.md D-136).
 
 These call a **real** local model runtime. They never run unless selected with ``-m real_model``, and when selected they never skip: if the
-configuration is missing they **fail** and say what is missing. Nothing here is asserted about a model's quality or speed: a single
-recorded run (progress.md, "The first real baseline run") records what happened and measures neither. The tests print what a real run measured so that it can be
+configuration is missing they **fail** and say what is missing. Nothing here is asserted about a model's quality or speed: the recorded runs
+(progress.md, from "The first real baseline run" on) record what happened and are not benchmarks. The tests print what a real run measured so that it can be
 recorded from that run (CLAUDE.md section 7).
+
+The baseline test asserts structure only, so a green pytest result does not say the mission succeeded: read the printed outcome, ``verified`` and step statuses.
 
 To run, after installing and starting the runtime yourself and pulling a model:
 
     set EIDOS_REAL_MODEL_URL=http://<host>:<port>
     set EIDOS_REAL_MODEL_NAME=<the model you pulled>
-    set EIDOS_REAL_MODEL_TIMEOUT_SECONDS=<seconds to wait for one call>
     python -m pytest -m real_model -s tests/integration/providers/test_ollama_real.py
 
-Every one of the three is required: there is no default endpoint, model or timeout (D-135). The generation parameters below are fixed here,
-explicitly, and are part of what a recorded run reports.
+Both are required: there is no default endpoint or model (D-135). The generation parameters and the timeout are fixed below, explicitly, and are part of what a
+recorded run reports (D-150 option a'): a reasoning model's thinking counts against the output budget, and the timeout has to cover the slowest call.
 """
 
 import json
@@ -46,8 +47,11 @@ from eidos_validation_factories import make_system_limits
 
 pytestmark = pytest.mark.real_model
 
-REQUIRED = ("EIDOS_REAL_MODEL_URL", "EIDOS_REAL_MODEL_NAME", "EIDOS_REAL_MODEL_TIMEOUT_SECONDS")
-GENERATION = GenerationParameters(temperature=0.0, seed=7, max_output_tokens=512)
+REQUIRED = ("EIDOS_REAL_MODEL_URL", "EIDOS_REAL_MODEL_NAME")
+# D-150 option (a'): 512 and 2,048 output tokens were not enough for the Analysis step (it needed 2,582), and the timeout has to cover a call of that length
+# (progress.md, "The D-150 option (a) run" and "The D-150 option (a') run").
+GENERATION = GenerationParameters(temperature=0.0, seed=7, max_output_tokens=4096)
+TIMEOUT_SECONDS = 240.0
 
 
 def configuration() -> tuple[str, ModelSettings]:
@@ -60,7 +64,7 @@ def configuration() -> tuple[str, ModelSettings]:
     settings = ModelSettings(
         model=os.environ["EIDOS_REAL_MODEL_NAME"],
         parameters=GENERATION,
-        timeout_seconds=float(os.environ["EIDOS_REAL_MODEL_TIMEOUT_SECONDS"]),
+        timeout_seconds=TIMEOUT_SECONDS,
     )
     return os.environ["EIDOS_REAL_MODEL_URL"], settings
 
