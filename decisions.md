@@ -2857,8 +2857,10 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
 - **Status:** Accepted · **Date:** 2026-09-21 · **Decided by:** human owner
 - **Source:** D-113, D-122, D-123, D-135, D-137, D-148, D-150, D-151; invariants 1, 2, 9, 15 and 17; CLAUDE.md §7 and §8; the V0.5 exploration
 - **Decision:**
-  1. **Events are produced by recording adapters** in `eidos.recording`, outside the runtime. They wrap the existing injection points — the agents, the verifier, the admission guard and the model
-     port — and propose events to the log. **The runtime, the executors, the compiler, the agents, the verifier and the D-122 and D-137 signatures are unchanged**, and the runtime itself emits no
+  1. **Events are produced by recording adapters** in `eidos.recording`, outside the runtime. They wrap the existing injection points — the agents, the verifier and the model port — and propose
+     events to the log. The plan-stage events (the plan and the result of each gate) come from the optional, observational `observer` hook on `run_baseline` (D-160 item 8). **A halt by the admission
+     guard is not observed at the guard:** it is read from the run's result after the run and recorded as `MISSION_PAUSED`, in D-160 item 1's order, so the guard is not wrapped. *(Amended 2026-09-21 by
+     D-163: the original wording listed the admission guard among the wrapped points.)* **The runtime, the executors, the compiler, the agents, the verifier and the D-122 and D-137 signatures are unchanged**, and the runtime itself emits no
      event, so D-123 stays accurate for it.
   2. **Adapters hold no `MissionState` and cannot write it.** They propose; the intake orders; only the reducer writes state (invariants 1 and 2).
   3. **The clock and the id source are injected.** Deterministic components read neither, and the adapters are not deterministic components.
@@ -2872,8 +2874,7 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
   7. **A correction to the exploration.** The `Verifier` port returns a verdict and a reason only. Per-rule outcomes exist inside the verifying agent's report, not at the port, so the log records the
      verdict and the reason text; it does **not** claim typed per-rule outcomes (D-148 item 7 already carries `NOT_EVALUATED` as prose).
 - **Consequences:** V0.5 changes one V0.4 module, and only additively: `run_baseline` gains an optional, observational `observer` parameter (D-160, item 8). Nothing else in V0.3 or V0.4 changes.
-- **Note (2026-09-21):** as built, the recorder wraps the agents, the verifier and the model port, and does **not** wrap the admission guard: a halt is read from the run's result. That differs from item 1's wording and
-  is recorded as **D-163 (Open)**; it is not resolved here.
+- **Amended (2026-09-21, D-163):** item 1 now states the recording and observer boundary as built. The original wording listed the admission guard among the wrapped points; nothing else in this decision changed.
 
 ### D-159 — `ExecutionRecord`: a thin, read-only, derived record
 
@@ -2941,7 +2942,7 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
 
 ### D-162 — Repeated node events are refused at the intake; the V0.5 implementation details are confirmed
 
-- **Status:** Accepted · **Date:** 2026-09-21 · **Decided by:** human owner · **Item 1 approved (option a); items 2 to 6 and 8 to 10 kept; item 7 moved to D-163 (Open)** (originally Open)
+- **Status:** Accepted · **Date:** 2026-09-21 · **Decided by:** human owner · **Item 1 approved (option a); items 2 to 6 and 8 to 10 kept; item 7 moved to D-163, since resolved** (originally Open)
 - **Source:** V0.5 Steps 2 to 7 (D-153 to D-160); invariants 8, 15 and 16; D-010a, D-113, D-155, D-157; CLAUDE.md §7 (a gap is recorded and raised, never resolved silently)
 - **Finding (item 1):** the reducer cannot refuse a repeated `NODE_STARTED` or `NODE_SETTLED` for the same step. **Probe (2026-09-21):** a recorded verified baseline folds to `agent_calls_used == 2`; offering
   `gather`'s `NODE_SETTLED` a second time, with a new `event_id` and the next sequence, before the terminal event, was **applied** and `agent_calls_used` became **3** (its tokens and duration were folded
@@ -2949,7 +2950,7 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
   Nothing produced such a repeat at V0.5; it becomes reachable with a second producer, a resume or a replan loop.
 - **The owner's ruling (2026-09-21):** the event intake must reject a repeated `NODE_STARTED` or `NODE_SETTLED` for the same execution step. **No per-node state is added to `MissionState`.** Items 2 to 10 are kept as
   built unless one contradicts an Accepted decision; each was checked against D-135, D-155, D-156, D-157, D-158, D-159 and D-160, and **item 7 does contradict the wording of D-158 item 1**, so it is not kept
-  and is recorded as **D-163 (Open)**. Keeping D-151 Open was restated.
+  and was recorded as **D-163**, which the owner then resolved by amending D-158 item 1. Keeping D-151 Open was restated.
 
 1. **The guard, as built.**
    - **The key is (event type, plan, step).** "The same execution step" is read as the same step *of the same plan*: a step id used again in another plan version is another step, so a replanned mission can run
@@ -2977,7 +2978,7 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
    duration and the model calls observed before the raise. A model call that itself raises is not recorded as a call: D-135 item 4 makes provider failures typed results that are never raised, so a raise is
    a port fault, and the log holds no fact for it.
 6. **`PLAN_REJECTED` changes only `state_version` and `updated_at`.** The refused plan stays in `plans` and `active_plan_id` stays absent; the rejection's stage and reasons live in the event.
-7. *(Moved to **D-163 (Open)**: whether the admission guard is wrapped.)*
+7. *(Moved to **D-163**, resolved: D-158 item 1 was amended to say the admission guard is not wrapped.)*
 8. **`EventProposal` reuses `UtcDateTime` from `eidos.contracts._validators`,** the same validator the envelope uses, so a naive or non-UTC time is refused the same way.
 9. **The mission's `status_reason` is written by the reducer:** `finished and verified`; `finished without a successful VERIFY (verified is false)`; `<cause>: <reason>` for a failure; the halt's reason for a
    pause. `MISSION_FAILED` carries a cause and a reason and no `step_id` (D-160 item 3 gives it none).
@@ -2990,6 +2991,25 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
 - **Effect:** `eidos.state.step_events` (the key and the check), the intake and the fold as described, and the tests in `test_state_step_events.py`, with the reducer, projection, recording and scenario tests adjusted.
   D-155 item 2's six outcomes and D-157's contract are unchanged except that the intake also refuses a repeated step event. `MissionState`, `MeasuredFacts`, the V0.1 envelope and the runtime are untouched.
 - **Not touched:** D-151 stays Open; no per-node state was added anywhere.
+
+---
+
+### D-163 — D-158 item 1 amended: the recorder does not wrap the admission guard
+
+- **Status:** Accepted · **Date:** 2026-09-21 · **Decided by:** human owner · **Resolves the conflict found while checking D-162 against the Accepted decisions** (originally Open)
+- **Source:** D-158 item 1, D-160 items 1 and 8, D-162 (its former item 7)
+- **The conflict, as recorded:** D-158 item 1 listed the admission guard among the injection points the recording adapters wrap ("the agents, the verifier, the admission guard and the model port"), while
+  D-160 item 1 fixes the event order, in which `MISSION_PAUSED` is **last**, after a `NODE_SETTLED` for every node that was not reached. A guard wrapper sees each admission decision as it is made, so the
+  only event it could propose at a halt is `MISSION_PAUSED`, **before** the settlements of the not-reached nodes, which exist only when the run ends; and the only other thing it could record, each
+  admission, has no event type in the vocabulary (D-154 added three types, none for admission).
+- **The owner's ruling (2026-09-21):** amend D-158's wording to match the implemented recording and observer boundary. **The recorder is not redesigned and no code changed.**
+- **The boundary, as amended in D-158 item 1 and as built:**
+  - the recording adapters **wrap the agents, the verifier and the model port**, and propose events to the log;
+  - the plan-stage events (the plan, and the result of each gate) come from the optional, observational **`observer` hook on `run_baseline`** (D-160 item 8);
+  - **the admission guard is not wrapped or observed:** a halt is read from the run's result (`RunResult.halt`) after the run and recorded as `MISSION_PAUSED` after the not-reached nodes are settled, which is
+    D-160 item 1's order. The halt's step, level and reason are in the event; the admission-halt case is tested on both executors.
+- **Effect:** documentation only. D-158 item 1 now says what was built; D-160 item 1's order stands; D-155, D-157, D-159 and D-162 are unaffected. Nothing in `eidos.recording`, `eidos.baseline` or the runtime
+  changed.
 
 ---
 
@@ -3047,7 +3067,7 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
 These are ambiguities, contradictions and gaps found in the handoff during the bootstrap read. None
 has been resolved. Work that depends on one of them is blocked until the owner decides.
 
-Count: 45. Highest-impact first is **D-015** (how verification confidence is computed), then
+Count: 44. Highest-impact first is **D-015** (how verification confidence is computed), then
 **D-007** (now V0.4-only, not V0.2 — see D-102) and **D-046** (bound values, mechanism unaffected —
 see D-103) for later V0.2 work. **D-012** (predicate language) was corrected 2026-09-18 to no longer
 be listed as a V0.2 item — it blocks the V0.3 compiler. **D-102** and **D-103**, logged the same day,
@@ -3795,22 +3815,6 @@ one is not.
 
 ---
 
-
-### D-163 — The recorder does not wrap the admission guard, and D-158 item 1 says it does
-
-- **Status:** Open · **Date:** 2026-09-21 · **Source:** D-158 item 1, D-160 item 1, D-162 (its former item 7); found while checking D-162 items against the Accepted decisions
-- **Question:** D-158 item 1 lists the admission guard among the injection points the recording adapters wrap ("the agents, the verifier, the admission guard and the model port"). D-160 item 1 fixes the event
-  order, in which `MISSION_PAUSED` is **last**, after a `NODE_SETTLED` for every node that was not reached. Which governs the halt?
-- **Current behaviour (V0.5), recorded as it is:** there is **no wrapper on the guard.** A halt is read from the run's result (`RunResult.halt`) after the run and recorded as `MISSION_PAUSED`, after the
-  not-reached nodes are settled, which is D-160 item 1's order. The admission-halt case is tested on both executors, and the halt's step, level and reason are in the event.
-- **Why the two cannot both be followed to the letter:** a guard wrapper sees each admission decision as it is made, so the only event it could propose at the halt is `MISSION_PAUSED`, **before** the
-  not-reached nodes' settlements, which exist only when the run ends. The other thing a wrapper could record, each admission, has no event type in the vocabulary (D-154 added three types, none for admission).
-- **Effect while Open:** nothing is lost: the behaviour follows D-160 item 1 and the log holds the whole halt. What differs is the wording of D-158 item 1, which lists a wrapper that does not exist.
-- **Needs:** the owner's choice, none adopted: (a) amend D-158 item 1 to say the recorder wraps the agents, the verifier and the model port, and reads a halt from the run's result (recommended: no code
-  change); (b) wrap the guard so the pause is recorded when it happens, and change D-160 item 1's order (a code change and a change to the recorded order); (c) leave both as they are and note the
-  difference.
-
----
 
 ### D-164 — A `NODE_STARTED` recorded after the same step's `NODE_SETTLED`
 

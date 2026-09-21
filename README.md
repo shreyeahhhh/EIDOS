@@ -20,7 +20,7 @@ deterministic rules and measures no quality, and the committed test asserts stru
 planner, no A2A, no MCP, no RAG, no persistence, no API and no frontend.
 
 V0.5 adds the typed event records, a pure state reducer, an in-memory event log with a JSONL round trip, checkpoint and replay (`eidos.state`), recording adapters around the baseline
-(`eidos.recording`) and a derived, read-only `ExecutionRecord`. A recorded baseline replays to the same `MissionState` and the same record with no agent run, and the intake refuses a repeated node event for a step (D-162). Two questions stay open (D-163, D-164), and a
+(`eidos.recording`) and a derived, read-only `ExecutionRecord`. A recorded baseline replays to the same `MissionState` and the same record with no agent run, and the intake refuses a repeated node event for a step (D-162). One question stays open (D-164), and a
 real-model recording has not been run.
 
 Current status and the milestone ladder: [progress.md](progress.md).
