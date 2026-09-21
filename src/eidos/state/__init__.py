@@ -7,6 +7,7 @@ writes ``MissionState`` (invariants 1 and 2).
 
 Step 2 — the typed payloads and ``EventRecord`` (D-153, D-154, D-160).
 Step 3 — the pure reducer (D-155, D-156, D-160).
+Step 4 — the event log and intake, checkpoint, replay and the strict JSONL form (D-157).
 """
 
 from .payloads import (
@@ -28,13 +29,33 @@ from .payloads import (
     RejectionReason,
     VerificationFacts,
 )
+from .log import EventLog, EventProposal, IntakeResult
 from .records import EventRecord, Payload
 from .reducer import ReduceOutcome, ReduceResult, reduce
+from .replay import (
+    Checkpoint,
+    LoadResult,
+    ReplayRejection,
+    ReplayRejectionCode,
+    ReplayResult,
+    checkpoint_at,
+    dump_jsonl,
+    load_jsonl,
+    records_after,
+    replay,
+    replay_jsonl,
+    resume,
+)
 
 __all__ = [
     "PAYLOAD_TYPES",
+    "Checkpoint",
     "EmittedPayload",
+    "EventLog",
+    "EventProposal",
     "EventRecord",
+    "IntakeResult",
+    "LoadResult",
     "MissionCompletedPayload",
     "MissionCreatedPayload",
     "MissionFailedPayload",
@@ -52,6 +73,16 @@ __all__ = [
     "ReduceOutcome",
     "ReduceResult",
     "RejectionReason",
+    "ReplayRejection",
+    "ReplayRejectionCode",
+    "ReplayResult",
     "VerificationFacts",
+    "checkpoint_at",
+    "dump_jsonl",
+    "load_jsonl",
+    "records_after",
     "reduce",
+    "replay",
+    "replay_jsonl",
+    "resume",
 ]
