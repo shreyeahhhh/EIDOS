@@ -1,8 +1,9 @@
 # 07 — A2A Contract
 
-**Status:** DERIVED — **the V0.6 protocol/contract design is accepted (2026-09-22, D-165 to D-177); Steps 1–5 of 9 are implemented (the `AgentTask`/state contract changes, the `eidos.runtime`
-non-blocking extension, the `eidos.state` event/reducer integration, and `eidos.a2a` itself: the client, the Research Agent's remote `WorkAgent`, the webhook converter) — see `progress.md`,
-"V0.6 One A2A Boundary". Step 5 found a real gap (a resumed mission could not record further events on the same log); D-177 resolved it with an explicit, never-automatic resume operation.**
+**Status:** DERIVED — **the V0.6 protocol/contract design is accepted (2026-09-22, D-165 to D-177); Steps 1–6 of 9 are implemented (the `AgentTask`/state contract changes, the `eidos.runtime`
+non-blocking extension, the `eidos.state` event/reducer integration, `eidos.a2a` itself: the client, the Research Agent's remote `WorkAgent`, the webhook converter, and the recording adapter
+that bridges a webhook delivery into a caller-owned `EventLog`) — see `progress.md`, "V0.6 One A2A Boundary". Step 5 found a real gap (a resumed mission could not record further events on the
+same log); D-177 resolved it with an explicit, never-automatic resume operation. Step 6 built the caller-facing piece that gets a delivery onto the log in the first place.**
 **Derived from:** handoff §8, §9, §10, §50, §59, §62, §63
 **Authority:** This document is derived from `EIDOS_CLAUDE_CODE_HANDOFF.md` and subordinate to it.
 If this document and the handoff conflict, stop and report the conflict to the human owner.
@@ -14,6 +15,12 @@ If this document and the handoff conflict, stop and report the conflict to the h
 > What Steps 2–4 built lives in `eidos.contracts`, `eidos.runtime` and `eidos.state` — the receiving
 > end of the contract below; Step 5 is the sending end. No mission driver, no automatic resume, no
 > `tasks/cancel`, no streaming.
+>
+> **The recording adapter now exists** (Step 6): `eidos.recording.a2a.record_a2a_notification`
+> composes the unchanged webhook converter above with the unchanged `EventLog.accept` — the one hop
+> a caller previously had to write by hand. It lives in `eidos.recording`, not `eidos.a2a` (an
+> adapter package may depend on this boundary; a core layer still may not), and it never resumes a
+> mission or runs another execution round — that stays the caller's own, separate, explicit call.
 >
 > **D-177 (resolved):** the completion webhook alone never resumes a mission — `MissionState.status`
 > stays `paused` through it. A caller resumes explicitly, through `EventLog.accept_resumed`, which

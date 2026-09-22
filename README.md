@@ -7,7 +7,7 @@
 
 ## Status
 
-**V0.6 — A2A protocol/contract design accepted, not implemented. V0.5 — the event log and the state reducer: complete as scoped. V0.4 — real local agents: complete as scoped.**
+**V0.6 — A2A protocol/contract design accepted; Steps 1–6 of 9 implemented, none pushed. V0.5 — the event log and the state reducer: complete as scoped. V0.4 — real local agents: complete as scoped.**
 
 This repository contains the project rules, the architecture knowledge base, the decision record,
 the V0.1 typed contracts (`eidos.contracts`), the V0.2 plan validator (`eidos.validation`), the V0.3
@@ -29,7 +29,9 @@ Specification rather than assumed: a non-blocking `SUBMITTED`/`AWAITING` executi
 event/reducer integration, and `eidos.a2a` itself (the client, the Research Agent's remote `WorkAgent`, the webhook-to-event converter) — none pushed. Re-verifying the wire format against the
 live spec while building the client corrected two Step 1 assumptions (`TaskState` casing, the JSON-RPC method names). Step 5 also found a real gap — nothing un-paused a mission once its one
 exempted completion event was accepted, so a resumed mission could not record further events on the same log — reported, not silently patched, and resolved by **D-177**: an explicit, never-
-automatic `EventLog.accept_resumed`/`reducer.reduce_resumed` pair that reads the log's own history rather than adding a `MissionState` field. See [progress.md](progress.md), "V0.6 One A2A Boundary".
+automatic `EventLog.accept_resumed`/`reducer.reduce_resumed` pair that reads the log's own history rather than adding a `MissionState` field. Step 6 built the one hop D-177 made possible —
+`eidos.recording.a2a.record_a2a_notification`, the recording adapter that bridges one externally received webhook delivery into a caller-owned `EventLog`, composing the unchanged webhook converter with the
+unchanged `EventLog.accept` and nothing else. See [progress.md](progress.md), "V0.6 One A2A Boundary".
 
 Current status and the milestone ladder: [progress.md](progress.md).
 Decisions and unresolved questions: [decisions.md](decisions.md).

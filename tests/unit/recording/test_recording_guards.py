@@ -1,8 +1,15 @@
-"""Static guards on ``eidos.recording`` (decisions.md D-152, D-158, D-160; CLAUDE.md §8; invariants 1, 2 and 9).
+"""Static guards on ``eidos.recording`` (decisions.md D-152, D-158, D-160, D-172; CLAUDE.md §8; invariants 1, 2 and 9).
 
 The recording package is an adapter: it may read the clock and draw an identifier because both are injected and it is not a deterministic
 component. It still holds no ``MissionState``, never imports the reducer, never reaches a provider or backend, and is imported by nothing
 below it. These are checks on the source, so they hold however the package is later extended.
+
+V0.6 Step 6 adds one narrow, deliberate exception to "never reaches a provider or backend": ``a2a.py`` alone may
+import ``eidos.a2a`` (the recording adapter that bridges a webhook delivery into a caller-owned ``EventLog``) — and
+only that one module, never the package's own ``__init__.py``, so importing ``eidos.recording`` itself never pulls
+in the optional ``a2a`` extra's ``httpx`` dependency (D-171). ``"a2a"`` is carved out of the vendor-name check below
+for the same reason ``eidos.state`` and ``eidos.a2a`` itself already carve it out of theirs: it is the protocol this
+one module exists to speak, not a vendor.
 """
 
 import ast
@@ -22,11 +29,13 @@ FORBIDDEN_IMPORTS = {
 }
 ALLOWED_ROOTS = {"__future__", "collections", "dataclasses", "datetime", "enum", "threading", "time", "types", "typing", "uuid", "eidos"}
 ALLOWED_EIDOS = {
-    "eidos.agents", "eidos.baseline", "eidos.capabilities", "eidos.compiler", "eidos.contracts", "eidos.recording", "eidos.runtime",
-    "eidos.state", "eidos.validation",
+    "eidos.a2a", "eidos.agents", "eidos.baseline", "eidos.capabilities", "eidos.compiler", "eidos.contracts", "eidos.recording",
+    "eidos.runtime", "eidos.state", "eidos.validation",
 }
+# Every vendor name this guard forbids, minus "a2a" itself (the protocol a2a.py exists to speak) — mirroring exactly
+# how eidos.state and eidos.a2a itself already carve "a2a" out of their own vendor-name sets.
 VENDOR_NAMES = {
-    "anthropic", "claude", "openai", "gpt", "gemini", "mistral", "llama", "cohere", "ollama", "qdrant", "a2a", "mcp",
+    "anthropic", "claude", "openai", "gpt", "gemini", "mistral", "llama", "cohere", "ollama", "qdrant", "mcp",
     "langgraph", "langchain", "langsmith",
 }
 
@@ -88,6 +97,15 @@ def test_no_module_level_mutable_state(module):
             if any(isinstance(t, ast.Name) and t.id == "__all__" for t in targets):
                 continue
             assert not isinstance(node.value, (ast.List, ast.Dict, ast.Set, ast.ListComp, ast.DictComp, ast.SetComp)), f"{module.name}: a mutable module-level value"
+
+
+def test_only_a2a_py_imports_eidos_a2a_and_the_package_init_never_does():
+    """``eidos.a2a`` needs the optional ``a2a`` extra (``httpx``, D-171); importing ``eidos.recording`` itself must
+    stay free of it (see the subprocess check below), so only ``a2a.py`` may reach for it — never ``__init__.py``,
+    never any other module, so a plain ``import eidos.recording`` never transitively loads it."""
+    for module in MODULES:
+        imports_a2a = any(name == "eidos.a2a" or name.startswith("eidos.a2a.") for name in imports_of(module))
+        assert imports_a2a == (module.name == "a2a.py"), module.name
 
 
 def test_the_wall_clock_and_the_random_id_are_read_in_one_place_only_the_ports_module():

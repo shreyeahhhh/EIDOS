@@ -87,11 +87,14 @@ def test_no_core_layer_imports_eidos_a2a(package):
             assert not (parts[0] == "eidos" and len(parts) > 1 and parts[1] == "a2a"), f"{path.relative_to(SRC)} imports {name}"
 
 
-def test_nothing_else_in_the_tree_imports_eidos_a2a_yet():
-    """No package other than eidos.a2a itself depends on it yet (item 11's boundary; Step 6 will be the first,
-    when it is approved — this guard is updated then, the same way each V0.6 step has updated its own)."""
+def test_only_eidos_recording_a2a_imports_eidos_a2a():
+    """V0.6 Step 6: ``eidos.recording.a2a`` is the one recording adapter that bridges a webhook delivery into a
+    caller-owned ``EventLog``, and the only module outside this package allowed to depend on it — every other
+    package stays exactly as isolated as item 11 originally required (this guard's own prior form said Step 6
+    would be the first to cross it; it now names the one file that does)."""
+    permitted = SRC / "recording" / "a2a.py"
     for path in sorted(SRC.rglob("*.py")):
-        if A2A in path.parents or path == A2A:
+        if A2A in path.parents or path == A2A or path == permitted:
             continue
         for name in imports_of(path):
             parts = name.split(".")
