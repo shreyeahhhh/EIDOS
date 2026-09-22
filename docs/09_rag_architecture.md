@@ -1,13 +1,17 @@
 # 09 — Agentic RAG Architecture
 
-**Status:** DERIVED — **DEFERRED to V0.8.** Specification only; nothing is implemented.
+**Status:** DERIVED — **DEFERRED, no milestone assigned (decisions.md D-184, 2026-09-22).** Specification only;
+nothing is implemented.
 **Derived from:** handoff §24, §25, §26, §31, §33, §50, §51, §63, §74, §76
 **Authority:** This document is derived from `EIDOS_CLAUDE_CODE_HANDOFF.md` and subordinate to it.
 If this document and the handoff conflict, stop and report the conflict to the human owner.
 
 > **Nothing in this document is implemented.** There is no `eidos.rag` package, no Qdrant, no
-> embedding model, no reranker and no dependency for any of them. Per §50, this arrives at V0.8.
-> See `decisions.md` D-028.
+> embedding model, no reranker and no dependency for any of them. §50 named this V0.8 in the
+> handoff's own original sequence; the owner has since redefined V0.8 as the Strategy Selector
+> (`decisions.md` D-178 onward, V0.7 Step 1's own naming) and ruled, as **D-184**, that RAG is not
+> renumbered into the V0.7–V1.0 strategy-intelligence sequence — it gets a milestone only when a
+> concrete requirement or benchmark needs it. See `decisions.md` D-028, D-184.
 
 ---
 

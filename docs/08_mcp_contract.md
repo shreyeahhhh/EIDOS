@@ -1,12 +1,16 @@
 # 08 — MCP Contract
 
-**Status:** DERIVED — **DEFERRED to V0.7.** Specification only; nothing is implemented.
+**Status:** DERIVED — **DEFERRED, no milestone assigned (decisions.md D-184, 2026-09-22).** Specification only;
+nothing is implemented.
 **Derived from:** handoff §27, §28, §29, §33, §50, §63
 **Authority:** This document is derived from `EIDOS_CLAUDE_CODE_HANDOFF.md` and subordinate to it.
 If this document and the handoff conflict, stop and report the conflict to the human owner.
 
 > **Nothing in this document is implemented.** There is no `eidos.mcp` package, no MCP dependency
-> and no tool. Per §50, MCP arrives at V0.7. See `decisions.md` D-027.
+> and no tool. §50 named this V0.7 in the handoff's own original sequence; the owner has since
+> redefined V0.7 as Strategy & Candidate Generation (`decisions.md` D-178 onward) and ruled, as
+> **D-184**, that MCP is not renumbered into the V0.7–V1.0 strategy-intelligence sequence — it gets a
+> milestone only when a concrete requirement or benchmark needs it. See `decisions.md` D-027, D-184.
 
 ---
 

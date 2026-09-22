@@ -7,7 +7,7 @@
 
 ## Status
 
-**V0.7 — Strategy & Candidate Generation: architecture accepted, Steps 2 to 4 (the data contracts, the bounded candidate generator, and the feasibility gate) implemented, none pushed. V0.6 — A2A: Steps 1–6 of 9 implemented and pushed. V0.5 — the event log and the state reducer: complete as scoped. V0.4 — real local agents: complete as scoped.**
+**V0.7 — Strategy & Candidate Generation: architecture accepted, Steps 2 to 5 (the data contracts, the bounded candidate generator, the feasibility gate, and close-out preparation) implemented, none pushed. V0.6 — A2A: Steps 1–6 of 9 implemented and pushed. V0.5 — the event log and the state reducer: complete as scoped. V0.4 — real local agents: complete as scoped.**
 
 This repository contains the project rules, the architecture knowledge base, the decision record,
 the V0.1 typed contracts (`eidos.contracts`), the V0.2 plan validator (`eidos.validation`), the V0.3
@@ -52,8 +52,13 @@ constructed; verification posture derived, not permuted as an independent axis),
 strategy-level analogues of V0.2's CAPABILITY/COMPLEXITY/RESOURCE stages, reusing the existing `SystemLimits`/
 `ReliabilityContract` — no new numeric limit anywhere, and the actual Plan validator (`eidos.validation.stages`/
 `.pipeline`) is never imported or called. `generate_candidate_strategies` now stamps identity, filters through
-this gate, and caps only the feasible pool. No Strategy-to-Plan expansion, no selection yet. See
-[progress.md](progress.md), "V0.7 Strategy & Candidate Generation".
+this gate, and caps only the feasible pool. Step 5 resolved the three questions Step 1 left open, by owner ruling,
+with no code change: **D-183** (candidates are feasibility-filtered before selection; full Plan validation runs
+once, only on the selected strategy's expanded `Plan`), **D-184** (MCP and RAG are deferred, unassigned extensions
+outside the V0.7–V1.0 sequence — not renumbered into it), **D-185** (candidate generation and feasibility are not
+`MissionEvent`s in V0.7). A close-out review was prepared but not declared closed — that is the owner's own call.
+No Strategy-to-Plan expansion, no selection yet. See [progress.md](progress.md), "V0.7 Strategy & Candidate
+Generation".
 
 Current status and the milestone ladder: [progress.md](progress.md).
 Decisions and unresolved questions: [decisions.md](decisions.md).
@@ -100,9 +105,9 @@ Everything in `docs/` is derived from it and subordinate to it.
 | [docs/04_task_genome.md](docs/04_task_genome.md) | The Task Genome contract |
 | [docs/05_plan_dsl.md](docs/05_plan_dsl.md) | The bounded Plan DSL and its validation pipeline |
 | [docs/06_mission_state.md](docs/06_mission_state.md) | MissionState ownership, events, reducer |
-| [docs/07_a2a_contract.md](docs/07_a2a_contract.md) | A2A boundary contract (deferred to V0.6) |
-| [docs/08_mcp_contract.md](docs/08_mcp_contract.md) | MCP tool boundary contract (deferred to V0.7) |
-| [docs/09_rag_architecture.md](docs/09_rag_architecture.md) | Agentic RAG architecture (deferred to V0.8) |
+| [docs/07_a2a_contract.md](docs/07_a2a_contract.md) | A2A boundary contract (V0.6, Steps 1–6 implemented and pushed) |
+| [docs/08_mcp_contract.md](docs/08_mcp_contract.md) | MCP tool boundary contract (deferred, unassigned — D-184) |
+| [docs/09_rag_architecture.md](docs/09_rag_architecture.md) | Agentic RAG architecture (deferred, unassigned — D-184) |
 | [docs/10_reliability.md](docs/10_reliability.md) | Reliability contract, verification, recovery, governance |
 | [docs/11_evaluation.md](docs/11_evaluation.md) | Telemetry, evaluation framework, experiments |
 | [docs/12_architecture_invariants.md](docs/12_architecture_invariants.md) | The hard invariants, normatively stated |

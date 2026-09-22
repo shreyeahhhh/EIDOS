@@ -3321,6 +3321,33 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
 - **Consequences:** **D-021 stays Open and untouched** — a bare `strategy_id` is not an answer to what a `strategy_signature` encodes or how strategies are compared for similarity; it only gives a future `STRATEGY_SELECTED`-type event (V0.8+, not built) something to reference. Strategy Memory (V1.0) is not built by this decision and needs no further contract change to eventually key outcomes by `strategy_id`.
 - **Affects:** D-178 (the object this identifies). Does not resolve D-021.
 
+### D-183 — Strategy candidate ordering: feasibility gates candidates before selection; full Plan validation runs once, only on the selected strategy's expanded Plan
+
+- **Status:** Accepted · **Date:** 2026-09-22 · **Decided by:** human owner
+- **Source:** handoff §2, §83 (`... Candidate Strategy Generation → Plan Validation → Strategy Selection → Execution ...`) vs. this session's own V0.7 Step 1 target flow (`... Candidate Strategy Generation → Feasibility filtering → bounded candidate set → [V0.8 Selection] → Plan validation → execution`); V0.7 Steps 1 and 4
+- **The tension found (and reported, not resolved, at Step 1):** the handoff's own fundamental-loop diagrams place PLAN VALIDATION between candidate generation and strategy selection, which reads as every candidate being expanded into a concrete `Plan` and run through the full V0.2 pipeline before anything is selected. The flow given for V0.7 itself placed "Plan validation" *after* selection, implying only the one selected strategy is ever expanded and validated. V0.7 did not need this resolved (Steps 2–4 stop at "bounded feasible candidate set," before either point), but V0.8 (Strategy Selection) would.
+- **Decision:** `Generate candidates → deterministic Strategy Feasibility (D-180, eidos.planning.feasibility, V0.7 Step 4) → Strategy Selection (V0.8, not built) → Strategy-to-Plan expansion (V0.8+, not built) → the existing, unmodified full Plan Validation pipeline (eidos.validation) → compilation (eidos.compiler).` Only strategies `check_feasibility` finds feasible may enter selection. **Full V0.2 Plan validation is never run against every candidate** — only once, against the concrete `Plan` the *selected* strategy expands into.
+- **Consequences:** confirms the reading V0.7 Steps 2–4 were already built against (feasibility is a narrower, strategy-level gate, not a stand-in for full Plan validation, D-180); no code changes to `eidos.planning` or `eidos.validation` follow from this ruling — it fixes the *order* a future V0.8 selector must respect, not anything already built. The handoff's own diagrams are not amended; this decision states which reading governs implementation, per CLAUDE.md §0's "if the handoff and this document conflict, stop and report" — reported at Step 1, now ruled on.
+- **Affects:** V0.8's own design (Strategy Selection must call `check_feasibility`-filtered candidates, never re-run full Plan validation per candidate). Does not reopen D-178–D-182 or any V0.2/V0.3 decision.
+
+### D-184 — MCP and RAG are deferred, unassigned extensions outside the V0.7–V1.0 strategy-intelligence sequence
+
+- **Status:** Accepted · **Date:** 2026-09-22 · **Decided by:** human owner
+- **Source:** `docs/03_architecture.md`, `progress.md`'s "Intentionally not built yet" table (originally: `mcp/` at V0.7, `rag/` at V0.8, per D-027/D-028); V0.7 Step 1's own redefinition of V0.7 as Strategy & Candidate Generation
+- **The gap found (and reported, not resolved, at Step 1):** the owner redefined V0.7 as Strategy & Candidate Generation and named V0.8 (Selector), V0.9 (benchmark) and V1.0 (Strategy Memory) explicitly — but said nothing about where MCP (previously "V0.7") and RAG (previously "V0.8") now land, an omission flagged rather than silently resolved by shifting every later milestone down by one.
+- **Decision:** MCP and RAG are **not** slotted anywhere in the V0.7–V1.0 strategy-intelligence sequence (Strategy contracts → candidate generation → feasibility → selection → benchmark → memory). Neither is assigned a milestone number now. Each gets one **only when a concrete EIDOS requirement or benchmark actually needs it** — not pre-reserved, not guessed at.
+- **Consequences:** `progress.md`'s "Intentionally not built yet" table rows for `mcp/`/`rag/` are updated from "V0.7 unclear"/"V0.8 unclear" to explicitly deferred-and-unassigned, per this ruling. D-027/D-028 (the original decisions putting MCP/RAG at V0.7/V0.8) are superseded by this renumbering, not reopened in substance — nothing about MCP's or RAG's own eventual design is decided here.
+- **Affects:** the milestone ladder in `progress.md` only. No source code, contract or test is affected.
+
+### D-185 — Candidate generation and feasibility are not MissionEvent lifecycle events in V0.7
+
+- **Status:** Accepted · **Date:** 2026-09-22 · **Decided by:** human owner
+- **Source:** invariant 15 ("every meaningful execution step emits a structured event"); `eidos.contracts.enums.MissionEventType`; V0.7 Step 1's own default position ("I'd default to no... but haven't assumed it")
+- **The question found (and reported, not resolved, at Step 1):** whether a generated `Strategy`, or the fact that a candidate-generation round happened at all, should be recorded as a `MissionEvent` (e.g. a future `CANDIDATES_GENERATED`/`STRATEGY_SELECTED`-shaped type), or whether it stays entirely outside `eidos.state` until a strategy is actually selected and expanded into a `Plan`.
+- **Decision:** **No.** Candidate generation and feasibility filtering are not `MissionEvent` lifecycle events in V0.7. `MissionEventType` gains no member for either. A `Strategy` is not (yet) a `MissionState` field and is not recorded by `eidos.state` in any form.
+- **Consequences:** matches D-165-style scope discipline — event vocabulary is added only at the milestone that needs it, never speculatively. Strategy-related event vocabulary (for replay, evaluation or Strategy Memory, V1.0) **may be introduced later**, when one of those milestones actually needs it — this decision does not pre-approve any specific future shape, only confirms none is needed now.
+- **Affects:** `eidos.state` is untouched by V0.7 in every step. Does not reopen D-090, D-154 or any other `MissionEventType` decision.
+
 ## Open — require the human owner
 
 These are ambiguities, contradictions and gaps found in the handoff during the bootstrap read. None
@@ -4066,12 +4093,16 @@ one is not.
 - **Status:** Deferred · **Source:** handoff §27, §28, §50
 - Documented in `docs/08_mcp_contract.md`. §27 caps the initial tool set at 2–3 (`search_documents`,
   `retrieve_evidence`) and warns against 20 tools in V1. No MCP code, dependency or package exists.
+- **Annotated 2026-09-22 (D-184):** V0.7 was redefined as Strategy & Candidate Generation; MCP no longer has a
+  reserved milestone number. It stays Deferred, unassigned, until a concrete requirement or benchmark needs it.
 
 ### D-028 — Agentic RAG and Qdrant deferred to V0.8
 
 - **Status:** Deferred · **Source:** handoff §24, §25, §26, §50
 - Documented in `docs/09_rag_architecture.md`. §25 notes the collection schema "should be designed
   later". No Qdrant, embedding model, reranker, dependency or package exists.
+- **Annotated 2026-09-22 (D-184):** V0.8 is now the Strategy Selector (V0.7 Step 1's own naming); RAG no longer
+  has a reserved milestone number. It stays Deferred, unassigned, until a concrete requirement or benchmark needs it.
 
 ### D-127 — V0.3 explicit deferrals
 

@@ -144,7 +144,9 @@ Agent -> MCP -> Permission / Policy -> Tool or resource
 
 Agents do not directly access environment capabilities (§27). The initial tool set is deliberately
 small — `search_documents`, `retrieve_evidence`. **Do not create 20 MCP tools in V1.** Detail in
-`08_mcp_contract.md`. Deferred to V0.7.
+`08_mcp_contract.md`. Deferred, unassigned (D-184) — V0.7 was redefined as Strategy & Candidate
+Generation; MCP is not renumbered into the V0.7–V1.0 sequence and gets a milestone only when a
+concrete requirement or benchmark needs it.
 
 ## 7. Strategy architecture
 
@@ -172,6 +174,14 @@ future decisions. A model-asserted quality score is **not** ground truth.
 > excluded — the first three by invariants 9/11, the last because D-012/D-125 are still Open and the
 > compiler rejects `RETRY`/`REPLAN` outright. **D-021** (a `strategy_signature`/"Strategy Genome") stays
 > Open and untouched — `StrategyId` (D-182) is plain identity, not a signature.
+>
+> **D-183:** candidates are filtered by `eidos.planning.feasibility.check_feasibility` (D-180) before
+> selection; the existing, unmodified full Plan Validation pipeline runs once, only on the *selected*
+> strategy's expanded `Plan` — never on every candidate. This is the reading §2/§83's own diagrams left
+> ambiguous (`... Candidate Strategy Generation → Plan Validation → Strategy Selection ...`), now ruled
+> on. **D-184:** MCP and RAG are deferred, unassigned extensions outside the V0.7–V1.0
+> strategy-intelligence sequence — see §11's package table. **D-185:** candidate generation and
+> feasibility filtering are not `MissionEvent`s in V0.7; `MissionEventType` gains no member for either.
 
 ## 8. The feedback loop
 
@@ -252,8 +262,8 @@ the architectural map; `progress.md` tracks which of these exist.
 | `eidos.memory` | Strategy and execution memory | V1.0 | no |
 | `eidos.evaluation` | Evaluation harness, experiments | V1.1 | no |
 | `eidos.a2a` | A2A boundary | V0.6 | no |
-| `eidos.mcp` | MCP tool boundary | V0.7 | no |
-| `eidos.rag` | Agentic RAG, retrieval, reranking, evidence judging | V0.8 | no |
+| `eidos.mcp` | MCP tool boundary | Deferred, unassigned (D-184) | no |
+| `eidos.rag` | Agentic RAG, retrieval, reranking, evidence judging | Deferred, unassigned (D-184) | no |
 | `eidos.api` | FastAPI surface | later | no |
 
 ### Contract representation rules
