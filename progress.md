@@ -7,7 +7,7 @@ Status only. Rules live in [CLAUDE.md](CLAUDE.md). Decisions and open questions 
 
 ## Current state
 
-**Milestone: V0.5 Mission State + Event Reducer — complete as scoped (D-152 to D-164), on top of V0.4 Real Local Agents (complete as scoped, D-131 to D-151), V0.1 Core Contracts, V0.2 Plan Validation and V0.3 LangGraph Runtime (complete as scoped, D-112 to D-130).**
+**Milestone: V0.7 Strategy & Candidate Generation — architecture accepted (D-178 to D-182), Step 2 of its sequence implemented, on top of V0.6 One A2A Boundary (protocol/contract design accepted, Steps 1–6 of 9 implemented, D-177; none pushed), V0.5 Mission State + Event Reducer (complete as scoped, D-152 to D-164, pushed), V0.4 Real Local Agents (complete as scoped, D-131 to D-151), V0.1 Core Contracts, V0.2 Plan Validation and V0.3 LangGraph Runtime (complete as scoped, D-112 to D-130).**
 
 All seven V0.1 contracts (`ReliabilityContract`, `TaskGenome`, `Plan`, `PlanStep`, `MissionEvent`,
 `MissionState`, `AgentTask`) are implemented in `src/eidos/contracts/`, immutable, in-memory only
@@ -51,7 +51,9 @@ Reducer" and "V0.5 close-out review" below.
 
 **V0.6 (One A2A Boundary): protocol and contract design accepted (2026-09-22; D-165 to D-177); Steps 1–6 of 9 implemented, none pushed.** The owner directed research against the published A2A Protocol Specification and the actual `a2a-sdk` dependency graph before any transport choice, then ruled on all twelve items, resolving **D-023, D-035, D-036, D-037** and amending **D-160** ruling 4 narrowly (**D-176**): an admission-guard `paused` mission is unchanged from V0.5; a `paused` mission caused by an A2A-awaiting pause is the one exception, resumable on the same log; no fifth `MissionStatus`. Step 2 extended the `AgentTask` contract (`AgentTaskStatus`, `plan_id`/`step_id`/`started_at`) and added `eidos.state.agent_tasks` (the D-166 mapping, the D-176 fold primitive). Step 3 extended `eidos.runtime` with the non-blocking `SUBMITTED`/`AWAITING` shape. Step 4 wired `A2A_TASK_STARTED`/`A2A_TASK_COMPLETED` into the reducer, the log's intake and replay, with the D-176 terminal exception. Step 5 built `eidos.a2a` — the hand-rolled JSON-RPC client (re-verified against the live spec, correcting two Step 1 assumptions), the Research Agent's remote `WorkAgent`, and the webhook-to-`EventProposal` converter — and found a real gap: nothing in the (then-)Accepted design un-paused a mission once its one exempted `A2A_TASK_COMPLETED` was accepted, so D-167's own described resume flow could not record further events on the same log (reported, not silently patched). **The owner ruled D-177**, resolving it: an explicit, narrow, never-automatic `EventLog.accept_resumed`/`reducer.reduce_resumed` pair, reading the log's own history rather than adding a `MissionState` field — `reduce()`, `accept()`, `MissionState`, `MissionStatus` and D-176 are all unchanged. **Step 6 built the recording adapter** (`eidos.recording.a2a.record_a2a_notification`) that bridges one externally received webhook delivery into a caller-owned `EventLog`, composing `eidos.a2a.webhook.notification_to_proposal` with the log's own unmodified `accept` — no new event vocabulary, no automatic resume. Each step required its own explicit go-ahead; none reopened a settled decision. See "V0.6 One A2A Boundary" below.
 
-There is still no planner, no MCP, no RAG, no persistence, no telemetry, no API and no frontend, and no A2A transport, client, webhook or remote agent — only the contract and state-layer support for one.
+**V0.7 (Strategy & Candidate Generation): architecture accepted (2026-09-22; D-178 to D-182, resolving D-020); Step 2 implemented, not pushed.** V0.6 is complete and pushed at `ab980c7`; V0.7 redefines what this milestone number means (originally MCP — see the milestone-ladder note above; the renumbering itself stays Open, not decided here). Step 1 was architecture/design only: `Strategy` is a distinct object from `Plan` (**D-178**, resolving the long-Open **D-020**) — an execution shape, never a `StepId`, a dependency edge or an agent binding; the approved structural dimensions are topology/parallelism (a sequential tuple of capability stages), verification posture (two members — only one deterministic Verifier exists, D-133) and capability allocation, with agent/model/tool/retry-replan posture explicitly excluded (**D-179**); feasibility filtering (not yet built) will reuse the existing `SystemLimits`/`ReliabilityContract`, no new numeric ceiling (**D-180**); `max_candidates` will be an explicit generation-time parameter, not a `SystemLimits` field — CLAUDE.md's own "two or three" is the ceiling, not reopened (**D-181**); `StrategyId` is plain, UUID-backed identity, no version, no signature — **D-021** (the "Strategy Genome") stays Open and untouched (**D-182**). **Step 2 built the data contracts alone**: `eidos.planning` (`Strategy`, `StrategyStage`, `VerificationPosture`), a new core layer depending only on `eidos.contracts` at this step. No `CandidateGenerator`, no feasibility filtering, no Strategy-to-Plan expansion, no selection — those are later steps, each requiring its own go-ahead. Three questions from Step 1 stay explicitly Open, not resolved: candidate-validation-vs-selection ordering, the MCP/RAG milestone renumbering, and whether candidate generation becomes a `MissionEvent`. See "V0.7 Strategy & Candidate Generation" below.
+
+There is still no MCP, no RAG, no persistence, no telemetry, no API and no frontend. A2A itself is built (`eidos.a2a`, V0.6 Steps 1–6, none pushed). A planner does not yet exist either — V0.7 Step 2 adds only the `Strategy` data contracts (`eidos.planning`); no `CandidateGenerator`, no feasibility filtering, no strategy-to-plan expansion and no selection exist yet.
 
 Real-model runs have been recorded (V0.4; see "The first real baseline run" and the sections after it). They record what happened in those runs and are not a benchmark: no quality
 metric exists anywhere in this repository, and the only latencies recorded are the first run's one trivial completion and the runtime-reported durations of the later runs' calls.
@@ -60,7 +62,7 @@ metric exists anywhere in this repository, and the only latencies recorded are t
 
 - [x] `CLAUDE.md` — permanent rules, 18 architecture invariants
 - [x] `progress.md` — this file
-- [x] `decisions.md` — 133 Accepted, 40 Open, 5 Deferred (counts current as of the latest decision below)
+- [x] `decisions.md` — 139 Accepted, 39 Open, 5 Deferred (counts current as of the latest decision below)
 - [x] `README.md`, `pyproject.toml`, `.gitignore`
 - [x] `docs/01`–`docs/12` — the twelve documents required by handoff §81
 - [x] `src/eidos/` and `src/eidos/contracts/` — docstring only, no code
@@ -83,8 +85,10 @@ hold, failure cases are covered, documentation matches reality, a git checkpoint
 | **V0.4** Real Local Agents | Research, Analysis, Verification. Baseline workflow end-to-end. | **Complete as scoped — 2026-09-21 (D-131 to D-151).** `eidos.agents` (the model seam, the artifact store, Research, Analysis and a deterministic Verification rule set), `eidos.capabilities`, `eidos.baseline` and `eidos.providers`; 2,053 tests pass, 2 real-model tests deselected. The baseline works end to end **with a scripted model** on both backends, and **with a real local model the committed opt-in test (4,096 output tokens, 240 s), run once, finished with a verifier PASS** (three deterministic rules; no quality measured). Smaller budgets had failed, as recorded (D-149, D-150). **Not delivered, by scope:** a planner, replan, events and replay, tools, A2A, MCP, RAG and persistence; D-151 (Open) is deliberately left. See "V0.4 close-out review". |
 | **V0.5** MissionState + Event Reducer | `MissionEvent`, `MissionState`, `StateReducer`, checkpoints, replay. §50: state handling must be reliable **before** A2A. | **Complete as scoped — 2026-09-21 (D-152 to D-164).** The event log, a pure outcome-returning reducer, checkpoint and replay, recording adapters outside the runtime, and a thin derived `ExecutionRecord`; in memory with a JSONL round trip, no durable store. Resolves D-010b, D-039 and D-126; D-151, D-129, D-059, D-015 and D-017 stay Open. The intake and replay refuse a repeated node event (D-162); **D-164 stays Open** (D-163 was resolved by amending D-158 item 1). 2,524 tests pass in the default suite. |
 | **V0.6** One A2A Boundary | Move exactly one agent into an independent process. Test: normal completion, timeout, duplicate event, late event, agent restart, partial artifact, failure. | **In progress — protocol/contract design accepted 2026-09-22 (D-165 to D-177), resolving D-023, D-035, D-036, D-037; D-160 amended by D-176. Steps 1–6 of 9 implemented (`AgentTask`/state contracts, the `eidos.runtime` non-blocking extension, the `eidos.state` event/reducer integration, the `eidos.a2a` client/agent/webhook boundary, the `eidos.recording.a2a` recording adapter); none pushed. Step 5's own found-and-reported resume gap is resolved by D-177 (`EventLog.accept_resumed`/`reducer.reduce_resumed`, explicit, never automatic) — see "V0.6 One A2A Boundary".** |
-| **V0.7** MCP | 2–3 real tools only (`search_documents`, `retrieve_evidence`). Test: successful call, invalid arguments, timeout, unavailable tool, unauthorized call, duplicate call. | Not started — deferred (D-027) |
-| **V0.8** Agentic RAG | Qdrant, local embeddings, retrieval, reranking, evidence judge. | Not started — deferred (D-028) |
+| **V0.7** Strategy & Candidate Generation *(redefined 2026-09-22 — see note)* | Introduce the `Strategy` representation and the bounded candidate-generation boundary: `Strategy` distinct from `Plan` (D-178), the approved structural dimensions (D-179), feasibility reusing `SystemLimits`/`ReliabilityContract` (D-180), an explicit `max_candidates` parameter (D-181), plain `StrategyId` identity (D-182). No `CandidateGenerator`, no feasibility filtering, no selection yet. | **In progress — architecture accepted 2026-09-22 (D-178 to D-182); Step 2 of the not-yet-numbered full sequence implemented: the `Strategy`/`StrategyStage`/`VerificationPosture` data contracts (`eidos.planning`), none pushed.** See "V0.7 Strategy & Candidate Generation" below. |
+| **V0.8** Agentic RAG *(original numbering; unclear — see note)* | Qdrant, local embeddings, retrieval, reranking, evidence judge. | Not started — deferred (D-028) |
+
+> **Note (Open, not resolved here):** V0.7 was originally "MCP" and V0.8 "Agentic RAG" (D-027/D-028). The owner has redefined V0.7 as Strategy & Candidate Generation; where MCP and RAG now land (V0.8, V0.9, or elsewhere) has not been decided — flagged during V0.7 Step 1's exploration and left genuinely Open, not silently renumbered. The V0.8 row above keeps its original content and number pending that ruling.
 | **V0.9** Telemetry | Structured event logging. Measure latency, tokens, agent calls, tool calls, A2A interactions, RAG rounds, retries, quality. | Not started |
 | **V1.0** Strategy Optimization | Historical strategy memory, strategy ranking, constraint-based selection, pilot execution. | Not started |
 | **V1.1** Adaptive Learning | Strategy memory, historical ranking, exploration, empirical estimation, prediction-error tracking. | Not started |
@@ -1367,21 +1371,102 @@ never invented here, same discipline as D-046).
 
 ---
 
+## V0.7 Strategy & Candidate Generation — architecture accepted; Step 2 (the data contracts) implemented, none pushed (2026-09-22)
+
+V0.6 closed and pushed at `ab980c7` (all Steps 1–6 plus D-177). The owner then redefined this milestone number:
+originally "MCP" (D-027), V0.7 is now **Strategy & Candidate Generation** — introducing the representation of an
+execution strategy and the bounded candidate-generation boundary the fundamental loop names (handoff §2, §83):
+*Capability Discovery → Candidate Strategy Generation → Feasibility filtering → bounded candidate set →
+[V0.8 Strategy Selection] → Plan validation → execution.* Where MCP/RAG now land is explicitly **not** decided
+by this renumbering (see "Carried forward, not decided" below).
+
+### Step 1 — architecture and design only (accepted 2026-09-22; no code)
+
+Read-only exploration of `TaskGenome`, `Plan`/`PlanStep`, the V0.2 validation stages, `eidos.compiler`,
+`eidos.capabilities`, `SystemLimits`, `ReliabilityContract` and the identifier conventions (D-053), against the
+long-Open **D-020** ("Strategy" and "Plan" used interchangeably) and `docs/03_architecture.md` §7's own earmark
+for `eidos.planning`. Proposed, and the owner approved, five decisions:
+
+- **D-178** (resolves D-020): `Strategy` is a **distinct object from `Plan`** — an execution shape (capability
+  stages, a verification posture), never a `StepId`, a dependency edge or an agent binding. A selected strategy
+  may eventually (V0.8+, not built) expand into a concrete `Plan`, through the unmodified V0.2/V0.3 pipeline —
+  a `Strategy` grants no validation or compilation shortcut, ever.
+- **D-179**: the V0.7 structural dimensions are exactly three — topology/parallelism (a sequential tuple of
+  capability stages, each a parallel group), verification posture (two members: `NONE`/`FINAL` — only one
+  deterministic `Verifier` exists, D-133, nothing richer to choose between yet) and capability allocation.
+  Agent selection (invariant 11), model selection (invariant 9), tool/retrieval selection (no MCP, no RAG yet)
+  and retry/replan posture (D-012, D-125 both Open; the compiler rejects `RETRY`/`REPLAN` outright, D-114) are
+  explicitly excluded, each for a named, already-existing reason — not by oversight.
+- **D-180**: feasibility filtering (not yet built) will reuse the **existing** `SystemLimits`/`ReliabilityContract`
+  — a narrower, structural analogue of exactly V0.2's CAPABILITY/COMPLEXITY/RESOURCE stages, no new numeric
+  ceiling invented. `eidos.planning` becomes a new **core layer**, alongside contracts/validation/compiler/
+  runtime/state — deterministic, no I/O, no clock, no hidden state.
+- **D-181**: `max_candidates` will be an explicit, required, no-default generation-time parameter (D-103's "no
+  ambient configuration" discipline) — **not** a `SystemLimits` field (a plan-shape ceiling is a different kind
+  of thing from a candidate-count knob). CLAUDE.md's own "two or three" is the ceiling; not reopened here.
+- **D-182**: `StrategyId` is a plain, UUID-backed identifier (D-053's default) — no version (strategies are not
+  replanned in place the way `Plan` is) and no signature/"genome" encoding. **D-021 stays Open and untouched.**
+
+Three questions were surfaced and explicitly left Open, not resolved: (1) the handoff's own diagrams (§2, §83)
+place Plan Validation *between* candidate generation and Strategy Selection, while this session's target flow
+places it *after* selection — V0.7 does not need this resolved (it stops before either point); (2) the MCP/RAG
+milestone renumbering (above); (3) whether candidate generation ever becomes a `MissionEvent`.
+
+### Step 2 — the `Strategy` data contracts (implemented, 2026-09-22)
+
+Scope held exactly to the contracts D-178/D-179/D-182 approved — no `CandidateGenerator`, no feasibility
+filtering, no Strategy-to-Plan expansion, no selection. New package `eidos.planning` (`docs/03_architecture.md`'s
+own long-standing earmark), a core layer depending only on `eidos.contracts` at this step:
+
+- **`StrategyId`** (`eidos.contracts.identifiers`) — UUID-backed (D-053 default; no exemption applies).
+- **`VerificationPosture`** (`eidos.planning.strategy`) — `StrEnum`, exactly `NONE`/`FINAL` (D-179 item 2).
+- **`StrategyStage`** — `capabilities: tuple[CapabilityId, ...]` with `Field(min_length=1)`; a capability may
+  repeat within one stage (two parallel calls to the same capability is a legitimate shape — a deliberate
+  difference from `AgentDescriptor.capabilities`, D-134, which is a set by nature, not a multiset).
+- **`Strategy`** — `tenant_id` (defaults, D-079), `mission_id`, `strategy_id`, `stages: tuple[StrategyStage, ...]`
+  (may be empty, mirroring D-106's "empty plans pass"), `verification`, `rationale: str` (non-empty). Frozen,
+  strict, extra-forbidden — the same `EidosModel` base every other contract uses.
+- **`StrategyShape` was reconsidered and dropped.** The Step 1 proposal split an identity-free "shape" the
+  generator would produce from an identity-stamped `Strategy` an orchestrator would wrap it into, mirroring
+  `eidos.recording`'s injected-`IdSource` discipline. With no `CandidateGenerator` built yet in this step, that
+  split has no consumer — introducing it now would be exactly the "field/type that sounds useful" CLAUDE.md
+  warns against. `Strategy` is flat, like `Plan` is flat; the split can be added, additively, whenever the
+  generator is actually built.
+
+Guard tests (`tests/unit/planning/test_planning_guards.py`, mirroring `test_compiler_guards.py`'s own discipline)
+pin: the package's exact module list; no I/O/network/clock/randomness import; imports only `eidos.contracts` (not
+yet `eidos.validation` — D-180 permits it once feasibility filtering is built); never imports
+`agents`/`providers`/`backends`/`a2a`/`recording`/`capabilities`/`runtime`; no vendor/model name; none of
+D-179's excluded concepts (`AgentId`, `StepId`, `model`, `tool(s)`, `max_retries`/`max_replans`, ...) appear as
+an imported symbol or a field name on `Strategy`/`StrategyStage`; no module-level mutable state; importing the
+package loads nothing from any other layer. 57 tests total (39 in `test_planning_strategy.py`: valid
+construction, immutability, the empty-stage rejection, capability/`StrategyId` typing, verification posture,
+every forbidden-concept rejection named in D-179, JSON round-trip and equality/hash behaviour matching `Plan`'s
+own conventions; 18 in `test_planning_guards.py`). Mutation check: 9 of 9 caught on the first pass (every
+`Field(min_length=...)`/required-field constraint in `strategy.py`, plus both `VerificationPosture` values).
+Full default suite **2,887 passed, 2 deselected**. Committed as one focused commit; not pushed. **Step 3 not
+started.**
+
+### Carried forward, not decided
+
+The three Step 1 questions above stay Open, exactly as recorded there — none is resolved by Step 2. D-021 (the
+"Strategy Genome"/signature) stays Open and untouched by D-182.
+
+---
+
 ## Intentionally not built yet
 
 Per CLAUDE.md §3, a package is created only when the milestone that fills it begins. These
-architectural components are **documented in `docs/03_architecture.md` but not scaffolded** (V0.4's four packages and V0.5's `state/` and `recording/` now exist and are no longer listed):
+architectural components are **documented in `docs/03_architecture.md` but not scaffolded** (V0.4's four packages, V0.5's `state/` and `recording/`, V0.6's `a2a/`, and V0.7 Step 2's `planning/` — the `Strategy` data contracts only, no generator/selector yet — now exist and are no longer listed):
 
 | Component | Arrives at |
 |---|---|
-| `planning/` — candidate strategy generation | V0.2+ |
 | `policy/` — governance, autonomy, budgets | V1.2 engine (V0.2 has only a `NOT_APPLICABLE` stage in `validation/` — D-110) |
 | `telemetry/` — structured events, metrics | V0.9 |
 | `memory/` — strategy and execution memory | V1.0 |
 | `evaluation/` — evaluation harness, experiments | V1.1 |
-| `a2a/` | V0.6 |
-| `mcp/` | V0.7 |
-| `rag/` | V0.8 |
+| `mcp/` | **V0.7 unclear** — V0.7 is now Strategy/candidate generation (D-178 onward); whether MCP/RAG renumber is unresolved, Open per V0.7 Step 1 |
+| `rag/` | **V0.8 unclear** — see `mcp/`'s row; not decided here |
 | `api/` — FastAPI | later (§53 schema not specified) |
 | `frontend/` | V1.3 |
 | Docker, CI workflows | V1.4 |
@@ -1435,6 +1520,8 @@ Full detail for each is in [decisions.md](decisions.md).
 
 | Date | Milestone | Outcome |
 |---|---|---|
+| 2026-09-22 | **V0.7 Step 2 implemented: the `Strategy` data contracts (`eidos.planning`)** | Scope held exactly to what D-178/D-179/D-182 approved: `StrategyId` (`eidos.contracts.identifiers`, UUID-backed, D-053 default), `VerificationPosture` (`StrEnum`, exactly `NONE`/`FINAL`), `StrategyStage` (`capabilities: tuple[CapabilityId, ...]`, `min_length=1`, a capability may repeat — a deliberate multiset, unlike `AgentDescriptor.capabilities`'s set, D-134), `Strategy` (`tenant_id`/`mission_id`/`strategy_id`/`stages`/`verification`/`rationale`, frozen, strict, extra-forbidden, the same `EidosModel` base every contract uses). **`StrategyShape` (Step 1's proposed identity-free intermediate type) was reconsidered and dropped**: with no `CandidateGenerator` built yet, it has no consumer, and introducing it now would be exactly the premature type CLAUDE.md warns against — `Strategy` stays flat, like `Plan`. New package `eidos.planning`, a core layer (joining contracts/validation/compiler/runtime/state) depending only on `eidos.contracts` at this step. Guard tests (mirroring `test_compiler_guards.py`) pin the exact module list, forbidden imports, the import boundary, no vendor/model names, and — directly testing D-179's own exclusions — that none of `AgentId`/`StepId`/`model`/`tool(s)`/`max_retries`/`max_replans` appears as an imported symbol or a field name on `Strategy`/`StrategyStage`. 57 new tests (39 construction/immutability/typing/forbidden-concept/serialization tests, 18 guard tests). Mutation check: 9 of 9 caught on the first pass. Full default suite **2,887 passed, 2 deselected**. Committed as one focused commit; not pushed. Step 3 not started. |
+| 2026-09-22 | **V0.7 Step 1: architecture and design accepted (D-178 to D-182, resolving D-020); no code** | Read-only exploration of `TaskGenome`, `Plan`, the V0.2 stages, `eidos.compiler`, `eidos.capabilities`, `SystemLimits`, `ReliabilityContract` and D-053's identifier conventions, against the long-Open D-020 and `docs/03_architecture.md` §7's own `eidos.planning` earmark. Proposed and the owner approved five decisions: **D-178** (Strategy is a distinct object from Plan — resolves D-020); **D-179** (the three V0.7 structural dimensions — topology/parallelism, a two-member verification posture, capability allocation — and the explicit exclusions: agent/model/tool selection, retry/replan posture, each for a named existing reason); **D-180** (feasibility filtering, not yet built, reuses the existing `SystemLimits`/`ReliabilityContract`, no new ceiling; `eidos.planning` becomes a new core layer); **D-181** (`max_candidates` is an explicit, required generation-time parameter, not a `SystemLimits` field; CLAUDE.md's own "two or three" stays the ceiling, not reopened); **D-182** (`StrategyId` is plain UUID-backed identity, no version, no signature — D-021 stays Open, untouched). **Three questions explicitly left Open, not resolved:** the handoff's own diagram ordering of Plan Validation relative to Strategy Selection vs. this session's target flow; the MCP/RAG milestone renumbering now that V0.7 means Strategy, not MCP; whether candidate generation ever becomes a `MissionEvent`. Decision counts: 139 Accepted, 39 Open, 5 Deferred. Updated `docs/03`, this file. No source code changed. Not pushed. |
 | 2026-09-22 | **V0.6 Step 6 implemented: the recording adapter (`eidos.recording.a2a.record_a2a_notification`)** | The narrow, transport-neutral bridge from one externally received A2A webhook delivery to a caller-owned `EventLog`, made possible by D-177 and requested next. Composes `eidos.a2a.webhook.notification_to_proposal` (unchanged) with the caller's own `EventLog.accept` (unchanged) — no new API surface was needed, so no new decision was recorded; this was checked, not assumed, before writing code. `log: EventLog` is a parameter on every call, never a constructor field, so ownership is never in question; the adapter never calls `accept_resumed`, never resumes, never runs another execution round, never touches `MissionState` directly, and was proved to hold no state of its own (two independent logs, two calls, no crosstalk). `A2ARecordingResult` (`webhook: WebhookResult`, `intake: IntakeResult \| None`, a `recorded` property) adds no new outcome vocabulary — the five required distinctions (malformed delivery, invalid correlation, duplicate lifecycle event, invalid event proposal, invalid state transition, successful recording) fall directly out of the existing `WebhookOutcome`/`ReduceOutcome` values, composed, never collapsed. **Lives in `eidos.recording`, not `eidos.a2a`** (an adapter package may depend on the A2A boundary; a core layer may not, and `eidos.a2a` itself must still be reached by nothing else) — and is **deliberately not re-exported from `eidos/recording/__init__.py`**, so a plain `import eidos.recording` stays free of the optional `a2a` extra's `httpx` dependency (D-171), verified directly by subprocess import; a caller imports `eidos.recording.a2a` explicitly. Both packages' static guard tests were extended to state this precisely, not weakened: `test_a2a_guards.py` now names the one permitted importer instead of forbidding all of them (its own prior wording had already anticipated this exact shape); `test_recording_guards.py` gained `eidos.a2a` as an allowed layer, carved `"a2a"` out of its vendor-name check (mirroring `eidos.state`'s and `eidos.a2a`'s own prior carve-outs), and gained a new guard proving only `a2a.py` — never `__init__.py`, never any other module — reaches for it. 11 new tests in `tests/unit/recording/test_recording_a2a.py` (A2A_TASK_STARTED unaffected; malformed/unknown-task deliveries never reaching the log; a completion applying through an AWAITING pause without auto-resuming; a repeated `event_id` and a repeated `a2a_task_id` refused distinctly; the wrong mission's log refused as invalid; a finished mission's late delivery refused as an invalid transition; statelessness across two logs; replay equivalence; a full end-to-end submit → await → pause → webhook → recording adapter → `accept_resumed` → finish), one new guard test, one guard test renamed. Mutation check: 6 of 6 caught on the first pass. Full default suite **2,830 passed, 2 deselected**. Committed as one focused commit; not pushed. Step 7 not started. |
 | 2026-09-22 | **D-177 ruled and implemented: explicit resume of a `paused` mission (`EventLog.accept_resumed`, `reducer.reduce_resumed`)** | Resolved the gap Step 5 found and reported: once D-176 accepted one `A2A_TASK_COMPLETED` into a `paused` mission, nothing un-paused `MissionState.status`, so a caller could not record the following round of ordinary events on the same log. The owner ruled resumption is a distinct, **never-automatic** `EventLog` operation reading the log's own history, not a new `MissionState` field. **`reduce()`, `accept()`, `MissionState`, `MissionStatus` and D-176's `A2A_TASK_COMPLETED` handling are all unchanged** — verified by rerunning every existing test unmodified. Added `reducer.reduce_resumed` (a sibling to `reduce`, sharing every check but the `paused`-refusal via a shared internal `_reduce`), `reducer.most_recent_pause`/`reducer.resumable_pause` (pure, shared by both `log.py` and `replay.py`), and `EventLog.accept_resumed` (a sibling to `accept`, refactored through a shared `_accept_via` so neither duplicates the D-162/D-172 repeat-guard bookkeeping). **Checked directly against the case that breaks any simpler design** (an admission-halt-paused mission with an independently outstanding, later-concluding A2A task — indistinguishable from a resolved awaiting pause by `agent_tasks` alone): `accept_resumed` still refuses it correctly, because it reads the log's actual history, not state alone; a genuinely new halt recorded *during* a resumed round is picked up by the next history scan and makes the mission terminal again, with no extra state. `replay._fold` needed the identical rule as a direct, necessary consequence (a log a live caller correctly extended past a resume must still replay to the same state) — `checkpoint_at`/`resume` inherit the same known "no history before the checkpoint" limitation `seen`/`task_seen` already carry, documented and pinned by its own test rather than silently accepted. 19 new tests in `tests/unit/state/test_state_d177_resume.py` (all ten of the owner's required scenarios) plus `tests/unit/a2a/test_a2a_scenario.py` extended to complete the full submit → await → pause → webhook → resume → finish flow it always meant to prove. Mutation check: 14 of 14 caught on the first pass. Full default suite **2,812 passed, 2 deselected**. Recorded as **D-177 (Accepted)**; counts 133 Accepted, 40 Open, 5 Deferred. Committed as one focused commit; not pushed. Step 6 not started. |
 | 2026-09-22 | **V0.6 Step 5 implemented: `eidos.a2a` (the client, the Research Agent's remote `WorkAgent`, the webhook converter); a real resume gap found and reported** | Re-verified the wire format directly against the live spec rather than trusting Step 1: found and corrected two real details (`TaskState` is `TASK_STATE_*` SCREAMING_SNAKE_CASE, confirmed by ADR-001 and the spec's own example; JSON-RPC methods are PascalCase — `SendMessage`/`GetTask` — not `message/send`/`tasks/get`), neither a contract change. Built `wire.py` (the verified Pydantic wire types), `convert.py` (`agent_task_status_of`, `text_artifact_of`), `transport.py` (`Transport`/`HttpxTransport`, the only module importing `httpx` — a new optional `a2a` extra, D-171), `client.py` (`send_message` always sends `return_immediately: true` — the wire default is `false` and would silently make a real server block the call — and `get_task`; four failure kinds, never collapsed: `NETWORK`, `TRANSPORT_TIMEOUT`, `MALFORMED_RESPONSE`, `PROTOCOL_ERROR`), `agent.py` (`A2AWorkAgent`, D-175's remote Research Agent; correlation facts `WorkResult` cannot carry, D-165 rule 1, exposed via `submitted_task(step_id)`), `webhook.py` (`notification_to_proposal`, a pure function — not a server — correlating via `MissionState.agent_tasks`, item 3, and writing a completed task's usable text to the same `ArtifactStore` a local agent uses), and `deadline.py` (`check_deadline`, D-173 item 2's separate EIDOS-observed timeout, never polled automatically). **Found and reported, not silently patched:** the full scenario test proves the runtime-level resume (`run_baseline` again with `PriorOutcomes`) works completely, but the event-recording side cannot follow on the same log — once D-176's exception accepts the one `A2A_TASK_COMPLETED`, `MissionState.status` stays `paused` and nothing currently moves it back, contradicting D-167's own description of that flow. Pinned as an asserted fact in `test_a2a_scenario.py`, not touched in `eidos.state` (Step 4 is already committed; this is the owner's call). 119 tests added across nine files, including `test_a2a_transport.py` against `httpx.MockTransport` (no real socket) and `test_a2a_guards.py` (layer boundaries, D-171's dependency footprint). Mutation check: 33 of 33 caught on the first pass. Full default suite **2,793 passed, 2 deselected**. Scope held to `eidos.a2a` and its tests (plus the one `eidos.providers` guard test D-171's new extra required updating). No `eidos.recording` change, no automatic resume, no `tasks/cancel`, no streaming. Committed as one focused commit; not pushed. Step 6 not started. |

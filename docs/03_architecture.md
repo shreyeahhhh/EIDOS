@@ -162,9 +162,16 @@ The cold-start problem is handled progressively (§18): rules and heuristics →
 actual signals → continue/abandon/replan → store real execution data → use historical evidence for
 future decisions. A model-asserted quality score is **not** ground truth.
 
-> **Open:** whether a "Strategy" is the same object as a "Plan" or a Plan plus binding decisions the
-> DSL does not encode. See `decisions.md` D-020. Several §17 factors (model selection, retrieval
-> strategy, context allocation) are not expressible in the §13 plan primitives.
+> **Resolved (D-178, 2026-09-22):** a Strategy is a **distinct object from Plan** — an execution shape
+> (capability stages, a verification posture) that never carries a `StepId`, a dependency edge or an
+> agent binding. A selected strategy may eventually (V0.8+, not built yet) expand into a concrete
+> `Plan`, through the unmodified V0.2/V0.3 pipeline. **D-179** narrows the §17 factor list to what the
+> rest of the system can already support: topology/parallelism (the stage shape itself), verification
+> posture (two members — only one deterministic Verifier exists, D-133) and capability allocation.
+> Agent selection, model selection, tool/retrieval selection and retry/replan posture are explicitly
+> excluded — the first three by invariants 9/11, the last because D-012/D-125 are still Open and the
+> compiler rejects `RETRY`/`REPLAN` outright. **D-021** (a `strategy_signature`/"Strategy Genome") stays
+> Open and untouched — `StrategyId` (D-182) is plain identity, not a signature.
 
 ## 8. The feedback loop
 
@@ -229,7 +236,7 @@ the architectural map; `progress.md` tracks which of these exist.
 |---|---|---|---|
 | `eidos.contracts` | Typed contracts: TaskGenome, ReliabilityContract, MissionState, MissionEvent, Plan, PlanStep, AgentTask | V0.1 | **yes** |
 | `eidos.capabilities` | The V0.4 capability set (five exact-string, lowercase names, D-132, D-144), the agent descriptor and a deterministic registry that resolves a capability to an agent; an unbound capability is a typed pre-run rejection (D-134) | V0.4 (V0.2 needed neither — D-102) | **yes** — vocabulary, descriptor, registry and `bind_plan` (Step 4) |
-| `eidos.planning` | Candidate strategy generation, strategy selection | V0.2+ | no |
+| `eidos.planning` | Candidate strategy generation, strategy selection | V0.7 | **yes** — the `Strategy`/`StrategyStage`/`VerificationPosture` data contracts only (Step 2); no generator, no feasibility filtering, no selection yet |
 | `eidos.validation` | The validation pipeline of §14 — depends only on `eidos.contracts` | V0.2 | **yes** |
 | `eidos.compiler` | Validated `Plan` + accepted `PlanValidationReport` → an immutable, backend-neutral compiled form; deterministic; compiles only `agent` and `VERIFY` (D-112, D-114); imports no LangGraph | V0.3 | **yes** — the compiled form and `compile_plan` only (Step 2) |
 | `eidos.runtime` | Backend-neutral execution: level-synchronous semantics, node and run results, synchronous execution ports, frozen `ExecutionContext` including the frozen `ReliabilityContract` (D-113, D-115, D-117, D-118, D-122, D-139); imports no LangGraph | V0.3 | **yes** — ports, results, `ExecutionContext` and the sequential reference executor (Step 3) |
@@ -439,10 +446,11 @@ V0.4 baseline (unchanged) --existing injection points--> eidos.recording   (inje
 
 ## Open questions
 
+**D-020** (Strategy vs Plan — one object or two) is resolved — see `decisions.md` D-178, §7 above.
+
 | Id | Question |
 |---|---|
 | D-007 | Capability vocabulary and matching semantics — not a V0.2 blocker (D-102) |
-| D-020 | Strategy vs Plan — one object or two |
 | D-009 | Where execution bounds originate |
 | D-024 | Whether the FAISS/Qdrant comparison is an out-of-runtime experiment |
 | D-129 | How a work node receives its predecessors' outputs — answered for V0.4 by D-137 (in-memory store); stays Open |

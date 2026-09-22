@@ -7,7 +7,7 @@
 
 ## Status
 
-**V0.6 — A2A protocol/contract design accepted; Steps 1–6 of 9 implemented, none pushed. V0.5 — the event log and the state reducer: complete as scoped. V0.4 — real local agents: complete as scoped.**
+**V0.7 — Strategy & Candidate Generation: architecture accepted, Step 2 (the data contracts) implemented, none pushed. V0.6 — A2A: Steps 1–6 of 9 implemented and pushed. V0.5 — the event log and the state reducer: complete as scoped. V0.4 — real local agents: complete as scoped.**
 
 This repository contains the project rules, the architecture knowledge base, the decision record,
 the V0.1 typed contracts (`eidos.contracts`), the V0.2 plan validator (`eidos.validation`), the V0.3
@@ -31,7 +31,20 @@ live spec while building the client corrected two Step 1 assumptions (`TaskState
 exempted completion event was accepted, so a resumed mission could not record further events on the same log — reported, not silently patched, and resolved by **D-177**: an explicit, never-
 automatic `EventLog.accept_resumed`/`reducer.reduce_resumed` pair that reads the log's own history rather than adding a `MissionState` field. Step 6 built the one hop D-177 made possible —
 `eidos.recording.a2a.record_a2a_notification`, the recording adapter that bridges one externally received webhook delivery into a caller-owned `EventLog`, composing the unchanged webhook converter with the
-unchanged `EventLog.accept` and nothing else. See [progress.md](progress.md), "V0.6 One A2A Boundary".
+unchanged `EventLog.accept` and nothing else. All six steps are committed and pushed to `origin/master`. See [progress.md](progress.md), "V0.6 One A2A Boundary".
+
+V0.7 introduces the representation of an execution strategy and the bounded candidate-generation boundary — the
+model chooses from a runtime-bounded set of feasible strategies rather than inventing an unrestricted workflow.
+Step 1 (architecture only) resolved the long-open **D-020** ("Strategy" and "Plan" used interchangeably) as
+**D-178**: a `Strategy` is a distinct object from `Plan`, an execution shape that never carries a `StepId`, a
+dependency edge or an agent binding. **D-179** fixes the three dimensions it may express — topology/parallelism,
+a two-member verification posture, and capability allocation — with agent/model/tool selection and retry/replan
+posture explicitly excluded. **D-180**–**D-182** fix that feasibility filtering will reuse the existing
+`SystemLimits`/`ReliabilityContract` (no new ceiling), that `max_candidates` is an explicit parameter (CLAUDE.md's
+own "two or three" stays the bound), and that `StrategyId` is plain identity (no version, no signature — **D-021**
+stays Open). Step 2 built the data contracts alone — `eidos.planning` (`Strategy`, `StrategyStage`,
+`VerificationPosture`) — a new core layer with no `CandidateGenerator`, no feasibility filtering and no selection
+yet. See [progress.md](progress.md), "V0.7 Strategy & Candidate Generation".
 
 Current status and the milestone ladder: [progress.md](progress.md).
 Decisions and unresolved questions: [decisions.md](decisions.md).

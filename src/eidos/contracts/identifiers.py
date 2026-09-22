@@ -44,6 +44,7 @@ PlanId = NewType("PlanId", UUID)
 EventId = NewType("EventId", UUID)
 AgentId = NewType("AgentId", UUID)
 ReliabilityContractId = NewType("ReliabilityContractId", UUID)
+StrategyId = NewType("StrategyId", UUID)  # decisions.md D-182 (V0.7): plain identity, no exemption applies
 
 # --- String-backed (exempt from the UUID-backed default) ----------------
 

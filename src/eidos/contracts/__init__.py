@@ -5,6 +5,11 @@ ReliabilityContract, MissionState, MissionEvent, Plan, PlanStep, AgentTask.
 See docs/03_architecture.md, docs/04-docs/07 and docs/10, and decisions.md
 for the full record of what each field is and why.
 
+V0.7 Step 2 adds one identifier only, ``StrategyId`` (decisions.md D-182):
+plain, UUID-backed identity for ``eidos.planning.Strategy``, which lives
+outside this package (it is not a Plan, D-178) the same way ``CompiledPlan``
+lives in ``eidos.compiler`` while using ``PlanId`` from here.
+
 Constraints these models satisfy (CLAUDE.md §8):
 
 - Pydantic v2. Typed and validated; no untyped dict crosses this boundary.
@@ -41,6 +46,7 @@ from .identifiers import (
     PlanId,
     ReliabilityContractId,
     StepId,
+    StrategyId,
     TenantId,
 )
 from .mission_event import MissionEvent
@@ -78,6 +84,7 @@ __all__ = [
     "PlanId",
     "ReliabilityContractId",
     "StepId",
+    "StrategyId",
     "TenantId",
     "MissionEvent",
     "MissionState",

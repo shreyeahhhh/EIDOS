@@ -3270,6 +3270,57 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
 - **Consequences:** the admission-halt case stays exactly as terminal as D-176 shipped it, in every test, including the one this ruling was checked against (a halt-paused mission with an independently outstanding, later-concluding A2A task: the completion is still accepted by unmodified D-176 machinery, but `accept_resumed` still refuses, because the log's history says the pause was a halt). A genuinely new admission-guard halt recorded *during* a resumed round is picked up by the next `most_recent_pause` call and makes the mission terminal again, correctly, with no extra state.
 - **Affects:** narrows nothing in D-165–D-176 (all unchanged); extends D-167 (the continuous log now actually supports the flow it described) and D-170 (the caller-orchestrated resume now has a concrete, named operation). `eidos.a2a`'s own `test_a2a_scenario.py` (V0.6 Step 5), which found and pinned this gap as unresolved, now completes the full scenario it always meant to prove.
 
+### D-178 — Strategy is a distinct object from Plan (resolves D-020)
+
+- **Status:** Accepted · **Date:** 2026-09-22 · **Decided by:** human owner · **Resolves D-020**
+- **Source:** handoff §2, §13, §16, §17; `docs/03_architecture.md` §7; V0.7 Step 1 exploration
+- **The question D-020 left open:** whether "Strategy" and "Plan" are the same object, or a Plan plus binding decisions the §13 DSL does not encode — left unresolved since the bootstrap read because nothing needed it decided until V0.7.
+- **Decision:** they are **two distinct objects**. A `Strategy` describes execution *shape* — an abstract, capability-level description of how a mission intends to execute — and never contains a `StepId`, a dependency edge, or an agent binding. A `Plan` remains exactly what V0.1–V0.6 already built: the concrete, ID-addressed, validated DAG. A strategy may **eventually** (V0.8+, not built by this decision) expand into one or more concrete `Plan`s; a `Plan` is never itself treated as a `Strategy` and neither subsumes the other's schema.
+- **Why not one object:** collapsing them would mean either bloating `Plan` with fields no validator/compiler stage reads (real concrete plans would carry unused strategy-only fields) or bloating `Strategy` with step ids and edges it does not yet have and should not invent before a strategy is selected — duplicating exactly the schema item A's own design work was told not to duplicate.
+- **Consequences:** `eidos.planning` is a new core layer producing its own type, `Strategy`, the same way `eidos.compiler` produces `CompiledPlan` rather than putting it in `eidos.contracts` — precedent, not invention. Whatever later expands a selected `Strategy` into a `Plan` must still pass that `Plan` through the unmodified V0.2 validation and V0.3 compiler pipeline; a `Strategy` grants no validation or compilation shortcut, ever.
+- **Affects:** D-179 (what a `Strategy` may express), D-182 (its identity). Does not reopen D-004, D-047, D-050, D-053, D-092, D-101 or any other Plan/PlanStep decision.
+
+### D-179 — V0.7 Strategy structural dimensions, and what is explicitly excluded
+
+- **Status:** Accepted · **Date:** 2026-09-22 · **Decided by:** human owner
+- **Source:** handoff §17 (the full "strategy factors" list); invariants 9 and 11; D-012, D-102, D-125, D-133; V0.7 Step 1 exploration
+- **Decision:** a `Strategy` expresses only the dimensions the system can actually act on today:
+  1. **Execution topology / decomposition style / parallelism** — one structural field: a sequential tuple of stages, each stage a non-empty set of capabilities that run in parallel within it (stage *i+1* depends on the whole of stage *i*). Linear chains, parallel-converge and staged shapes (the §16 Plan A/B/C examples) are all expressible as this one shape; no separate "topology kind" or "parallelism" field is added — both are read off the stage shape, never stored twice.
+  2. **Verification posture** — a two-member enum, `NONE`/`FINAL`, reflecting that exactly one deterministic `Verifier` exists (D-133) and is invoked once, at the end, in every baseline built so far. Not a richer "verification approach": there is nothing yet to choose between.
+  3. **Capability allocation** — which capabilities appear in the strategy, and how many times.
+- **Explicitly excluded, and why each is excluded now rather than omitted by oversight:**
+  - **Agent selection** — invariant 11 ("plans request capabilities, not named agents") applies to `Strategy` exactly as it applies to `Plan`; a `Strategy` never carries an `AgentId`.
+  - **Model selection** — invariant 9 (no model/vendor name in contracts, planning, validation, compiler, runtime or state).
+  - **Tool selection / retrieval strategy** — no MCP, no RAG exist in the codebase yet.
+  - **Retry / replan / recovery posture** — D-012 (no predicate language) and D-125 (plan-level `RETRY` vs. runtime retry policy) are both still Open, and the compiler rejects `RETRY`/`REPLAN` steps outright today (D-114); there is nothing for a Strategy-level field to describe that could ever compile.
+  - **Context allocation** — not expressible in any built primitive; not invented here.
+- **Consequences:** the §17 "potential strategy factors" list is **not** V0.7's contract — it is the long-run aspiration; V0.7 takes only the slice the rest of the system can already support. Adding an excluded dimension later requires its own decision, once the primitive it depends on exists (D-012/D-125 resolving, MCP/RAG landing, etc.) — this entry does not pre-approve any of them.
+- **Affects:** D-178 (the object this bounds), D-180 (what feasibility over these dimensions can check).
+
+### D-180 — Strategy feasibility filtering reuses `SystemLimits`/`ReliabilityContract`; no new numeric ceiling
+
+- **Status:** Accepted · **Date:** 2026-09-22 · **Decided by:** human owner
+- **Source:** `eidos.validation.stages` (`check_capabilities`, `check_complexity`, `check_resources`); D-009, D-046, D-102, D-110; V0.7 Step 1 exploration
+- **Decision:** feasibility filtering over a `Strategy` (deferred to a later V0.7 step, not built by this decision) is a narrower, structural analogue of exactly three of V0.2's seven stages — CAPABILITY, COMPLEXITY and RESOURCE — reusing the **same** `SystemLimits` and `ReliabilityContract` values a `Plan` is already checked against, never a value invented for `Strategy` alone. SCHEMA/DEPENDENCY/CYCLE do not apply (a `Strategy` has no step ids or edges to be malformed, duplicated, or cyclic); POLICY stays `NOT_APPLICABLE` for the identical reason D-110 already gives.
+- **Consequences:** `eidos.planning` becomes a **core layer**, joining `eidos.contracts`, `eidos.validation`, `eidos.compiler`, `eidos.runtime` and `eidos.state` — it may import `eidos.validation.limits.SystemLimits` (a new core-to-core edge, not previously drawn) and `eidos.contracts.ReliabilityContract`. It imports nothing from `eidos.agents`, `eidos.providers`, `eidos.capabilities`, `eidos.backends`, `eidos.a2a` or `eidos.recording` — determinism (invariant: no I/O, no clock, no hidden state) is preserved exactly as it is for `eidos.validation`/`eidos.compiler` today.
+- **Affects:** the feasibility-checking step itself is **not implemented by this decision** — it only fixes what it may reuse and what layer it lives in, ahead of the step that builds it.
+
+### D-181 — `max_candidates` is an explicit generation-time parameter, not a `SystemLimits` field
+
+- **Status:** Accepted · **Date:** 2026-09-22 · **Decided by:** human owner
+- **Source:** CLAUDE.md §3 ("Do not generate an unbounded number of candidate strategies. Two or three."); handoff §16; D-046, D-103; `eidos.validation.limits.SystemLimits`'s own docstring ("ceilings a plan and a reliability contract are checked against"); V0.7 Step 1 exploration
+- **Decision:** the ceiling on how many candidate strategies a generation round may return is **CLAUDE.md's own "two or three"** — not reopened, not re-decided here. Where the number is supplied is: a required parameter to the (not-yet-built) generation entrypoint, with **no default**, matching D-103's "no ambient configuration" discipline. It is **not** added to `SystemLimits`, because `SystemLimits` bounds a plan's shape and a mission's resource budgets — a candidate *count* at generation time is a different kind of quantity, checked before any `Plan` exists at all.
+- **Consequences:** no new field is added to any existing contract by this decision. A (not-yet-built) reference generator must never pad its output to reach a target count — it emits only structurally distinct shapes and the parameter only ever truncates, never pads. The **exact** value used at any call site (2 or 3) is left to the caller, consistent with D-046's own "actual values pinned at implementation, never invented" discipline.
+- **Affects:** nothing existing changes; this only fixes where a not-yet-built parameter will live.
+
+### D-182 — `StrategyId` is a plain, UUID-backed identity; no version, no signature
+
+- **Status:** Accepted · **Date:** 2026-09-22 · **Decided by:** human owner
+- **Source:** D-053 (identifier conventions), D-021 (Strategy signature / "Strategy Genome," Open, explicitly deferred); V0.7 Step 1 exploration
+- **Decision:** `Strategy` carries one new identifier, `StrategyId`, UUID-backed by D-053's default (no exemption applies — it is neither planner-authored DSL text, an opaque external-system id, nor produced by a remote agent, the four reasons the existing exemptions exist). It carries **no version** (strategies are not replanned/amended in place the way `Plan` is — a fresh generation round produces fresh ids for a fresh, unrelated candidate set) and **no signature or "genome" encoding**.
+- **Consequences:** **D-021 stays Open and untouched** — a bare `strategy_id` is not an answer to what a `strategy_signature` encodes or how strategies are compared for similarity; it only gives a future `STRATEGY_SELECTED`-type event (V0.8+, not built) something to reference. Strategy Memory (V1.0) is not built by this decision and needs no further contract change to eventually key outcomes by `strategy_id`.
+- **Affects:** D-178 (the object this identifies). Does not resolve D-021.
+
 ## Open — require the human owner
 
 These are ambiguities, contradictions and gaps found in the handoff during the bootstrap read. None
@@ -3504,13 +3555,21 @@ one is not.
 
 ### D-020 — "Strategy" and "Plan" are used interchangeably
 
-- **Status:** Open · **Source:** handoff §13, §16, §17, §38, §53
+- **Status:** Accepted · **Date:** 2026-09-22 · **Decided by:** human owner · **Resolved by D-178**
+  (originally Open)
+- **Source:** handoff §13, §16, §17, §38, §53
 - **Finding:** §16 generates "candidate strategies" labelled Plan A/B/C; §13 defines a Plan DSL;
   §53's API response carries `strategy_id`; §17 lists strategy factors (model selection, retrieval
   strategy, context allocation) that are *not* expressible in the §13 plan primitives.
-- **Needs:** Are a Strategy and a Plan the same object, or is a Strategy a Plan plus binding
+- **Original need:** Are a Strategy and a Plan the same object, or is a Strategy a Plan plus binding
   decisions (agent, model, retrieval, context) that the DSL does not encode? This determines whether
   one contract or two is needed, and what a `strategy_signature` (D-021) actually signs.
+- **Resolution:** **D-178.** Two distinct objects. A `Strategy` describes execution shape only
+  (capability stages, verification posture) and never carries a `StepId`, a dependency edge or an
+  agent binding; a `Plan` is unchanged. A selected strategy may later (V0.8+) expand into a `Plan`,
+  which still passes through the unmodified V0.2/V0.3 pipeline.
+- **Not resolved by this:** **D-021** (what a `strategy_signature`/"Strategy Genome" encodes) stays
+  Open — `StrategyId` (D-182) is plain identity, not a signature.
 
 ### D-021 — Strategy signature / "Strategy Genome" encoding
 
