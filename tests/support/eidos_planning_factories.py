@@ -1,4 +1,4 @@
-"""Minimal valid-object factories for ``eidos.planning`` tests (decisions.md D-178 to D-182; V0.7 Step 2).
+"""Minimal valid-object factories for ``eidos.planning`` tests (decisions.md D-178 to D-182; V0.7 Steps 2 and 3).
 
 Mirrors ``eidos_factories.py``'s own discipline: every factory returns a fresh, structurally valid instance so a
 test starts from something known-good and mutates exactly the field under test. Fixed ids only — nothing here
@@ -9,6 +9,8 @@ from uuid import UUID
 
 from eidos.contracts import CapabilityId, MissionId, StrategyId, TenantId
 from eidos.planning import Strategy, StrategyStage, VerificationPosture
+
+from eidos_factories import make_task_genome
 
 TENANT = TenantId(UUID(int=101))
 MISSION = MissionId(UUID(int=102))
@@ -34,3 +36,21 @@ def make_strategy(**overrides) -> Strategy:
     )
     fields.update(overrides)
     return Strategy(**fields)
+
+
+def genome_with(*capabilities: str, **overrides):
+    """A ``TaskGenome`` requiring exactly ``capabilities`` (in the order given, duplicates allowed on purpose —
+    some tests exercise the generator's own deduplication)."""
+    return make_task_genome(required_capabilities=tuple(CapabilityId(c) for c in capabilities), **overrides)
+
+
+class FixedStrategyIdSource:
+    """A deterministic ``StrategyIdSource`` test double: hands out ``make_strategy_id(1)``, ``(2)``, ... in order."""
+
+    def __init__(self, start: int = 1):
+        self._next = start
+
+    def next_strategy_id(self) -> StrategyId:
+        strategy_id = make_strategy_id(self._next)
+        self._next += 1
+        return strategy_id

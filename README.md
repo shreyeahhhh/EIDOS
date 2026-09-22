@@ -7,7 +7,7 @@
 
 ## Status
 
-**V0.7 — Strategy & Candidate Generation: architecture accepted, Step 2 (the data contracts) implemented, none pushed. V0.6 — A2A: Steps 1–6 of 9 implemented and pushed. V0.5 — the event log and the state reducer: complete as scoped. V0.4 — real local agents: complete as scoped.**
+**V0.7 — Strategy & Candidate Generation: architecture accepted, Steps 2 and 3 (the data contracts and the bounded candidate generator) implemented, none pushed. V0.6 — A2A: Steps 1–6 of 9 implemented and pushed. V0.5 — the event log and the state reducer: complete as scoped. V0.4 — real local agents: complete as scoped.**
 
 This repository contains the project rules, the architecture knowledge base, the decision record,
 the V0.1 typed contracts (`eidos.contracts`), the V0.2 plan validator (`eidos.validation`), the V0.3
@@ -42,9 +42,15 @@ a two-member verification posture, and capability allocation — with agent/mode
 posture explicitly excluded. **D-180**–**D-182** fix that feasibility filtering will reuse the existing
 `SystemLimits`/`ReliabilityContract` (no new ceiling), that `max_candidates` is an explicit parameter (CLAUDE.md's
 own "two or three" stays the bound), and that `StrategyId` is plain identity (no version, no signature — **D-021**
-stays Open). Step 2 built the data contracts alone — `eidos.planning` (`Strategy`, `StrategyStage`,
-`VerificationPosture`) — a new core layer with no `CandidateGenerator`, no feasibility filtering and no selection
-yet. See [progress.md](progress.md), "V0.7 Strategy & Candidate Generation".
+stays Open). Step 2 built the data contracts — `eidos.planning` (`Strategy`, `StrategyStage`,
+`VerificationPosture`). Step 3 built the bounded candidate-generation boundary itself: `CandidateGenerator` (a
+`Protocol`, pure function of `TaskGenome.required_capabilities` only), the deterministic reference
+`RuleBasedCandidateGenerator` (linear/parallel/staged shapes, gated so a guaranteed duplicate is never even
+constructed; verification posture derived, not permuted as an independent axis), and `generate_candidate_strategies`
+(structural dedup, a capability-membership re-check, and identity injection via a new `StrategyIdSource` — no
+uuid-drawing implementation lives in `eidos.planning` itself). No feasibility filtering (D-180's own later shape/
+resource ceilings), no Strategy-to-Plan expansion, no selection yet. See [progress.md](progress.md), "V0.7
+Strategy & Candidate Generation".
 
 Current status and the milestone ladder: [progress.md](progress.md).
 Decisions and unresolved questions: [decisions.md](decisions.md).

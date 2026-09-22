@@ -1,9 +1,12 @@
-"""Static guards on ``eidos.planning`` (decisions.md D-178 to D-182; CLAUDE.md §2 invariants 1, 2, 9, 11; V0.7 Step 2).
+"""Static guards on ``eidos.planning`` (decisions.md D-178 to D-182; CLAUDE.md §2 invariants 1, 2, 9, 11; V0.7 Steps 2 and 3).
 
 Mirrors ``tests/unit/compiler/test_compiler_guards.py``'s own discipline for a sibling core layer: these read the
 package source, so they fail the moment someone adds a forbidden dependency, a vendor name, a hidden source of
 non-determinism, or one of the concepts D-179 explicitly excluded from ``Strategy`` — not merely when behaviour
-visibly changes.
+visibly changes. ``uuid``/``random``/``time``/``datetime`` are forbidden **everywhere** in this package, stronger
+than ``eidos.compiler``'s own "confined to one file" carve-out for a clock/id port: no real, randomness-drawing
+``StrategyIdSource`` implementation lives here at all (``pipeline.py``'s own docstring) — a caller supplies one,
+exactly as a caller supplies a real ``IdSource`` to ``eidos.recording`` today.
 """
 
 import ast
@@ -55,7 +58,9 @@ def imports_of(path: Path) -> list[tuple[str, tuple[str, ...], int]]:
 
 
 def test_the_package_has_the_expected_modules():
-    assert [m.name for m in MODULES] == ["__init__.py", "strategy.py"]
+    assert [m.name for m in MODULES] == [
+        "__init__.py", "generator.py", "pipeline.py", "results.py", "strategy.py",
+    ]
 
 
 @pytest.mark.parametrize("module", MODULES, ids=lambda m: m.name)
@@ -65,8 +70,8 @@ def test_no_module_imports_io_network_clock_randomness_or_process_state(module):
 
 
 @pytest.mark.parametrize("module", MODULES, ids=lambda m: m.name)
-def test_planning_depends_only_on_eidos_contracts_at_step_2(module):
-    # D-180 permits eidos.validation once feasibility filtering is built; nothing built yet needs it.
+def test_planning_depends_only_on_eidos_contracts(module):
+    # D-180 permits eidos.validation once feasibility filtering is built; nothing built through Step 3 needs it.
     for name, _imported, level in imports_of(module):
         if level:  # relative: inside eidos.planning
             continue
@@ -97,10 +102,18 @@ def test_no_vendor_or_model_names(module):
 
 
 def test_strategy_and_stage_declare_none_of_the_forbidden_field_names():
-    from eidos.planning import Strategy, StrategyStage
+    from eidos.planning import CandidateGenerationResult, RejectedCandidate, Strategy, StrategyShape, StrategyStage
 
-    assert FORBIDDEN_FIELD_NAMES & set(Strategy.model_fields) == set()
-    assert FORBIDDEN_FIELD_NAMES & set(StrategyStage.model_fields) == set()
+    for model in (Strategy, StrategyShape, StrategyStage, CandidateGenerationResult, RejectedCandidate):
+        assert FORBIDDEN_FIELD_NAMES & set(model.model_fields) == set(), model.__name__
+
+
+def test_candidate_generation_result_never_names_a_winner_or_a_score():
+    # Candidate generation is not strategy selection (V0.8, not built): no ranking vocabulary anywhere.
+    from eidos.planning import CandidateGenerationResult
+
+    forbidden = {"best", "preferred", "winner", "rank", "score", "selected"}
+    assert forbidden & set(CandidateGenerationResult.model_fields) == set()
 
 
 @pytest.mark.parametrize("module", MODULES, ids=lambda m: m.name)

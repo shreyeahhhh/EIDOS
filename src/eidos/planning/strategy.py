@@ -31,8 +31,16 @@ for an unrelated candidate set. ``tenant_id``/``mission_id`` follow ``Plan``'s o
 ``TaskGenome``'s: a ``Strategy``, like a ``Plan``, is a self-identifying value that crosses module boundaries
 (generator, a future selector, a future Plan-expander), not one embedded permanently inside a single container.
 
-**Not built here (later V0.7/V0.8 steps, D-178's own scope line):** ``CandidateGenerator``, feasibility filtering,
-Strategy-to-Plan expansion, and Strategy selection. This module is the data contract alone.
+**``StrategyShape`` (V0.7 Step 3): the identity-free content a generator produces.** Step 2 considered and dropped
+this split because nothing consumed it yet; ``CandidateGenerator`` (``generator.py``) is that consumer now. It is
+exactly ``Strategy`` minus ``tenant_id``/``mission_id``/``strategy_id`` — the deterministic core builds *content*;
+identity is stamped on afterward, at the orchestration boundary (``pipeline.py``), mirroring
+``eidos.recording.ports``'s injected ``Clock``/``IdSource`` discipline (D-158 item 3) one layer earlier. This is
+not a new identity mechanism (nothing here invents one) and it is not a change to the approved ``Strategy``
+contract — ``Strategy`` itself is unchanged from Step 2.
+
+**Not built here (later V0.7/V0.8 steps, D-178's own scope line):** feasibility filtering (D-180), Strategy-to-Plan
+expansion, and Strategy selection (V0.8).
 """
 
 from enum import StrEnum
@@ -61,6 +69,14 @@ class Strategy(EidosModel):
     tenant_id: TenantId = Field(default=DEFAULT_TENANT_ID)
     mission_id: MissionId
     strategy_id: StrategyId
+    stages: tuple[StrategyStage, ...]
+    verification: VerificationPosture
+    rationale: str = Field(min_length=1)
+
+
+class StrategyShape(EidosModel):
+    """``Strategy`` minus identity — what a ``CandidateGenerator`` produces (V0.7 Step 3). See the module docstring."""
+
     stages: tuple[StrategyStage, ...]
     verification: VerificationPosture
     rationale: str = Field(min_length=1)
