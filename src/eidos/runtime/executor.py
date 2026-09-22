@@ -5,7 +5,9 @@ decisions.md: D-117 (level-synchronous execution), D-118 (statuses and outcomes)
 (prior ``SUCCEEDED`` outcomes seed a new run and are never redispatched), D-121 (the
 verifier's verdict maps to a node status; no scalar), D-122 (synchronous ports; a
 required ``AdmissionGuard``), D-123 (no event, no MissionState write), D-128 (this
-executor is part of V0.3).
+executor is part of V0.3), D-165 (V0.6 Step 3: a work port may report ``SUBMITTED``
+instead of concluding; see points 3, 5 and 7 below — nothing protocol-specific is added
+here, and no port shipped today ever returns it).
 
 It is the reference and the oracle, not the production concurrency backend. It defines
 what a run *means*; an execution backend (D-115) is later held to produce the same
@@ -22,20 +24,31 @@ position:
    dispatched.
 2. A node is *ready* when all its predecessors are settled, whatever their status. Every
    predecessor is in a lower level, so it is always settled by now.
-3. If any predecessor is not ``SUCCEEDED``, the node is settled ``SKIPPED`` without a
-   dispatch and without consulting the guard.
+3. If any predecessor is not ``SUCCEEDED``, the node is not dispatched, and consults no
+   guard. It is settled ``SKIPPED`` if at least one predecessor has *concluded* without
+   succeeding (failed, produced nothing, was itself skipped, or was never reached); it is
+   settled ``NOT_REACHED`` instead if every one of them is only ``AWAITING`` or
+   ``NOT_REACHED`` — genuinely unresolved rather than failed (D-165): ``SKIPPED`` would
+   claim more than is known about a node whose predecessor may yet succeed.
 4. Otherwise the ``AdmissionGuard`` is asked about it (rank counted among the nodes of
    this level that will be dispatched). ``ADMIT`` dispatches it; ``HALT`` leaves it
    ``NOT_REACHED``.
 5. A dispatched node is invoked exactly once. A work node's result maps to ``SUCCEEDED``,
-   ``FAILED`` or ``NO_RESULT``; a ``VERIFY`` node's verdict maps ``PASS`` to ``SUCCEEDED``,
+   ``FAILED``, ``NO_RESULT`` or ``AWAITING`` (D-165: the port dispatched the work and does
+   not yet know the outcome); a ``VERIFY`` node's verdict maps ``PASS`` to ``SUCCEEDED``,
    ``FAIL`` to ``VERIFICATION_FAILED`` and ``INCONCLUSIVE`` to
    ``VERIFICATION_INCONCLUSIVE``.
 6. Every node of the level is resolved before the next level begins. A failure never
-   stops independent branches, and nothing is retried.
+   stops independent branches, and nothing is retried. Neither does an awaiting node
+   (D-165): only the nodes that actually depend on it, directly or transitively, become
+   ``NOT_REACHED``, through the ordinary readiness check in point 3 — there is no bulk
+   cascade for it, unlike a halt.
 7. A ``HALT`` takes effect after the current level: the other nodes of the level are still
    resolved, then every node of every later level that is not already settled by prior
-   outcomes becomes ``NOT_REACHED``, and the run ends ``HALTED``.
+   outcomes becomes ``NOT_REACHED``, and the run ends ``HALTED`` — this outranks
+   everything, including one or more nodes that are independently ``AWAITING`` elsewhere
+   in the same run (D-165). A run that never halts but has at least one ``AWAITING`` node
+   ends ``AWAITING`` instead of ``FINISHED`` or ``FAILED``.
 
 Faults in a port never leak: an exception from a ``WorkExecutor`` or a ``Verifier``, or a
 return value that is not the port's typed result, becomes ``FAILED`` with the reason
@@ -66,6 +79,7 @@ from .ports import (
 )
 from .preconditions import check_run_preconditions
 from .results import (
+    AwaitingInfo,
     HaltInfo,
     NodeResult,
     NodeStatus,
@@ -74,6 +88,10 @@ from .results import (
     RunRejection,
     RunResult,
 )
+
+# A blocker in one of these states has not concluded — it may yet succeed — so a node behind only blockers like these is not_reached, not
+# skipped (D-165, mirrored from results.py's own _UNRESOLVED_STATUSES so the executor's readiness check and RunResult's own validator agree).
+_UNRESOLVED_STATUSES = (NodeStatus.AWAITING, NodeStatus.NOT_REACHED)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -110,6 +128,7 @@ class SequentialExecutor:
 
         levels = _nodes_by_level(compiled)
         dispatched: list[StepId] = []
+        awaiting: list[AwaitingInfo] = []
         halt: HaltInfo | None = None
 
         for level, level_nodes in enumerate(levels, start=1):
@@ -120,7 +139,10 @@ class SequentialExecutor:
                     continue  # carried over from prior outcomes
                 blockers = [p for p in node.predecessors if settled[p].status is not NodeStatus.SUCCEEDED]
                 if blockers:
-                    settled[node.step_id] = _skipped(node, blockers, settled)
+                    if all(settled[p].status in _UNRESOLVED_STATUSES for p in blockers):
+                        settled[node.step_id] = _not_reached_pending(node, blockers, settled)
+                    else:
+                        settled[node.step_id] = _skipped(node, blockers, settled)
                     continue
 
                 decision = self._ask_guard(
@@ -145,6 +167,8 @@ class SequentialExecutor:
 
                 settled[node.step_id] = self._dispatch(context, node, settled)
                 dispatched.append(node.step_id)
+                if settled[node.step_id].status is NodeStatus.AWAITING:
+                    awaiting.append(AwaitingInfo(step_id=node.step_id, level=level, reason=settled[node.step_id].reason))
 
             if halt is not None:
                 for later_nodes in levels[level:]:  # the levels after this one (level is 1-based)
@@ -161,6 +185,8 @@ class SequentialExecutor:
         results = tuple(settled[node.step_id] for node in compiled.nodes)
         if halt is not None:
             outcome = RunOutcome.HALTED
+        elif awaiting:
+            outcome = RunOutcome.AWAITING
         elif all(result.status is NodeStatus.SUCCEEDED for result in results):
             outcome = RunOutcome.FINISHED
         else:
@@ -173,6 +199,7 @@ class SequentialExecutor:
             plan_version=compiled.plan_version,
             outcome=outcome,
             halt=halt,
+            awaiting=tuple(awaiting),
             results=results,
             dispatched=tuple(dispatched),
         )
@@ -211,7 +238,11 @@ class SequentialExecutor:
             return NodeResult(
                 step_id=node.step_id, kind=node.kind, status=NodeStatus.SUCCEEDED, artifact=result.artifact
             )
-        status = NodeStatus.FAILED if result.status is WorkStatus.FAILED else NodeStatus.NO_RESULT
+        status = {
+            WorkStatus.FAILED: NodeStatus.FAILED,
+            WorkStatus.NO_RESULT: NodeStatus.NO_RESULT,
+            WorkStatus.SUBMITTED: NodeStatus.AWAITING,  # D-165
+        }[result.status]
         return NodeResult(step_id=node.step_id, kind=node.kind, status=status, reason=result.reason)
 
     def _dispatch_verify(
@@ -257,6 +288,17 @@ def _skipped(node: WorkNode | VerifyNode, blockers: list[StepId], settled: dict[
         kind=node.kind,
         status=NodeStatus.SKIPPED,
         reason=f"not dispatched: predecessor(s) did not succeed: {listed}",
+    )
+
+
+def _not_reached_pending(node: WorkNode | VerifyNode, blockers: list[StepId], settled: dict[StepId, NodeResult]) -> NodeResult:
+    """D-165: every blocker is only awaiting or itself not_reached — none has concluded, so this is not a skip."""
+    listed = ", ".join(f"{blocker!r} ({settled[blocker].status.value})" for blocker in blockers)
+    return NodeResult(
+        step_id=node.step_id,
+        kind=node.kind,
+        status=NodeStatus.NOT_REACHED,
+        reason=f"not dispatched: predecessor(s) have not concluded yet: {listed}",
     )
 
 

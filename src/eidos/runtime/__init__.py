@@ -40,6 +40,7 @@ from .ports import (
 )
 from .preconditions import check_run_preconditions
 from .results import (
+    AwaitingInfo,
     HaltInfo,
     NodeResult,
     NodeStatus,
@@ -55,6 +56,7 @@ __all__ = [
     "AdmissionGuard",
     "AdmissionOutcome",
     "AdmissionRequest",
+    "AwaitingInfo",
     "ExecutionContext",
     "HaltInfo",
     "NodeResult",

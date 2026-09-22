@@ -254,6 +254,107 @@ def test_a_run_of_one_success_and_one_failure_in_a_fan_out_only_skips_the_descen
     }
 
 
+# --- awaiting: a work port that dispatches without concluding (decisions.md D-165, V0.6 Step 3) -----
+#
+# Nothing in eidos.agents, eidos.providers or the V0.4 agents is touched by this step. ScriptedWork must be
+# explicitly told to return WorkResult.submitted(...) for any of this to happen at all — no existing WorkExecutor
+# implementation ever does.
+
+
+def test_one_node_dispatches_and_reports_it_is_awaiting():
+    result, work, *_ = go({"a": ""}, work=ScriptedWork({"a": WorkResult.submitted("dispatched; outcome pending")}))
+    assert statuses(result) == {"a": "awaiting"}
+    assert result.outcome is RunOutcome.AWAITING and result.halt is None
+    assert [i.step_id for i in result.awaiting] == ["a"]
+    assert work.calls == ["a"] and result.dispatched == ("a",)  # genuinely dispatched, unlike a halted node
+
+
+def test_multiple_independently_submitted_nodes_are_all_reported():
+    script = {"a": WorkResult.submitted("pending a"), "b": WorkResult.submitted("pending b")}
+    result, work, *_ = go({"a": "", "b": ""}, work=ScriptedWork(script))
+    assert statuses(result) == {"a": "awaiting", "b": "awaiting"}
+    assert result.outcome is RunOutcome.AWAITING
+    assert [i.step_id for i in result.awaiting] == ["a", "b"]
+    assert work.calls == ["a", "b"]
+
+
+def test_a_node_blocked_only_by_an_awaiting_predecessor_is_not_reached_not_skipped():
+    # not_reached, not skipped: nothing has concluded unsuccessfully, so "did not succeed" would claim too much.
+    result, work, *_ = go({"a": "", "b": "a"}, work=ScriptedWork({"a": WorkResult.submitted("pending")}))
+    assert statuses(result) == {"a": "awaiting", "b": "not_reached"}
+    assert result.result_for(StepId("b")).reason == "not dispatched: predecessor(s) have not concluded yet: 'a' (awaiting)"
+    assert work.calls == ["a"]  # b's port was never called
+    assert result.outcome is RunOutcome.AWAITING
+
+
+def test_blocking_by_awaiting_propagates_transitively_through_not_reached_nodes():
+    result, *_ = go({"a": "", "b": "a", "c": "b"}, work=ScriptedWork({"a": WorkResult.submitted("pending")}))
+    assert statuses(result) == {"a": "awaiting", "b": "not_reached", "c": "not_reached"}
+    assert result.result_for(StepId("c")).reason == "not dispatched: predecessor(s) have not concluded yet: 'b' (not_reached)"
+
+
+def test_a_node_with_one_doomed_and_one_awaiting_predecessor_is_skipped_not_not_reached():
+    # x has genuinely failed; waiting for y (still awaiting) would not change that join's fate.
+    script = {"x": WorkResult.failed("boom"), "y": WorkResult.submitted("pending")}
+    result, *_ = go({"x": "", "y": "", "join": "x y"}, work=ScriptedWork(script))
+    assert statuses(result) == {"x": "failed", "y": "awaiting", "join": "skipped"}
+    assert "'x' (failed)" in result.result_for(StepId("join")).reason
+
+
+def test_independent_branches_continue_normally_after_an_awaiting_node_unlike_a_halt():
+    # D-165: awaiting does not stop the run the way a halt does. An independent branch, and a later level that
+    # does not depend on the awaiting node, both proceed and can even finish normally.
+    spec = {"a": "", "b": "a", "x": "", "y": "x"}
+    result, work, *_ = go(spec, work=ScriptedWork({"a": WorkResult.submitted("pending")}))
+    assert statuses(result) == {"a": "awaiting", "b": "not_reached", "x": "succeeded", "y": "succeeded"}
+    assert work.calls == ["a", "x", "y"]
+    assert result.outcome is RunOutcome.AWAITING
+
+
+def test_the_guard_is_still_asked_for_other_nodes_of_the_level_after_one_goes_awaiting():
+    result, work, verifier, guard, _ = go(
+        {"a": "", "b": ""}, work=ScriptedWork({"a": WorkResult.submitted("pending")})
+    )
+    assert [r[0] for r in guard.asked()] == ["a", "b"]
+    assert work.calls == ["a", "b"]
+
+
+def test_an_admission_halt_takes_precedence_over_an_independently_awaiting_node():
+    # a (level 1) is submitted and awaiting; c (level 2) is halted. The run's outcome is HALTED (D-165's
+    # extension of D-118 rule 4), and a is still named in RunResult.awaiting — nothing about it is hidden.
+    spec = {"a": "", "b": "a", "c": ""}
+    guard = halt_when(lambda r: r.step_id == "c")
+    result, work, *_ = go(spec, work=ScriptedWork({"a": WorkResult.submitted("pending")}), guard=guard)
+    assert statuses(result) == {"a": "awaiting", "b": "not_reached", "c": "not_reached"}
+    assert result.outcome is RunOutcome.HALTED
+    assert [i.step_id for i in result.awaiting] == ["a"]
+
+
+def test_an_awaiting_node_never_stops_a_verify_node_from_being_skipped_the_ordinary_way():
+    # v depends on the awaiting node a: v is not_reached (D-165's pending case), same as any other descendant.
+    result, work, verifier, *_ = go(
+        {"a": "", "v": "a"}, verify=("v",), work=ScriptedWork({"a": WorkResult.submitted("pending")})
+    )
+    assert statuses(result) == {"a": "awaiting", "v": "not_reached"}
+    assert verifier.calls == []
+
+
+def test_an_awaiting_run_is_never_verified_even_if_a_verify_node_already_passed():
+    spec = {"a": "", "v": "a", "z": ""}
+    result, *_ = go(spec, verify=("v",), work=ScriptedWork({"z": WorkResult.submitted("pending")}))
+    assert result.result_for(StepId("v")).status is S.SUCCEEDED
+    assert result.outcome is RunOutcome.AWAITING and result.verified is False
+
+
+def test_the_results_carry_the_runs_identity_the_same_way_for_an_awaiting_run():
+    result, _, _, _, compiled = go({"a": ""}, work=ScriptedWork({"a": WorkResult.submitted("pending")}), version=4)
+    context = context_for(compiled)
+    assert (result.tenant_id, result.mission_id, result.execution_id) == (
+        compiled.tenant_id, compiled.mission_id, context.execution_id,
+    )
+    assert (result.plan_id, result.plan_version) == (compiled.plan_id, 4)
+
+
 # --- nothing is retried; each node is dispatched at most once ---------------------------------------
 
 

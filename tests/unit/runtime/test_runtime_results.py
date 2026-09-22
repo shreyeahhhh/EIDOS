@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from eidos.contracts import ExecutionId, MissionId, PlanId, PlanStepKind, StepId, TenantId
 from eidos.runtime import (
+    AwaitingInfo,
     HaltInfo,
     NodeResult,
     NodeStatus,
@@ -35,12 +36,18 @@ def node(step_id, status, kind=WORK, **fields) -> NodeResult:
     return NodeResult(step_id=StepId(step_id), kind=kind, status=status, **fields)
 
 
-def run(results, *, outcome=None, halt=None, dispatched=None, **overrides) -> RunResult:
-    """A RunResult; unspecified outcome/dispatched are derived the honest way."""
+def run(results, *, outcome=None, halt=None, awaiting=None, dispatched=None, **overrides) -> RunResult:
+    """A RunResult; unspecified outcome/awaiting/dispatched are derived the honest way."""
     results = tuple(results)
+    if awaiting is None:
+        awaiting = tuple(
+            AwaitingInfo(step_id=r.step_id, level=1, reason=r.reason) for r in results if r.status is NodeStatus.AWAITING
+        )
     if outcome is None:
         if halt is not None:
             outcome = RunOutcome.HALTED
+        elif awaiting:
+            outcome = RunOutcome.AWAITING
         elif all(r.status is NodeStatus.SUCCEEDED for r in results):
             outcome = RunOutcome.FINISHED
         else:
@@ -49,14 +56,14 @@ def run(results, *, outcome=None, halt=None, dispatched=None, **overrides) -> Ru
         dispatched = tuple(
             r.step_id for r in results if r.status not in (NodeStatus.SKIPPED, NodeStatus.NOT_REACHED)
         )
-    return RunResult(**{**IDS, "outcome": outcome, "halt": halt, "results": results,
+    return RunResult(**{**IDS, "outcome": outcome, "halt": halt, "awaiting": tuple(awaiting), "results": results,
                         "dispatched": tuple(dispatched), **overrides})
 
 
 # --- the vocabularies ---------------------------------------------------------------
 
 
-def test_node_statuses_are_exactly_the_seven_of_d118():
+def test_node_statuses_are_exactly_the_seven_of_d118_plus_awaiting_from_d165():
     assert [s.value for s in NodeStatus] == [
         "succeeded",
         "failed",
@@ -65,11 +72,12 @@ def test_node_statuses_are_exactly_the_seven_of_d118():
         "verification_inconclusive",
         "skipped",
         "not_reached",
+        "awaiting",
     ]
 
 
-def test_run_outcomes_are_exactly_the_three_of_d118():
-    assert [o.value for o in RunOutcome] == ["finished", "failed", "halted"]
+def test_run_outcomes_are_exactly_the_three_of_d118_plus_awaiting_from_d165():
+    assert [o.value for o in RunOutcome] == ["finished", "failed", "halted", "awaiting"]
 
 
 def test_no_status_or_outcome_is_named_success_or_completed():
@@ -95,6 +103,7 @@ def test_no_status_or_outcome_is_named_success_or_completed():
         (VERIFY, NodeStatus.SKIPPED, dict(reason="predecessor did not succeed")),
         (WORK, NodeStatus.NOT_REACHED, dict(reason="run halted")),
         (VERIFY, NodeStatus.NOT_REACHED, dict(reason="run halted")),
+        (WORK, NodeStatus.AWAITING, dict(reason="dispatched; outcome pending")),  # D-165: a work node only
     ],
 )
 def test_every_status_has_a_valid_shape(kind, status, fields):
@@ -119,6 +128,9 @@ def test_every_status_has_a_valid_shape(kind, status, fields):
         (WORK, NodeStatus.SKIPPED, dict(), "state why"),
         (WORK, NodeStatus.NOT_REACHED, dict(), "state why"),
         (WORK, NodeStatus.SKIPPED, dict(artifact="a", reason="r"), "no artifact"),
+        (WORK, NodeStatus.AWAITING, dict(), "state why"),
+        (WORK, NodeStatus.AWAITING, dict(artifact="a", reason="r"), "no artifact"),
+        (VERIFY, NodeStatus.AWAITING, dict(reason="r"), "belongs to a work node"),  # D-165
     ],
 )
 def test_an_ill_shaped_node_result_is_rejected(kind, status, fields, why):
@@ -170,7 +182,31 @@ def test_halt_info_needs_a_level_of_at_least_one_and_a_reason():
         HaltInfo(step_id=StepId("a"), level=1, reason="")
 
 
-# --- RunResult: the three outcomes ----------------------------------------------------------
+# --- AwaitingInfo (D-165) ---------------------------------------------------------------------
+
+
+def test_awaiting_info_needs_a_level_of_at_least_one_and_a_reason():
+    assert AwaitingInfo(step_id=StepId("a"), level=2, reason="pending").level == 2
+    with pytest.raises(ValidationError):
+        AwaitingInfo(step_id=StepId("a"), level=0, reason="pending")
+    with pytest.raises(ValidationError):
+        AwaitingInfo(step_id=StepId("a"), level=1, reason="")
+
+
+def test_awaiting_info_is_frozen_and_carries_exactly_these_fields():
+    info = AwaitingInfo(step_id=StepId("a"), level=1, reason="pending")
+    with pytest.raises(ValidationError):
+        info.reason = "changed"
+    assert list(AwaitingInfo.model_fields) == ["step_id", "level", "reason"]
+
+
+def test_awaiting_info_carries_no_protocol_specific_field():
+    # D-165 rule 1: eidos.runtime names no vendor, model or protocol. AwaitingInfo mirrors HaltInfo's shape exactly
+    # and adds nothing that would correlate a node to what it is waiting on.
+    assert list(AwaitingInfo.model_fields) == list(HaltInfo.model_fields)
+
+
+# --- RunResult: the four outcomes -------------------------------------------------------------
 
 
 def test_a_finished_run():
@@ -215,6 +251,83 @@ def test_an_empty_run_finishes_vacuously_and_is_unverified():
     assert result.results == () and result.dispatched == () and result.verified is False
 
 
+def test_an_awaiting_run():
+    result = run([node("a", NodeStatus.SUCCEEDED), node("b", NodeStatus.AWAITING)])
+    assert result.outcome is RunOutcome.AWAITING and result.halt is None
+    assert [i.step_id for i in result.awaiting] == ["b"]
+    assert result.dispatched == ("a", "b")  # an awaiting node was genuinely dispatched (D-165)
+
+
+def test_multiple_independently_awaiting_nodes_are_all_named_not_just_the_first():
+    # Unlike a halt, which the executor's own design keeps to one triggering node, D-165 rule 4 requires every
+    # independently submitted node to be named.
+    result = run([node("a", NodeStatus.AWAITING), node("b", NodeStatus.AWAITING), node("c", NodeStatus.SUCCEEDED)])
+    assert result.outcome is RunOutcome.AWAITING
+    assert [i.step_id for i in result.awaiting] == ["a", "b"]
+
+
+def test_awaiting_takes_precedence_over_finished_and_failed():
+    with pytest.raises(ValidationError, match="outcome must be 'awaiting'"):
+        run([node("a", NodeStatus.AWAITING)], outcome=RunOutcome.FINISHED)
+    with pytest.raises(ValidationError, match="outcome must be 'awaiting'"):
+        run([node("a", NodeStatus.FAILED), node("b", NodeStatus.AWAITING)], outcome=RunOutcome.FAILED)
+
+
+def test_halted_takes_precedence_over_awaiting_even_when_both_occur_in_the_same_run():
+    # A node dispatched earlier in the same run can be genuinely awaiting even though a later admission decision
+    # halts the run (D-165's extension of D-118 rule 4); the run's own outcome is still HALTED, and the awaiting
+    # node is still named in `awaiting` — nothing about it is hidden by the precedence.
+    halt = HaltInfo(step_id=StepId("c"), level=1, reason="budget")
+    results = [node("a", NodeStatus.AWAITING), node("b", NodeStatus.SUCCEEDED), node("c", NodeStatus.NOT_REACHED)]
+    result = run(results, halt=halt)
+    assert result.outcome is RunOutcome.HALTED
+    assert [i.step_id for i in result.awaiting] == ["a"]
+    with pytest.raises(ValidationError, match="outcome must be 'halted'"):
+        run(results, halt=halt, outcome=RunOutcome.AWAITING)
+
+
+# --- RunResult: awaiting consistency (D-165) -----------------------------------------------
+
+
+def test_awaiting_must_name_only_steps_whose_result_is_genuinely_awaiting():
+    with pytest.raises(ValidationError, match="whose result is not awaiting"):
+        run([node("a", NodeStatus.SUCCEEDED)], awaiting=(AwaitingInfo(step_id=StepId("a"), level=1, reason="pending"),))
+    with pytest.raises(ValidationError, match="whose result is not awaiting"):
+        run(
+            [node("a", NodeStatus.AWAITING)],
+            awaiting=(AwaitingInfo(step_id=StepId("ghost"), level=1, reason="pending"),),
+        )
+
+
+def test_every_awaiting_result_must_appear_in_awaiting():
+    with pytest.raises(ValidationError, match="is missing from RunResult.awaiting"):
+        run([node("a", NodeStatus.AWAITING)], awaiting=())
+
+
+def test_awaiting_entries_may_not_repeat_a_step_id():
+    duplicate = (
+        AwaitingInfo(step_id=StepId("a"), level=1, reason="pending"),
+        AwaitingInfo(step_id=StepId("a"), level=1, reason="still pending"),
+    )
+    with pytest.raises(ValidationError, match="appears more than once in awaiting"):
+        run([node("a", NodeStatus.AWAITING)], awaiting=duplicate)
+
+
+def test_not_reached_is_legal_without_a_halt_when_a_node_is_awaiting():
+    # D-165: a node blocked only by an awaiting predecessor is not_reached without the run having halted at all.
+    result = run(
+        [node("a", NodeStatus.AWAITING), node("b", NodeStatus.NOT_REACHED, reason="waiting on 'a'")],
+        dispatched=("a",),
+    )
+    assert result.outcome is RunOutcome.AWAITING and result.halt is None
+
+
+def test_not_reached_without_a_halt_or_an_awaiting_node_is_still_rejected():
+    # The pre-D-165 rule is unweakened: a not_reached node still needs a legitimate cause.
+    with pytest.raises(ValidationError, match="requires the run to have halted or a node to be awaiting"):
+        run([node("a", NodeStatus.NOT_REACHED)])
+
+
 # --- RunResult: internal consistency ----------------------------------------------------------
 
 
@@ -237,8 +350,9 @@ def test_an_undispatched_status_cannot_be_dispatched(status):
         run([node("a", status)], dispatched=("a",), halt=halt if status is NodeStatus.NOT_REACHED else None)
 
 
-@pytest.mark.parametrize("status", [NodeStatus.FAILED, NodeStatus.NO_RESULT])
+@pytest.mark.parametrize("status", [NodeStatus.FAILED, NodeStatus.NO_RESULT, NodeStatus.AWAITING])
 def test_a_status_only_a_dispatch_can_produce_must_be_dispatched(status):
+    # The dispatch check runs before the awaiting-consistency check, so this fires regardless of `awaiting`.
     with pytest.raises(ValidationError, match="was never dispatched"):
         run([node("a", status)], dispatched=())
 
@@ -267,7 +381,7 @@ def test_not_reached_requires_a_halt_and_the_halt_must_name_a_not_reached_node()
 def test_a_run_result_carries_exactly_these_fields():
     assert list(RunResult.model_fields) == [
         "tenant_id", "mission_id", "execution_id", "plan_id", "plan_version",
-        "outcome", "halt", "results", "dispatched",
+        "outcome", "halt", "awaiting", "results", "dispatched",
     ]
 
 
@@ -312,6 +426,15 @@ def test_settled_is_everything_but_not_reached_in_plan_order():
         halt=halt,
     )
     assert result.settled == ("a", "b")
+
+
+def test_settled_also_excludes_awaiting_it_has_not_concluded_either_d165():
+    halt = HaltInfo(step_id=StepId("d"), level=1, reason="r")
+    result = run(
+        [node("a", NodeStatus.SUCCEEDED), node("b", NodeStatus.AWAITING), node("c", NodeStatus.SKIPPED), node("d", NodeStatus.NOT_REACHED)],
+        halt=halt,
+    )
+    assert result.settled == ("a", "c")
 
 
 def test_result_for_finds_a_step_and_raises_key_error_for_an_unknown_one():

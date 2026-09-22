@@ -42,8 +42,14 @@ def test_a_no_result_completed_without_a_usable_artifact_and_says_why():
     assert result.artifact is None and result.reason == "the search returned nothing"
 
 
-def test_the_three_work_statuses_are_exactly_these():
-    assert [s.value for s in WorkStatus] == ["produced", "failed", "no_result"]
+def test_a_submitted_result_carries_no_artifact_and_a_generic_reason_d165():
+    result = WorkResult.submitted("dispatched; outcome pending")
+    assert result.status is WorkStatus.SUBMITTED
+    assert result.artifact is None and result.reason == "dispatched; outcome pending"
+
+
+def test_the_work_statuses_are_exactly_these_the_three_of_d118_plus_submitted_from_d165():
+    assert [s.value for s in WorkStatus] == ["produced", "failed", "no_result", "submitted"]
 
 
 @pytest.mark.parametrize(
@@ -55,6 +61,8 @@ def test_the_three_work_statuses_are_exactly_these():
         dict(status=WorkStatus.FAILED, artifact="a", reason="r"),
         dict(status=WorkStatus.NO_RESULT),
         dict(status=WorkStatus.NO_RESULT, artifact="a", reason="r"),
+        dict(status=WorkStatus.SUBMITTED),  # D-165: must say why, same as failed/no_result
+        dict(status=WorkStatus.SUBMITTED, artifact="a", reason="r"),
     ],
 )
 def test_an_ill_shaped_work_result_is_rejected(fields):

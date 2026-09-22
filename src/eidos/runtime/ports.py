@@ -38,14 +38,19 @@ class WorkStatus(StrEnum):
     PRODUCED = "produced"  # the executor produced a usable result
     FAILED = "failed"  # the executor's own work failed
     NO_RESULT = "no_result"  # the executor completed but produced nothing usable
+    SUBMITTED = "submitted"  # D-165: dispatched to a remote system; the outcome is not yet known
 
 
 class WorkResult(EidosModel):
     """What a ``WorkExecutor`` reports for one work node.
 
     ``PRODUCED`` means a usable result: it names an ``artifact`` (an opaque reference;
-    no artifact model exists, D-098). ``FAILED`` and ``NO_RESULT`` carry no artifact and
-    must say why.
+    no artifact model exists, D-098). ``FAILED``, ``NO_RESULT`` and ``SUBMITTED`` carry
+    no artifact and must say why. ``SUBMITTED`` (D-165) is the one non-blocking case: the
+    port genuinely dispatched the work — it does not raise, and it does not wait — and
+    reports plainly that it does not yet know the outcome. Its ``reason`` is a short,
+    generic description; nothing protocol-specific belongs here (D-165 rule 1), since
+    ``eidos.runtime`` names no vendor, model or protocol.
     """
 
     status: WorkStatus
@@ -73,12 +78,19 @@ class WorkResult(EidosModel):
     def no_result(cls, reason: str) -> "WorkResult":
         return cls(status=WorkStatus.NO_RESULT, reason=reason)
 
+    @classmethod
+    def submitted(cls, reason: str) -> "WorkResult":
+        return cls(status=WorkStatus.SUBMITTED, reason=reason)
+
 
 class WorkExecutor(Protocol):
     """Performs one work node's requested capability. Synchronous.
 
     An exception raised here is caught by the executor and recorded as ``FAILED``; it
-    never propagates.
+    never propagates. The *call* is always synchronous and returns exactly once — but the
+    *work* need not be finished when it does: a port may report ``SUBMITTED`` (D-165) to
+    say it has dispatched the work elsewhere and does not yet know the outcome, without
+    blocking this call to find out.
     """
 
     def execute(self, context: ExecutionContext, node: WorkNode) -> WorkResult: ...
