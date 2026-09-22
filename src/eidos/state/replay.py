@@ -13,8 +13,17 @@ log equal to the original. A line that does not parse is a typed rejection namin
 there is no file, no database and no store here (D-157 item 3; D-017 stays Open).
 
 A **checkpoint** is a value — the mission state and the last applied sequence — taken only when the caller asks and never automatically. Resuming
-applies the events after its sequence, and the invariant that is tested is that **a checkpoint plus the tail equals a full replay**. It is not a
-checkpointer of any execution backend (D-113, D-127).
+(this module's own sense: folding the tail after a checkpoint, D-157 — **not** D-177's "explicit resume of a paused mission", a different
+operation on a different boundary, ``EventLog.accept_resumed``) applies the events after its sequence, and the invariant that is tested is that
+**a checkpoint plus the tail equals a full replay**. It is not a checkpointer of any execution backend (D-113, D-127).
+
+**D-177 in a fold-from-scratch.** ``replay`` must apply the *same* rule live intake does: a ``paused`` mission's later record is folded through
+``reduce_resumed`` instead of ``reduce`` once the fold's own history (``most_recent_pause``, ``resumable_pause`` — the exact functions
+``EventLog.accept_resumed`` uses) shows the pause was awaiting-caused and resolved — otherwise a log a live caller correctly extended past a
+D-177 resume would falsely fail to replay. This is tracked as ``_fold`` goes, the same way ``seen``/``task_seen`` already are, and ``resume``
+inherits the **same existing caveat** those two already carry: it is not given the records before its checkpoint, so it starts knowing nothing
+about a pause from before that point — a checkpoint taken *inside* an unresolved D-177 pause cannot fold a tail across a resume; **to check a
+log end to end, replay it** (unchanged advice, D-157 item 4).
 """
 
 from collections.abc import Iterable
@@ -22,11 +31,12 @@ from enum import StrEnum
 
 from pydantic import Field, ValidationError, model_validator
 
-from eidos.contracts import EidosModel, EventId, MissionState
+from eidos.contracts import EidosModel, EventId, MissionState, MissionStatus
 
 from .agent_task_events import AgentTaskEventKey, agent_task_event_key, repeated_agent_task_event
+from .payloads import MissionPausedPayload
 from .records import EventRecord
-from .reducer import ReduceOutcome, reduce
+from .reducer import ReduceOutcome, most_recent_pause, reduce, reduce_resumed, resumable_pause
 from .step_events import StepEventKey, repeated_step_event, step_event_key
 
 
@@ -89,9 +99,14 @@ def _fold(
     seen: frozenset[StepEventKey],
     task_seen: frozenset[AgentTaskEventKey],
     records: Iterable[EventRecord],
+    pause: MissionPausedPayload | None = None,
 ) -> tuple[MissionState | None, ReplayRejection | None]:
     for record in records:
-        result = reduce(state, record, applied)
+        # D-177: the same rule EventLog.accept_resumed applies live — a paused mission's later record folds through
+        # reduce_resumed once the fold's own history (not `state`, which never records why it paused) shows the most
+        # recent pause was awaiting-caused and resolved; otherwise this is an ordinary fold, unchanged.
+        resumed = state is not None and state.status is MissionStatus.PAUSED and resumable_pause(state, pause)
+        result = reduce_resumed(state, record, applied) if resumed else reduce(state, record, applied)
         if result.applied:
             repeated = repeated_step_event(seen, record)  # the intake refuses this live, so a log it wrote never has one (D-162 item 1)
             if repeated is not None:
@@ -123,6 +138,8 @@ def _fold(
         task_key = agent_task_event_key(record)
         if task_key is not None:
             task_seen = task_seen | {task_key}
+        if isinstance(record.payload, MissionPausedPayload):
+            pause = record.payload
     return state, None
 
 

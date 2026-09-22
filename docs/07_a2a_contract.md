@@ -1,8 +1,8 @@
 # 07 — A2A Contract
 
-**Status:** DERIVED — **the V0.6 protocol/contract design is accepted (2026-09-22, D-165 to D-176); Steps 1–5 of 9 are implemented (the `AgentTask`/state contract changes, the `eidos.runtime`
-non-blocking extension, the `eidos.state` event/reducer integration, and now `eidos.a2a` itself: the client, the Research Agent's remote `WorkAgent`, the webhook converter) — see `progress.md`,
-"V0.6 One A2A Boundary". A real gap was found while building Step 5: a resumed mission cannot yet record further events on the same log (reported there, not fixed here).**
+**Status:** DERIVED — **the V0.6 protocol/contract design is accepted (2026-09-22, D-165 to D-177); Steps 1–5 of 9 are implemented (the `AgentTask`/state contract changes, the `eidos.runtime`
+non-blocking extension, the `eidos.state` event/reducer integration, and `eidos.a2a` itself: the client, the Research Agent's remote `WorkAgent`, the webhook converter) — see `progress.md`,
+"V0.6 One A2A Boundary". Step 5 found a real gap (a resumed mission could not record further events on the same log); D-177 resolved it with an explicit, never-automatic resume operation.**
 **Derived from:** handoff §8, §9, §10, §50, §59, §62, §63
 **Authority:** This document is derived from `EIDOS_CLAUDE_CODE_HANDOFF.md` and subordinate to it.
 If this document and the handoff conflict, stop and report the conflict to the human owner.
@@ -15,7 +15,13 @@ If this document and the handoff conflict, stop and report the conflict to the h
 > end of the contract below; Step 5 is the sending end. No mission driver, no automatic resume, no
 > `tasks/cancel`, no streaming.
 >
-> **The design below is now decided**, not merely proposed: `decisions.md` D-165 to D-176, researched
+> **D-177 (resolved):** the completion webhook alone never resumes a mission — `MissionState.status`
+> stays `paused` through it. A caller resumes explicitly, through `EventLog.accept_resumed`, which
+> reads the log's own history (never a new `MissionState` field) to tell a genuinely resolved
+> awaiting pause apart from a permanently terminal admission-guard halt. See `progress.md`'s D-177
+> subsection and `decisions.md` D-177 for the full contract.
+>
+> **The design below is now decided**, not merely proposed: `decisions.md` D-165 to D-177, researched
 > directly against the published A2A Protocol Specification (a2a-protocol.org, v1.0) rather than
 > assumed. `progress.md`'s "V0.6 One A2A Boundary" section summarises it. Sections 1 to 5 below are
 > unchanged by that design — it refines and extends them, it does not contradict them.

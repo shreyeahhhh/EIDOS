@@ -23,12 +23,13 @@ V0.5 adds the typed event records, a pure state reducer, an in-memory event log 
 (`eidos.recording`) and a derived, read-only `ExecutionRecord`. A recorded baseline replays to the same `MissionState` and the same record with no agent run, and the intake refuses a repeated node event for a step (D-162). One question stays open (D-164), and a
 real-model recording has not been run.
 
-V0.6 moves the Research Agent behind one A2A boundary (D-175). The protocol/contract design is decided (`decisions.md` D-165 to D-176), researched directly against the published A2A Protocol
+V0.6 moves the Research Agent behind one A2A boundary (D-175). The protocol/contract design is decided (`decisions.md` D-165 to D-177), researched directly against the published A2A Protocol
 Specification rather than assumed: a non-blocking `SUBMITTED`/`AWAITING` execution shape, `AgentTask`'s real lifecycle, one continuous event log across the pause, a hand-rolled `httpx` client (no
 `a2a-sdk`), and no fifth `MissionStatus`. Steps 1–5 of 9 are implemented — the `AgentTask`/state contract changes, the `eidos.runtime` non-blocking extension, the `eidos.state`
-event/reducer integration, and now `eidos.a2a` itself (the client, the Research Agent's remote `WorkAgent`, the webhook-to-event converter) — none pushed. Re-verifying the wire format
-against the live spec while building the client corrected two Step 1 assumptions (`TaskState` casing, the JSON-RPC method names) and **found a real gap**: nothing yet un-pauses a mission once
-its one exempted completion event is accepted, so a resumed mission cannot record further events on the same log — reported, not silently patched. See [progress.md](progress.md), "V0.6 One A2A Boundary".
+event/reducer integration, and `eidos.a2a` itself (the client, the Research Agent's remote `WorkAgent`, the webhook-to-event converter) — none pushed. Re-verifying the wire format against the
+live spec while building the client corrected two Step 1 assumptions (`TaskState` casing, the JSON-RPC method names). Step 5 also found a real gap — nothing un-paused a mission once its one
+exempted completion event was accepted, so a resumed mission could not record further events on the same log — reported, not silently patched, and resolved by **D-177**: an explicit, never-
+automatic `EventLog.accept_resumed`/`reducer.reduce_resumed` pair that reads the log's own history rather than adding a `MissionState` field. See [progress.md](progress.md), "V0.6 One A2A Boundary".
 
 Current status and the milestone ladder: [progress.md](progress.md).
 Decisions and unresolved questions: [decisions.md](decisions.md).

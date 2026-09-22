@@ -17,16 +17,25 @@ duplicate, one after a terminal state, one that does not fit) take precedence, a
 
 The log is not thread-safe, and this module imports no threading: whoever feeds it from several threads serializes access, and the order in which
 they get through is the order the log records. Nothing here reads a clock or draws an identifier; the producer supplies both.
+
+**``accept_resumed`` (D-177): the caller's explicit resume of a ``paused`` mission.** ``accept`` (above) is unchanged — an ``A2A_TASK_COMPLETED``
+still only folds ``agent_tasks`` (D-176) and never itself resumes anything; ``status`` stays ``paused`` through it. Resuming is a *different*
+operation, and this is the one place that can support it correctly: unlike ``reduce`` (state-only, D-155, never reopened), this log holds its
+own full record history, so it can find the mission's most recent ``MISSION_PAUSED`` record and read its **actual recorded cause** directly —
+an admission-guard halt refuses here exactly as it always has, unconditionally, never reopened by any amount of A2A activity (D-176's own
+guarantee, preserved byte for byte); an A2A-awaiting pause is accepted only once every step it named now shows a concluded ``AgentTask``
+(D-166, via ``node_status_for``). Only then is the proposal folded through ``reduce_resumed`` and the *same* D-162/D-172 repeat-guard
+bookkeeping ``accept`` itself uses (``_accept_via``, shared, not forked) — the same log, the same guards, one narrow addition.
 """
 
 from pydantic import ValidationError
 
-from eidos.contracts import EidosModel, EventId, MissionEvent, MissionId, MissionState, TenantId
+from eidos.contracts import EidosModel, EventId, MissionEvent, MissionId, MissionState, MissionStatus, TenantId
 from eidos.contracts._validators import UtcDateTime
 
 from .agent_task_events import AgentTaskEventKey, agent_task_event_key, agent_task_event_keys, repeated_agent_task_event
 from .records import EventRecord, Payload
-from .reducer import ReduceOutcome, reduce
+from .reducer import ReduceOutcome, most_recent_pause, reduce, reduce_resumed, resumable_pause
 from .replay import Checkpoint, ReplayRejection, dump_jsonl, replay
 from .step_events import StepEventKey, repeated_step_event, step_event_key, step_event_keys
 
@@ -96,6 +105,30 @@ class EventLog:
 
     def accept(self, proposal: EventProposal) -> IntakeResult:
         """Order, check and append one proposal. Never raises for a proposal that does not fit."""
+        return self._accept_via(proposal, reduce)
+
+    def accept_resumed(self, proposal: EventProposal) -> IntakeResult:
+        """D-177: the caller's *explicit* resume of a ``paused`` mission — never automatic (D-170). See the module docstring.
+
+        Requires the mission to be ``paused``; refuses outright if its most recent recorded pause was an admission-guard
+        halt (D-176's terminality, unconditionally preserved); otherwise requires every step the pause's ``awaiting``
+        named to now show a concluded ``AgentTask`` (D-166). Only then does the proposal fold through ``reduce_resumed``.
+        Both checks (``most_recent_pause``, ``resumable_pause``) are the same functions ``replay._fold`` uses, so a live
+        resume and a from-scratch replay of the same log agree (D-157).
+        """
+        if self._state is None or self._state.status is not MissionStatus.PAUSED:
+            return self._refused(ReduceOutcome.POST_TERMINAL, "the mission is not paused: there is nothing to resume")
+        pause = most_recent_pause(self._records)
+        if not resumable_pause(self._state, pause):
+            reason = (
+                "the mission's most recent pause was an admission-guard halt (D-176): it stays terminal"
+                if pause is not None and pause.halt is not None
+                else "still awaiting: the mission is not yet resumable"
+            )
+            return self._refused(ReduceOutcome.POST_TERMINAL, reason)
+        return self._accept_via(proposal, reduce_resumed)
+
+    def _accept_via(self, proposal: EventProposal, reducer_fn) -> IntakeResult:
         if proposal.event_id in self._applied:
             return self._refused(ReduceOutcome.DUPLICATE, f"event {str(proposal.event_id)!r} was already applied")
         try:
@@ -113,7 +146,7 @@ class EventLog:
             )
         except ValidationError as error:
             return self._refused(ReduceOutcome.INVALID_FOR_STATE, "the proposal is inconsistent: " + str(error.errors()[0]["msg"]))
-        result = reduce(self._state, record, self._applied)
+        result = reducer_fn(self._state, record, self._applied)
         if not result.applied:
             return IntakeResult(outcome=result.outcome, reason=result.reason, state=self._state)
         repeated_step = repeated_step_event(self._step_events, record)

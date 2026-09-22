@@ -1,4 +1,4 @@
-"""The state reducer (decisions.md D-155, D-156, D-160, D-166, D-172, D-176; invariants 1, 2 and 8).
+"""The state reducer (decisions.md D-155, D-156, D-160, D-166, D-172, D-176, D-177; invariants 1, 2 and 8).
 
 ``reduce(state, record, applied)`` is a **pure function**: it does no I/O, reads no clock, holds no hidden state, and never raises for
 expected traffic. It returns the new state **and an outcome** (D-155 item 2), so a duplicate, a late event and a rejection are observable and
@@ -31,6 +31,15 @@ completing a task changes only ``agent_tasks``, **never** ``status`` — an admi
 regardless of whether that pause happens to coexist with an independently outstanding task (D-165 item shows this is possible: a halt can
 take precedence over an awaiting node in the same run). A ``paused`` mission with nothing genuinely outstanding for the named task — the
 ordinary admission-halt case — refuses the event exactly as V0.5 shipped it, ``POST_TERMINAL``, unchanged.
+
+**``reduce_resumed``, D-177's own narrow addition, exactly.** ``A2A_TASK_COMPLETED`` being accepted (above) never itself resumes anything —
+``status`` stays ``paused`` through it, unconditionally (D-177). A caller resumes **explicitly**, through a *different* boundary entirely:
+``eidos.state.log.EventLog.accept_resumed``, the only place with the log's own record history, not this module. ``reduce_resumed`` is what
+``accept_resumed`` folds the resumed proposal through once it has already verified — from the log's own history, never a new ``MissionState``
+field, which D-177 rules out exactly as D-176 did — that the mission's most recent pause was awaiting-caused and everything it named has now
+concluded. ``reduce_resumed`` differs from ``reduce`` in exactly one respect: a ``paused`` mission is not refused *for that reason alone*
+(``completed``/``failed`` stay refused, unconditionally, precisely as ``reduce`` refuses them — D-177 narrows only the ``paused`` case). Every
+other check — duplicate, identity, sequence, the event's own fit — is the same check, shared by both functions, not forked (see ``_reduce``).
 
 What each event does to the state (D-160 item 4, extended by D-166/D-176). Per-node execution state never enters ``MissionState`` (D-010a,
 D-113), so ``NODE_STARTED``/``A2A_TASK_STARTED`` change only ``state_version`` and ``updated_at`` (plus, for the latter, folding
@@ -68,7 +77,7 @@ from eidos.contracts import (
     StepId,
 )
 
-from .agent_tasks import fold_agent_task
+from .agent_tasks import fold_agent_task, node_status_for
 from .payloads import (
     A2ATaskCompletedPayload,
     A2ATaskStartedPayload,
@@ -135,6 +144,22 @@ class _Reject:
 
 def reduce(state: MissionState | None, record: EventRecord, applied: frozenset[EventId] = frozenset()) -> ReduceResult:
     """Apply one record to ``state`` (``None`` before the mission exists), given the ids of the events already applied to it."""
+    return _reduce(state, record, applied, allow_paused=False)
+
+
+def reduce_resumed(state: MissionState | None, record: EventRecord, applied: frozenset[EventId] = frozenset()) -> ReduceResult:
+    """D-177: exactly ``reduce``, except a ``paused`` mission is not refused for that reason alone.
+
+    Only ``eidos.state.log.EventLog.accept_resumed`` calls this — it is the sole place that has already checked the log's own
+    history and confirmed the mission's most recent pause was awaiting-caused (never a halt) and everything it named has
+    concluded. This function does not, and cannot, re-derive that from ``state`` alone (``MissionState`` carries no field
+    for *why* it paused, by design — D-176, D-177); it trusts its caller's precondition the same way ``_apply`` already
+    trusts ``reduce``'s. ``completed``/``failed`` remain refused, unconditionally, exactly as ``reduce`` refuses them.
+    """
+    return _reduce(state, record, applied, allow_paused=True)
+
+
+def _reduce(state: MissionState | None, record: EventRecord, applied: frozenset[EventId], *, allow_paused: bool) -> ReduceResult:
     event = record.event
     if event.event_id in applied:
         return _no(state, ReduceOutcome.DUPLICATE, f"event {str(event.event_id)!r} was already applied")
@@ -149,7 +174,8 @@ def reduce(state: MissionState | None, record: EventRecord, applied: frozenset[E
         return _no(state, ReduceOutcome.OUT_OF_ORDER, f"sequence {event.sequence} arrived while {expected} was next")
     if event.sequence < expected:
         return _no(state, ReduceOutcome.STALE, f"sequence {event.sequence} is already applied; {expected} is next")
-    if state.status in _TERMINAL and not _resumable_completion(state, record.payload):
+    resumable = _resumable_completion(state, record.payload) or (allow_paused and state.status is MissionStatus.PAUSED)
+    if state.status in _TERMINAL and not resumable:
         return _no(state, ReduceOutcome.POST_TERMINAL, f"the mission is {state.status.value}, so it takes no further events")
 
     outcome = _apply(state, record)
@@ -171,6 +197,32 @@ def _resumable_completion(state: MissionState, payload) -> bool:
         return False
     task = next((t for t in state.agent_tasks if t.a2a_task_id == payload.a2a_task_id), None)
     return task is not None and task.status in _NOT_YET_CONCLUDED_AGENT_TASK_STATUSES
+
+
+def most_recent_pause(records) -> MissionPausedPayload | None:
+    """D-177: the last ``MISSION_PAUSED`` payload among ``records``, or ``None`` — the log's own answer to *why* a mission most recently
+    paused, since ``MissionState`` itself never records that (D-176). Shared by ``eidos.state.log.EventLog.accept_resumed`` (which already
+    holds the log) and ``eidos.state.replay._fold`` (which folds one record at a time and tracks this as it goes) — one rule, not two."""
+    pause = None
+    for record in records:
+        if isinstance(record.payload, MissionPausedPayload):
+            pause = record.payload
+    return pause
+
+
+def resumable_pause(state: MissionState, pause: MissionPausedPayload | None) -> bool:
+    """D-177: whether ``pause`` — the mission's actual, most recently recorded pause — is one ``reduce_resumed`` may now be used for.
+
+    Never true for a halt (D-176's terminality is absolute, regardless of any A2A activity); true for an awaiting pause only once every
+    step it named shows a concluded ``AgentTask`` (D-166), read the same way the reducer's own fold reads conclusion (``node_status_for``).
+    """
+    if pause is None or pause.halt is not None:
+        return False
+    for info in pause.awaiting:
+        task = next((t for t in state.agent_tasks if t.step_id == info.step_id), None)
+        if task is None or node_status_for(task.status, artifact=task.latest_artifact) is None:
+            return False
+    return True
 
 
 def _create(record: EventRecord) -> ReduceResult:

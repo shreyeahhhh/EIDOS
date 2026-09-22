@@ -12,6 +12,7 @@ Step 6 — ``ExecutionRecord``, the derived read-only projection of a log (D-159
 
 V0.6 Step 2 — the ``AgentTask`` status mapping and the D-176 fold primitive (``agent_tasks``).
 V0.6 Step 4 — ``A2A_TASK_STARTED``/``A2A_TASK_COMPLETED`` wired into the reducer, the log's intake and replay (D-166, D-172, D-176).
+V0.6 D-177 — explicit resume: ``EventLog.accept_resumed`` and ``reduce_resumed``, narrow additions beside ``accept``/``reduce``.
 """
 
 from .agent_tasks import AmbiguousAgentTaskCorrelation, fold_agent_task, node_status_for
@@ -39,7 +40,7 @@ from .payloads import (
 from .execution_record import ExecutionRecord, StepRecord, execution_record
 from .log import EventLog, EventProposal, IntakeResult
 from .records import EventRecord, Payload
-from .reducer import ReduceOutcome, ReduceResult, reduce
+from .reducer import ReduceOutcome, ReduceResult, reduce, reduce_resumed
 from .replay import (
     Checkpoint,
     LoadResult,
@@ -98,6 +99,7 @@ __all__ = [
     "node_status_for",
     "records_after",
     "reduce",
+    "reduce_resumed",
     "replay",
     "replay_jsonl",
     "resume",

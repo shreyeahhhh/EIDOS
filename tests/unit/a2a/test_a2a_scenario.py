@@ -1,4 +1,4 @@
-"""The full Research-Agent-via-A2A boundary, end to end (decisions.md D-165–D-176, V0.6 Steps 2–5; item 12's own
+"""The full Research-Agent-via-A2A boundary, end to end (decisions.md D-165–D-177, V0.6 Steps 2–5; item 12's own
 "full Research Agent remote boundary scenario" and "replay equivalence").
 
 The events here are built directly through ``EventLog``/``EventProposal`` rather than ``record_baseline``
@@ -8,18 +8,14 @@ itself names as still-needed work (a later, separate step — recording is out o
 wrapper would automate — proved here directly against the real runtime, the real reducer and the real A2A boundary,
 with only the transport faked.
 
-**A genuine gap found while writing this test, reported rather than silently patched (Step 5's own instruction):**
-the *runtime*-level resume works completely — a second ``run_baseline`` pass, given ``PriorOutcomes`` for the
-now-known ``gather`` result, correctly finishes the mission (proved below). But the *event-recording* side cannot
-actually follow it on the same log: once the D-176 exception accepts the one ``A2A_TASK_COMPLETED`` a ``paused``
-mission is allowed, ``MissionState.status`` stays ``paused`` — nothing in the currently Accepted design ever moves
-it back to a status where an ordinary event (``NODE_STARTED`` for ``analyse``, eventually ``MISSION_COMPLETED``) is
-accepted again. D-167 explicitly describes the opposite: calling ``record_baseline`` again on the same log
-"naturally produces the post-hoc ``NODE_SETTLED`` and ... the mission's real terminal event — entirely through
-machinery that already exists." That machinery does not, today, exist: the reducer's terminal check (`_TERMINAL`
-in ``reducer.py``, D-176's own `_resumable_completion`) exempts only the one ``A2A_TASK_COMPLETED`` and nothing
-after it. This is `eidos.state` territory — Step 4's already-committed reducer, or a follow-up decision — never
-`eidos.a2a`'s to silently fix, so it is proved and pinned here (not patched) and reported in the Step 5 report.
+**The gap this test originally found is now resolved (D-177).** Step 5 found, and this test pinned as a fact rather
+than silently patching it, that once D-176's exception accepted one ``A2A_TASK_COMPLETED`` into a ``paused`` mission,
+nothing moved ``MissionState.status`` back to where an ordinary event was accepted again — so pass 2's own
+``NODE_STARTED``/``NODE_SETTLED``/``MISSION_COMPLETED`` events could not be recorded on the same log, contradicting
+D-167's own description of that flow. The owner ruled **D-177**: resuming is a distinct, explicit operation,
+``EventLog.accept_resumed`` — never automatic, never triggered by the completion itself — that inspects the log's own
+history (the actual recorded cause of the mission's most recent pause, not a new ``MissionState`` field) before
+folding a proposal through ``reduce_resumed``. This test now completes the whole flow it always meant to prove.
 """
 
 from uuid import UUID
@@ -40,8 +36,10 @@ from eidos.state import (
     A2ATaskStartedPayload,
     EventLog,
     EventProposal,
+    MissionCompletedPayload,
     MissionCreatedPayload,
     MissionPausedPayload,
+    NodeSettledPayload,
     NodeStartedPayload,
     PlanCompiledPayload,
     PlanGeneratedPayload,
@@ -164,21 +162,40 @@ def test_the_full_remote_boundary_scenario_submits_pauses_completes_and_resumes_
     assert run2.result_for(StepId("analyse")).status is NodeStatus.SUCCEEDED
     assert run2.result_for(StepId("check")).status is NodeStatus.SUCCEEDED
 
-    # --- the discovered gap, pinned as a fact rather than left as prose (see the module docstring) --------------------
-    # D-167 says recording pass 2's events onto the same log "naturally produces the post-hoc NODE_SETTLED and ...
-    # the mission's real terminal event". It does not: MissionState.status is still `paused`, and the reducer's
-    # only exemption (D-176) is for the one A2A_TASK_COMPLETED already accepted above — an ordinary event after it
-    # is refused exactly as any event after any other terminal status would be.
-    blocked = log.accept(EventProposal(
+    # --- D-177: the caller's explicit resume, recording pass 2's own events on the same log -------------------------
+    # An ordinary accept() still refuses this — accept() itself was never changed (D-177's own constraint) — only
+    # accept_resumed(), the distinct, explicit boundary, may fold it now that gather's task has concluded.
+    def accept_resumed(payload):
+        result = log.accept_resumed(EventProposal(
+            event_id=EventId(UUID(int=next(n))), tenant_id=state.tenant_id, mission_id=state.mission_id,
+            occurred_at=at(next(n)), recorded_at=at(next(n)), payload=payload,
+        ))
+        assert result.applied, result.reason
+        return result
+
+    still_refused = log.accept(EventProposal(
         event_id=EventId(UUID(int=next(n))), tenant_id=state.tenant_id, mission_id=state.mission_id,
         occurred_at=at(next(n)), recorded_at=at(next(n)),
         payload=NodeStartedPayload(plan_id=plan.plan_id, step_id=StepId("analyse"), kind=PlanStepKind.AGENT, capability=CapabilityId("cost"), agent_id=ANALYSIS_AGENT_ID),
     ))
-    assert not blocked.applied and blocked.reason == "the mission is paused, so it takes no further events"
+    assert not still_refused.applied and still_refused.reason == "the mission is paused, so it takes no further events"
 
-    # --- replay equivalence (item 12), over the part of the log this step actually builds -------------------------------
+    accept_resumed(NodeSettledPayload(plan_id=plan.plan_id, result=run2.result_for(StepId("gather")), dispatched=False))
+    accept_resumed(NodeStartedPayload(plan_id=plan.plan_id, step_id=StepId("analyse"), kind=PlanStepKind.AGENT, capability=CapabilityId("cost"), agent_id=ANALYSIS_AGENT_ID))
+    accept_resumed(NodeSettledPayload(plan_id=plan.plan_id, result=run2.result_for(StepId("analyse")), dispatched=True, duration_ms=5))
+    accept_resumed(NodeStartedPayload(plan_id=plan.plan_id, step_id=StepId("check"), kind=PlanStepKind.VERIFY))
+    accept_resumed(NodeSettledPayload(plan_id=plan.plan_id, result=run2.result_for(StepId("check")), dispatched=True, duration_ms=5))
+    accept_resumed(MissionCompletedPayload(plan_id=plan.plan_id, verified=run2.verified))
+
+    assert log.state.status.value == "completed" and log.state.status_reason == "finished and verified"
+
+    # --- replay equivalence (item 12), over the whole, now-finished log -------------------------------------------------
     records = log.records
     assert replay(records).state == log.state
-    for sequence in range(1, len(records) + 1):
+    # checkpoint + tail equals full replay for a checkpoint taken before the pause, or at the very end — not for one
+    # taken inside the unresolved-then-resumed stretch (replay.py's own documented D-177 caveat: resume() is never
+    # given the records before its checkpoint, so it cannot know a pause it does not see happened at all; this exact
+    # limitation, and why, is proved on its own in tests/unit/state/test_state_d177_resume.py).
+    for sequence in (1, 2, 3, len(records)):
         checkpoint = checkpoint_at(records, sequence)
         assert resume(checkpoint, records_after(records, checkpoint)).state == log.state
