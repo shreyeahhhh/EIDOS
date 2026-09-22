@@ -10,9 +10,10 @@ does not fit the state) is returned with its outcome and is not appended: **orde
 order is inferred from a timestamp (D-160 item 7).
 
 The intake also refuses a **repeated ``NODE_STARTED`` or ``NODE_SETTLED`` for the same step** of the same plan, under a new ``event_id`` or not, with
-``REPEATED_STEP_EVENT`` (D-162 item 1). The reducer cannot: ``MissionState`` keeps no per-node state, and none is added. The check runs after the
-reducer has accepted the event, so the reducer's own outcomes (a duplicate, one after a terminal state, one that does not fit) take precedence, and
-a refused proposal consumes no sequence.
+``REPEATED_STEP_EVENT`` (D-162 item 1), and, the same way, a **repeated ``A2A_TASK_STARTED`` or ``A2A_TASK_COMPLETED`` for the same
+``a2a_task_id``**, with ``REPEATED_AGENT_TASK_EVENT`` (D-172). The reducer cannot catch either: ``MissionState`` keeps no per-node and no
+per-task event history, and none is added. Both checks run after the reducer has accepted the event, so the reducer's own outcomes (a
+duplicate, one after a terminal state, one that does not fit) take precedence, and a refused proposal consumes no sequence.
 
 The log is not thread-safe, and this module imports no threading: whoever feeds it from several threads serializes access, and the order in which
 they get through is the order the log records. Nothing here reads a clock or draws an identifier; the producer supplies both.
@@ -23,6 +24,7 @@ from pydantic import ValidationError
 from eidos.contracts import EidosModel, EventId, MissionEvent, MissionId, MissionState, TenantId
 from eidos.contracts._validators import UtcDateTime
 
+from .agent_task_events import AgentTaskEventKey, agent_task_event_key, agent_task_event_keys, repeated_agent_task_event
 from .records import EventRecord, Payload
 from .reducer import ReduceOutcome, reduce
 from .replay import Checkpoint, ReplayRejection, dump_jsonl, replay
@@ -58,6 +60,7 @@ class EventLog:
         self._records: list[EventRecord] = []
         self._applied: frozenset[EventId] = frozenset()
         self._step_events: frozenset[StepEventKey] = frozenset()  # the log's own memory of which steps started and settled; never in MissionState
+        self._agent_task_events: frozenset[AgentTaskEventKey] = frozenset()  # which a2a_task_ids started and completed; never in MissionState
         self._state: MissionState | None = None
 
     @classmethod
@@ -71,6 +74,7 @@ class EventLog:
         log._records = list(materialized)
         log._applied = frozenset(r.event.event_id for r in materialized)
         log._step_events = step_event_keys(materialized)
+        log._agent_task_events = agent_task_event_keys(materialized)
         log._state = folded.state
         return log
 
@@ -112,14 +116,20 @@ class EventLog:
         result = reduce(self._state, record, self._applied)
         if not result.applied:
             return IntakeResult(outcome=result.outcome, reason=result.reason, state=self._state)
-        repeated = repeated_step_event(self._step_events, record)
-        if repeated is not None:  # the reducer would have applied it; the intake will not (D-162 item 1)
-            return self._refused(ReduceOutcome.REPEATED_STEP_EVENT, repeated)
+        repeated_step = repeated_step_event(self._step_events, record)
+        if repeated_step is not None:  # the reducer would have applied it; the intake will not (D-162 item 1)
+            return self._refused(ReduceOutcome.REPEATED_STEP_EVENT, repeated_step)
+        repeated_task = repeated_agent_task_event(self._agent_task_events, record)
+        if repeated_task is not None:  # the reducer would have applied it; the intake will not (D-172)
+            return self._refused(ReduceOutcome.REPEATED_AGENT_TASK_EVENT, repeated_task)
         self._records.append(record)
         self._applied = self._applied | {record.event.event_id}
         key = step_event_key(record)
         if key is not None:
             self._step_events = self._step_events | {key}
+        task_key = agent_task_event_key(record)
+        if task_key is not None:
+            self._agent_task_events = self._agent_task_events | {task_key}
         self._state = result.state
         return IntakeResult(outcome=ReduceOutcome.APPLIED, record=record, state=self._state)
 

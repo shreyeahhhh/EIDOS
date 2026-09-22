@@ -25,7 +25,9 @@ real-model recording has not been run.
 
 V0.6 moves the Research Agent behind one A2A boundary (D-175). The protocol/contract design is decided (`decisions.md` D-165 to D-176), researched directly against the published A2A Protocol
 Specification rather than assumed: a non-blocking `SUBMITTED`/`AWAITING` execution shape, `AgentTask`'s real lifecycle, one continuous event log across the pause, a hand-rolled `httpx` client (no
-`a2a-sdk`), and no fifth `MissionStatus`. **No `eidos.a2a` package, no A2A dependency and no code exist yet** — see [progress.md](progress.md), "V0.6 One A2A Boundary".
+`a2a-sdk`), and no fifth `MissionStatus`. Steps 1–4 of 9 are implemented — the `AgentTask`/state contract changes, the `eidos.runtime` non-blocking extension and the `eidos.state`
+event/reducer integration (`A2A_TASK_STARTED`/`A2A_TASK_COMPLETED`, the D-176 terminal exception) — none pushed. **No `eidos.a2a` package and no A2A dependency exist yet: no transport,
+client, webhook or remote agent** — see [progress.md](progress.md), "V0.6 One A2A Boundary".
 
 Current status and the milestone ladder: [progress.md](progress.md).
 Decisions and unresolved questions: [decisions.md](decisions.md).

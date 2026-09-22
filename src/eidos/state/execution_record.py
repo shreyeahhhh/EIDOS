@@ -7,7 +7,8 @@ rejection and never a record built on a log that does not hold. A record therefo
 
 What it holds is facts, each one a value the log recorded: identity; the plan's structure as recorded, with the agent each step was bound to;
 per step, the typed result, whether a port was dispatched, the recorded duration, the model calls and the ``VERIFY`` verdict with its reason;
-the mission's terminal status, its typed cause and the halt; the folded counters; and the log's own bounds.
+the mission's terminal status, its typed cause, and — for a paused mission — which of the two causes D-169 distinguishes, the halt or the
+awaiting nodes; the folded counters; and the log's own bounds.
 
 What it never holds (D-159 item 2): a quality, a confidence, a score, a rate, a signature, or anything aggregated across missions. The verifier's
 reason is carried word for word, so the ``NOT_EVALUATED`` clauses it names (D-146) stay named and are never turned into a number. Every count
@@ -34,7 +35,7 @@ from eidos.contracts import (
     TenantId,
 )
 from eidos.contracts._validators import UtcDateTime
-from eidos.runtime import HaltInfo, NodeResult, RunOutcome
+from eidos.runtime import AwaitingInfo, HaltInfo, NodeResult, RunOutcome
 
 from .payloads import (
     MissionCompletedPayload,
@@ -97,7 +98,8 @@ class ExecutionRecord(EidosModel):
     verified: bool | None = None  # only a completed mission says; absent otherwise
     failure_cause: MissionFailureCause | None = None
     failure_reason: str | None = None
-    halt: HaltInfo | None = None
+    halt: HaltInfo | None = None  # an admission-guard pause (D-169); absent for an awaiting pause, and vice versa for `awaiting`
+    awaiting: tuple[AwaitingInfo, ...] = ()  # an A2A-awaiting pause (D-165, D-169); empty unless the mission paused for that reason
 
     agent_calls_used: int = Field(ge=0)
     tool_calls_used: int = Field(ge=0)
@@ -156,6 +158,7 @@ def execution_record(records: Iterable[EventRecord]) -> ExecutionRecord | Replay
         failure_cause=failed.cause if failed else None,
         failure_reason=failed.reason if failed else None,
         halt=terminal.halt if isinstance(terminal, MissionPausedPayload) else None,
+        awaiting=terminal.awaiting if isinstance(terminal, MissionPausedPayload) else (),
         agent_calls_used=state.agent_calls_used,
         tool_calls_used=state.tool_calls_used,
         retries_used=state.retries_used,
@@ -192,11 +195,15 @@ _NEVER_RAN = (MissionFailureCause.PLAN_REJECTED, MissionFailureCause.RUN_REJECTE
 
 
 def _run_outcome(terminal) -> RunOutcome | None:
-    """The run's outcome as the terminal event implies it (the same mapping the recorder applies going the other way, D-160 item 5)."""
+    """The run's outcome as the terminal event implies it (the same mapping the recorder applies going the other way, D-160 item 5).
+
+    A ``MissionPausedPayload`` maps to ``HALTED`` or ``AWAITING`` depending on which of its two causes is present (D-169) — never guessed,
+    since the payload itself says which one applies.
+    """
     if isinstance(terminal, MissionCompletedPayload):
         return RunOutcome.FINISHED
     if isinstance(terminal, MissionPausedPayload):
-        return RunOutcome.HALTED
+        return RunOutcome.HALTED if terminal.halt is not None else RunOutcome.AWAITING
     if isinstance(terminal, MissionFailedPayload) and terminal.cause not in _NEVER_RAN:
         return RunOutcome.FAILED
     return None

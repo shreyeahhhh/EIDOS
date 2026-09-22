@@ -14,9 +14,13 @@ from uuid import UUID
 import pytest
 from pydantic import ValidationError
 
-from eidos.contracts import MissionState, MissionStatus, PlanId, PlanStepKind, StepId
-from eidos.runtime import HaltInfo, NodeResult, NodeStatus
+from eidos.contracts import AgentTaskStatus, MissionState, MissionStatus, PlanId, PlanStepKind, StepId
+from eidos.runtime import AwaitingInfo, HaltInfo, NodeResult, NodeStatus
 from eidos.state import (
+    A2ATaskCompletedPayload,
+    A2ATaskStartedPayload,
+    EventLog,
+    EventProposal,
     MissionCompletedPayload,
     MissionFailedPayload,
     MissionFailureCause,
@@ -31,13 +35,18 @@ from eidos.state import (
     PlanRejectionStage,
     ReduceOutcome,
     ReduceResult,
+    checkpoint_at,
+    records_after,
     reduce,
+    replay,
+    resume,
 )
 
 from eidos_mission_factories import make_mission, make_mission_plan
 from eidos_state_factories import (
     RESEARCH_AGENT,
     LogBuilder,
+    a2a_task_id,
     at,
     baseline_state_and_plan,
     created,
@@ -419,6 +428,272 @@ def test_parallel_nodes_may_settle_in_either_order_and_the_state_is_the_same():
     assert counters(forward) == counters(backward) == (2, 6, 300)
 
 
+# --- V0.6 Step 4: A2A_TASK_STARTED / A2A_TASK_COMPLETED, and the D-176 exception for an awaiting-caused pause -------------------------
+
+
+def test_an_a2a_task_started_folds_a_new_submitted_agent_task_and_changes_no_counter():
+    log = prefix()
+    before = state_after(log)
+    log.a2a_started("gather", task=1)
+    state = state_after(log)
+    assert len(state.agent_tasks) == 1
+    task = state.agent_tasks[0]
+    assert task.status is AgentTaskStatus.SUBMITTED
+    assert task.a2a_task_id == a2a_task_id(1) and task.a2a_context_id is None
+    assert task.agent_id == RESEARCH_AGENT
+    assert task.plan_id == log.plan.plan_id and task.step_id == StepId("gather")
+    assert task.started_at == log.records[-1].event.occurred_at
+    assert task.last_event == log.records[-1].event.event_id
+    assert counters(state) == counters(before)  # no counter change: A2A_TASK_STARTED folds only agent_tasks
+
+
+def test_an_a2a_task_completed_updates_the_correlated_task_in_place_not_a_duplicate_append():
+    log = prefix()
+    log.a2a_started("gather", task=1)
+    started_at_event = log.records[-1].event.occurred_at
+    log.a2a_completed("gather", task=1, outcome=AgentTaskStatus.COMPLETED)
+    state = state_after(log)
+    assert len(state.agent_tasks) == 1  # replaced, not appended (D-176's find-and-replace)
+    task = state.agent_tasks[0]
+    assert task.status is AgentTaskStatus.COMPLETED
+    assert task.latest_artifact is not None
+    assert task.agent_id == RESEARCH_AGENT and task.plan_id == log.plan.plan_id and task.step_id == StepId("gather")
+    assert task.started_at == started_at_event  # unchanged from the STARTED event
+    assert task.last_event == log.records[-1].event.event_id  # advanced to the COMPLETED event
+    assert counters(state) == (0, 0, 0)  # no counter change: that is NODE_SETTLED's job, later, via existing V0.5 machinery (D-167)
+
+
+def test_multiple_independent_a2a_tasks_fold_independently_and_in_order():
+    log = prefix()
+    log.a2a_started("gather", task=1)
+    log.a2a_started("analyse", task=2)
+    state = state_after(log)
+    assert [t.a2a_task_id for t in state.agent_tasks] == [a2a_task_id(1), a2a_task_id(2)]
+    log.a2a_completed("gather", task=1)
+    state = state_after(log)
+    assert [(t.a2a_task_id, t.status) for t in state.agent_tasks] == [
+        (a2a_task_id(1), AgentTaskStatus.COMPLETED), (a2a_task_id(2), AgentTaskStatus.SUBMITTED),
+    ]
+
+
+def test_a_completed_event_for_an_a2a_task_that_never_started_is_rejected_d172():
+    log = prefix()
+    state = state_after(log)
+    result = invalid(state, log, A2ATaskCompletedPayload(
+        plan_id=log.plan.plan_id, step_id=StepId("gather"), a2a_task_id=a2a_task_id(1),
+        outcome=AgentTaskStatus.COMPLETED, artifact=None, reason="x",
+    ))
+    assert "no recorded A2A_TASK_STARTED" in result.reason
+
+
+def test_a_completed_event_naming_the_wrong_plan_step_for_a_started_task_is_rejected():
+    log = prefix()
+    log.a2a_started("gather", task=1)
+    state = state_after(log)
+    result = invalid(state, log, A2ATaskCompletedPayload(
+        plan_id=log.plan.plan_id, step_id=StepId("analyse"), a2a_task_id=a2a_task_id(1),  # started for "gather", not "analyse"
+        outcome=AgentTaskStatus.COMPLETED, artifact=None, reason="x",
+    ))
+    assert "different plan step" in result.reason
+
+
+def test_an_a2a_event_needs_the_active_plan_and_one_of_its_steps_kind_agent():
+    log = LogBuilder(*baseline_state_and_plan())
+    log.created()
+    log.generated()  # not compiled: no active plan yet
+    early = state_after(log)
+    result = invalid(early, log, A2ATaskStartedPayload(
+        plan_id=log.plan.plan_id, step_id=StepId("gather"), agent_id=RESEARCH_AGENT, a2a_task_id=a2a_task_id(1),
+    ))
+    assert "not the active plan" in result.reason
+
+    log.compiled()
+    state = state_after(log)
+    wrong_kind = invalid(state, log, A2ATaskStartedPayload(
+        plan_id=log.plan.plan_id, step_id=StepId("check"), agent_id=RESEARCH_AGENT, a2a_task_id=a2a_task_id(1),  # "check" is VERIFY, not AGENT
+    ))
+    assert "is a VERIFY step" in wrong_kind.reason
+
+
+def test_the_reducer_holds_no_per_task_state_so_it_never_returns_the_repeated_agent_task_outcome():
+    """D-172, mirroring D-162 item 1's own reducer test: only the intake and replay refuse a repeat; the reducer, offered one directly, applies it
+    again (a harmless, idempotent-looking fold, per fold_agent_task's own docstring)."""
+    log = prefix()
+    log.a2a_started("gather", task=1)
+    log.a2a_completed("gather", task=1)
+    state, applied = None, frozenset()
+    for r in log.records:
+        result = reduce(state, r, applied)
+        state, applied = result.state, applied | {r.event.event_id}
+    again = make_record(log.records[-1].payload, state=log.state, sequence=state.state_version + 1, number=999)  # the completion, once more
+    result = reduce(state, again, applied)
+    assert result.outcome is ReduceOutcome.APPLIED  # reapplies: only the intake stops this (agent_task_events.py, D-172)
+
+
+def test_a_repeated_a2a_task_started_at_reducer_level_replaces_not_duplicates():
+    """Offered directly (bypassing the intake's D-172 guard), the reducer still folds through fold_agent_task's own find-and-replace,
+    never a raw append: the same D-176 primitive Step 2 built, exercised here a second time for the same a2a_task_id."""
+    log = prefix()
+    log.a2a_started("gather", task=1)
+    state, applied = None, frozenset()
+    for r in log.records:
+        result = reduce(state, r, applied)
+        state, applied = result.state, applied | {r.event.event_id}
+    again = make_record(log.records[-1].payload, state=log.state, sequence=state.state_version + 1, number=998)  # the same start, once more
+    result = reduce(state, again, applied)
+    assert result.applied and len(result.state.agent_tasks) == 1  # replaced, not appended
+
+
+# --- D-176: an awaiting-caused pause takes exactly one more event; an admission-halt pause is otherwise unchanged --------------------
+
+
+def test_an_awaiting_paused_mission_still_accepts_the_completion_that_concludes_the_outstanding_task():
+    log = prefix()
+    log.a2a_started("gather", task=1)
+    log.paused_awaiting("gather", reason="awaiting the remote gather task")
+    state = state_after(log)
+    assert state.status is MissionStatus.PAUSED
+    completed = A2ATaskCompletedPayload(
+        plan_id=log.plan.plan_id, step_id=StepId("gather"), a2a_task_id=a2a_task_id(1),
+        outcome=AgentTaskStatus.COMPLETED, artifact=None, reason="the remote task concluded",
+    )
+    result = reduce(state, make_record(completed, state=log.state, sequence=state.state_version + 1, number=850))
+    assert result.applied
+    assert result.state.status is MissionStatus.PAUSED and result.state.status_reason == state.status_reason  # unchanged: never auto-resumed (D-170)
+    assert result.state.agent_tasks[0].status is AgentTaskStatus.COMPLETED  # the bookkeeping did update
+
+
+def test_an_awaiting_pauses_status_reason_is_the_awaiting_infos_own_reason():
+    log = prefix()
+    log.a2a_started("gather", task=1)
+    log.paused_awaiting("gather", reason="awaiting the remote gather task")
+    assert state_after(log).status_reason == "awaiting the remote gather task"
+
+
+def test_an_awaiting_pause_must_name_a_step_of_the_active_plan_just_like_a_halt():
+    log = prefix()
+    state = state_after(log)
+    result = invalid(state, log, MissionPausedPayload(
+        plan_id=log.plan.plan_id, awaiting=(AwaitingInfo(step_id=StepId("nope"), level=1, reason="x"),)
+    ))
+    assert "is not in plan" in result.reason
+
+
+def test_an_awaiting_paused_mission_refuses_a_completion_for_an_unrelated_task():
+    log = prefix()
+    log.a2a_started("gather", task=1)
+    log.paused_awaiting("gather")
+    state = state_after(log)
+    unrelated = A2ATaskCompletedPayload(
+        plan_id=log.plan.plan_id, step_id=StepId("gather"), a2a_task_id=a2a_task_id(2),  # a different task, never started
+        outcome=AgentTaskStatus.COMPLETED, artifact=None, reason="x",
+    )
+    result = reduce(state, make_record(unrelated, state=log.state, sequence=state.state_version + 1, number=851))
+    assert result.outcome is ReduceOutcome.POST_TERMINAL  # the exception is keyed to a genuinely outstanding, correlated task, not any A2A event
+
+
+def test_an_awaiting_paused_mission_refuses_a_second_completion_of_the_same_already_concluded_task():
+    log = prefix()
+    log.a2a_started("gather", task=1)
+    log.paused_awaiting("gather")
+    state = state_after(log)
+    completed = A2ATaskCompletedPayload(
+        plan_id=log.plan.plan_id, step_id=StepId("gather"), a2a_task_id=a2a_task_id(1),
+        outcome=AgentTaskStatus.COMPLETED, artifact=None, reason="the remote task concluded",
+    )
+    first = reduce(state, make_record(completed, state=log.state, sequence=state.state_version + 1, number=852))
+    assert first.applied
+    second = reduce(first.state, make_record(completed, state=log.state, sequence=first.state.state_version + 1, number=853))
+    assert second.outcome is ReduceOutcome.POST_TERMINAL  # the task has already concluded: the exception no longer applies to it
+
+
+def test_an_awaiting_paused_mission_otherwise_refuses_everything_exactly_like_an_admission_halt():
+    log = prefix()
+    log.a2a_started("gather", task=1)
+    log.paused_awaiting("gather")
+    state = state_after(log)
+    later = make_record(PlanCompiledPayload(plan_id=log.plan.plan_id, plan_version=1), state=log.state, sequence=state.state_version + 1, number=854)
+    assert reduce(state, later).outcome is ReduceOutcome.POST_TERMINAL
+
+
+def test_an_admission_halt_paused_mission_refuses_a_completion_with_nothing_outstanding_for_that_task():
+    log = prefix()
+    log.started("gather")
+    log.settled(work_result("gather"))
+    log.paused(step="analyse", level=2, reason="held for review")
+    state = state_after(log)
+    completed = A2ATaskCompletedPayload(
+        plan_id=log.plan.plan_id, step_id=StepId("gather"), a2a_task_id=a2a_task_id(1),  # no AgentTask was ever folded
+        outcome=AgentTaskStatus.COMPLETED, artifact=None, reason="x",
+    )
+    result = reduce(state, make_record(completed, state=log.state, sequence=state.state_version + 1, number=855))
+    assert result.outcome is ReduceOutcome.POST_TERMINAL  # the ordinary admission-halt case: nothing outstanding, so nothing is exempted
+
+
+def test_an_admission_halt_paused_mission_still_folds_a_genuinely_outstanding_tasks_completion():
+    """D-176's exception is keyed on what the state holds (an outstanding, correlated AgentTask), never on *why* the mission paused —
+    MissionState records no such reason, and none is added (D-176 named only the agent_tasks fold as new). An admission-halt pause that
+    happens to coexist with an independently outstanding A2A task therefore still takes that task's completion: it only updates
+    agent_tasks bookkeeping and can never touch status, so the halt's own terminality is not reopened by this. This is a deliberate,
+    flagged reading of an interaction D-176 did not itself spell out — not something the owner has separately ruled on."""
+    log = prefix()
+    log.a2a_started("gather", task=1)  # an A2A task is genuinely outstanding
+    log.paused(step="analyse", level=2, reason="held for review")  # an unrelated admission halt
+    state = state_after(log)
+    completed = A2ATaskCompletedPayload(
+        plan_id=log.plan.plan_id, step_id=StepId("gather"), a2a_task_id=a2a_task_id(1),
+        outcome=AgentTaskStatus.COMPLETED, artifact=None, reason="the remote task concluded",
+    )
+    result = reduce(state, make_record(completed, state=log.state, sequence=state.state_version + 1, number=856))
+    assert result.applied
+    assert result.state.status is MissionStatus.PAUSED and result.state.status_reason == "held for review"  # the halt's own reason, untouched
+    assert result.state.agent_tasks[0].status is AgentTaskStatus.COMPLETED
+
+
+def test_a_completed_or_failed_mission_refuses_a_task_completion_even_for_an_outstanding_task():
+    """D-176 exempts only a paused mission (the one status a later A2A completion can meaningfully still concern) — never completed or
+    failed, which stay exactly as terminal as V0.5 shipped them, whatever eidos.state.agent_tasks happens to still show."""
+    log = prefix()
+    log.a2a_started("gather", task=1)
+    log.started("analyse")
+    log.settled(work_result("analyse"))
+    log.started("check")
+    log.settled(verify_result("check"))
+    log.completed(verified=True)
+    state = state_after(log)
+    completed = A2ATaskCompletedPayload(
+        plan_id=log.plan.plan_id, step_id=StepId("gather"), a2a_task_id=a2a_task_id(1),
+        outcome=AgentTaskStatus.COMPLETED, artifact=None, reason="x",
+    )
+    result = reduce(state, make_record(completed, state=log.state, sequence=state.state_version + 1, number=857))
+    assert result.outcome is ReduceOutcome.POST_TERMINAL
+
+
+def test_a_log_with_an_awaiting_pause_and_its_completion_replays_and_checkpoints_consistently():
+    log = prefix()
+    log.a2a_started("gather", task=1)
+    log.paused_awaiting("gather")
+    log.add(A2ATaskCompletedPayload(
+        plan_id=log.plan.plan_id, step_id=StepId("gather"), a2a_task_id=a2a_task_id(1),
+        outcome=AgentTaskStatus.COMPLETED, artifact=None, reason="the remote task concluded",
+    ))
+    full = state_after(log)
+    assert full.status is MissionStatus.PAUSED and full.agent_tasks[0].status is AgentTaskStatus.COMPLETED
+
+    records = log.records
+    live = EventLog()
+    for r in records:
+        result = live.accept(EventProposal(
+            event_id=r.event.event_id, tenant_id=r.event.tenant_id, mission_id=r.event.mission_id,
+            occurred_at=r.event.occurred_at, recorded_at=r.event.recorded_at, payload=r.payload,
+        ))
+        assert result.applied, result.reason
+    assert replay(records).state == full == live.state
+    for sequence in range(1, len(records) + 1):
+        checkpoint = checkpoint_at(records, sequence)
+        assert resume(checkpoint, records_after(records, checkpoint)).state == full
+
+
 # --- the result type and the source ------------------------------------------------------------------------------------------------
 
 
@@ -434,9 +709,10 @@ def test_an_applied_result_needs_a_state_and_no_reason_and_a_non_applied_one_nee
                 ReduceResult(state=state, outcome=outcome)
 
 
-def test_the_outcomes_are_the_reducers_six_and_the_one_the_intake_and_replay_add():
+def test_the_outcomes_are_the_reducers_six_and_the_two_the_intake_and_replay_add():
     reducer_outcomes = {"applied", "duplicate", "out_of_order", "stale", "post_terminal", "invalid_for_state"}
-    assert {o.value for o in ReduceOutcome} == reducer_outcomes | {"repeated_step_event"}  # D-155 item 2's six, and D-162 item 1's
+    # D-155 item 2's six, D-162 item 1's repeated_step_event, and D-172's repeated_agent_task_event.
+    assert {o.value for o in ReduceOutcome} == reducer_outcomes | {"repeated_step_event", "repeated_agent_task_event"}
 
 
 def test_the_reducer_holds_no_per_node_state_so_it_never_returns_the_repeated_step_outcome():

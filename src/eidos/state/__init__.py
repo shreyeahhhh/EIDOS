@@ -10,12 +10,15 @@ Step 3 — the pure reducer (D-155, D-156, D-160).
 Step 4 — the event log and intake, checkpoint, replay and the strict JSONL form (D-157).
 Step 6 — ``ExecutionRecord``, the derived read-only projection of a log (D-159).
 
-V0.6 Step 2 — the ``AgentTask`` status mapping and the D-176 fold primitive (``agent_tasks``), not yet wired into the reducer.
+V0.6 Step 2 — the ``AgentTask`` status mapping and the D-176 fold primitive (``agent_tasks``).
+V0.6 Step 4 — ``A2A_TASK_STARTED``/``A2A_TASK_COMPLETED`` wired into the reducer, the log's intake and replay (D-166, D-172, D-176).
 """
 
 from .agent_tasks import AmbiguousAgentTaskCorrelation, fold_agent_task, node_status_for
 from .payloads import (
     PAYLOAD_TYPES,
+    A2ATaskCompletedPayload,
+    A2ATaskStartedPayload,
     EmittedPayload,
     MissionCompletedPayload,
     MissionCreatedPayload,
@@ -54,6 +57,8 @@ from .replay import (
 
 __all__ = [
     "PAYLOAD_TYPES",
+    "A2ATaskCompletedPayload",
+    "A2ATaskStartedPayload",
     "AmbiguousAgentTaskCorrelation",
     "Checkpoint",
     "EmittedPayload",

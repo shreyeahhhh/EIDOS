@@ -1,8 +1,9 @@
-"""The state reducer (decisions.md D-155, D-156, D-160; invariants 1, 2 and 8).
+"""The state reducer (decisions.md D-155, D-156, D-160, D-166, D-172, D-176; invariants 1, 2 and 8).
 
 ``reduce(state, record, applied)`` is a **pure function**: it does no I/O, reads no clock, holds no hidden state, and never raises for
 expected traffic. It returns the new state **and an outcome** (D-155 item 2), so a duplicate, a late event and a rejection are observable and
-countable instead of being indistinguishable from a no-op (D-039's reason). A non-applied outcome leaves the state byte-identical.
+countable instead of being indistinguishable from a no-op (D-039's reason). A non-applied outcome leaves the state byte-identical. **Its
+signature is unchanged by V0.6** (D-155 is not reopened): it still takes only ``(state, record, applied)`` and nothing more.
 
 **Only this module constructs or updates a ``MissionState``** (invariants 1 and 2; a guard test enforces it). It rebuilds a state through the
 contract's own constructor, so every V0.1 consistency check (plan identity, uniqueness, lineage, tenant) still runs on the result.
@@ -13,16 +14,27 @@ Checks run in a fixed order, and the first that fails decides the outcome:
 2. **identity** — the record belongs to another mission or tenant;
 3. **sequence** — the event applies only if ``sequence == state_version + 1`` (D-097): a later one is *out of order*, an earlier one *stale*.
    Ordering is the EIDOS-assigned sequence and nothing else; **no ordering is ever inferred from a timestamp** (D-160 item 7);
-4. **terminal** — ``completed`` and ``failed`` reject every later event, and so does ``paused``, which is terminal in V0.5 because resume is
-   deferred (D-160 item 9);
+4. **terminal** — ``completed`` and ``failed`` reject every later event, and so does ``paused``, with **one narrow exception** (D-176, below);
 5. **the event's own rules** — a plan or step the event names must exist in the state, and the state's own validators must accept the result.
 
-One more check is **not the reducer's**: a repeated ``NODE_STARTED`` or ``NODE_SETTLED`` for the same step. The reducer cannot see it, because per-node
-state never enters ``MissionState`` (D-010a, D-113) and none is added; the intake and a fold from scratch refuse it, after the reducer has accepted
-the event (``eidos.state.step_events``, D-162 item 1). A record offered to ``reduce`` directly is therefore judged by the five checks above only.
+One more check is **not the reducer's**: a repeated ``NODE_STARTED``/``NODE_SETTLED`` for the same step, or a repeated ``A2A_TASK_STARTED``/
+``A2A_TASK_COMPLETED`` for the same ``a2a_task_id``. The reducer cannot see either kind, because per-node and per-task state never enters
+``MissionState`` (D-010a, D-113) and none is added; the intake and a fold from scratch refuse both, after the reducer has accepted the event
+(``eidos.state.step_events`` for D-162 item 1; ``eidos.state.agent_task_events`` for D-172). A record offered to ``reduce`` directly is
+therefore judged by the five checks above only.
 
-What each event does to the state (D-160 item 4). Per-node execution state never enters ``MissionState`` (D-010a, D-113), so ``NODE_STARTED``
-changes only ``state_version`` and ``updated_at``; ``NODE_SETTLED`` folds the counters (D-156):
+**The D-176 exception, exactly.** A ``paused`` mission still refuses everything **except** an ``A2A_TASK_COMPLETED`` whose ``a2a_task_id``
+correlates to an ``AgentTask`` the state already holds in a **non-concluded** status (``SUBMITTED``, ``WORKING`` or ``UNSPECIFIED``, D-166).
+This is deliberately **not** keyed on *why* the mission paused — ``MissionState`` carries no field recording that, and adding one would be a
+``MissionState`` contract change this step does not make (D-176 explicitly named only the ``agent_tasks`` fold as new). It does not need one:
+completing a task changes only ``agent_tasks``, **never** ``status`` — an admission-guard pause's own terminality is not reopened by this,
+regardless of whether that pause happens to coexist with an independently outstanding task (D-165 item shows this is possible: a halt can
+take precedence over an awaiting node in the same run). A ``paused`` mission with nothing genuinely outstanding for the named task — the
+ordinary admission-halt case — refuses the event exactly as V0.5 shipped it, ``POST_TERMINAL``, unchanged.
+
+What each event does to the state (D-160 item 4, extended by D-166/D-176). Per-node execution state never enters ``MissionState`` (D-010a,
+D-113), so ``NODE_STARTED``/``A2A_TASK_STARTED`` change only ``state_version`` and ``updated_at`` (plus, for the latter, folding
+``agent_tasks``); ``NODE_SETTLED`` folds the counters (D-156):
 
 * ``agent_calls_used`` grows by one for each *dispatched* work node — a node carried over from prior outcomes is not a call;
 * ``tokens_used`` grows by the prompt and output tokens the provider **reported**; a token count nobody reported adds nothing, so the counter is
@@ -30,6 +42,11 @@ changes only ``state_version`` and ``updated_at``; ``NODE_SETTLED`` folds the co
 * ``execution_time_used_ms`` grows by the node's recorded ``duration_ms`` — accumulated accounted node execution time, **not** wall-clock
   duration; a node with no recorded duration adds nothing (D-160 item 6);
 * ``retries_used``, ``replans_used`` and ``tool_calls_used`` are never changed: nothing produces them.
+
+``A2A_TASK_STARTED`` and ``A2A_TASK_COMPLETED`` fold **only** ``agent_tasks`` (D-176's find-and-replace-or-append, ``eidos.state.agent_tasks``)
+— **no counter changes here**. The eventual ``agent_calls_used``/``execution_time_used_ms`` contribution of the node an A2A task serves is
+folded later, by that node's own ``NODE_SETTLED``, produced through the existing V0.5 machinery once the caller resumes the mission (D-167) —
+not invented here, and not duplicated.
 
 Nothing is enforced against a limit: the counters are recorded, not checked (D-156 item 5).
 """
@@ -39,6 +56,8 @@ from enum import StrEnum
 from pydantic import ValidationError, model_validator
 
 from eidos.contracts import (
+    AgentTask,
+    AgentTaskStatus,
     EidosModel,
     EventId,
     MissionState,
@@ -49,7 +68,10 @@ from eidos.contracts import (
     StepId,
 )
 
+from .agent_tasks import fold_agent_task
 from .payloads import (
+    A2ATaskCompletedPayload,
+    A2ATaskStartedPayload,
     MissionCompletedPayload,
     MissionCreatedPayload,
     MissionFailedPayload,
@@ -63,6 +85,9 @@ from .payloads import (
 from .records import EventRecord
 
 _TERMINAL = (MissionStatus.COMPLETED, MissionStatus.FAILED, MissionStatus.PAUSED)
+# D-166: the AgentTaskStatus values a task can still be in before it has concluded — the only ones an A2A_TASK_COMPLETED may legitimately
+# advance from (D-176's PAUSED exception checks this; the payload's own validator separately forbids these three as an *outcome*, D-174).
+_NOT_YET_CONCLUDED_AGENT_TASK_STATUSES = (AgentTaskStatus.SUBMITTED, AgentTaskStatus.WORKING, AgentTaskStatus.UNSPECIFIED)
 
 
 class ReduceOutcome(StrEnum):
@@ -75,6 +100,9 @@ class ReduceOutcome(StrEnum):
     # Not returned by ``reduce``, which holds no per-node state (D-113): the intake and a fold from scratch return it when a step's start or
     # settlement is recorded a second time (D-162 item 1; ``step_events``).
     REPEATED_STEP_EVENT = "repeated_step_event"
+    # Not returned by ``reduce``, which holds no per-task event history (D-113): the intake and a fold from scratch return it when an A2A
+    # task's start or completion is recorded a second time for the same ``a2a_task_id`` (D-172; ``agent_task_events``).
+    REPEATED_AGENT_TASK_EVENT = "repeated_agent_task_event"
 
 
 class ReduceResult(EidosModel):
@@ -121,7 +149,7 @@ def reduce(state: MissionState | None, record: EventRecord, applied: frozenset[E
         return _no(state, ReduceOutcome.OUT_OF_ORDER, f"sequence {event.sequence} arrived while {expected} was next")
     if event.sequence < expected:
         return _no(state, ReduceOutcome.STALE, f"sequence {event.sequence} is already applied; {expected} is next")
-    if state.status in _TERMINAL:
+    if state.status in _TERMINAL and not _resumable_completion(state, record.payload):
         return _no(state, ReduceOutcome.POST_TERMINAL, f"the mission is {state.status.value}, so it takes no further events")
 
     outcome = _apply(state, record)
@@ -132,6 +160,17 @@ def reduce(state: MissionState | None, record: EventRecord, applied: frozenset[E
 
 def _no(state: MissionState | None, outcome: ReduceOutcome, reason: str) -> ReduceResult:
     return ReduceResult(state=state, outcome=outcome, reason=reason)
+
+
+def _resumable_completion(state: MissionState, payload) -> bool:
+    """D-176: the one event a terminal mission still takes — an ``A2A_TASK_COMPLETED`` that concludes a task the state itself still shows
+    outstanding. False for ``completed``/``failed`` (only ``paused`` can hold an outstanding task at all) and false for an ordinary
+    admission-halt pause with nothing outstanding for the named task: this checks what the state already holds, never *why* it paused, since
+    ``MissionState`` records no such reason and none is added here (D-176 named only the ``agent_tasks`` fold as new)."""
+    if state.status is not MissionStatus.PAUSED or not isinstance(payload, A2ATaskCompletedPayload):
+        return False
+    task = next((t for t in state.agent_tasks if t.a2a_task_id == payload.a2a_task_id), None)
+    return task is not None and task.status in _NOT_YET_CONCLUDED_AGENT_TASK_STATUSES
 
 
 def _create(record: EventRecord) -> ReduceResult:
@@ -233,11 +272,52 @@ def _apply(state: MissionState, record: EventRecord) -> MissionState | _Reject:
             execution_time_used_ms=state.execution_time_used_ms + (payload.duration_ms or 0),
         )
 
-    if isinstance(payload, MissionPausedPayload):
-        problem = _check_node(state, payload.plan_id, payload.halt.step_id, None)
+    if isinstance(payload, A2ATaskStartedPayload):
+        problem = _check_node(state, payload.plan_id, payload.step_id, PlanStepKind.AGENT)
         if problem is not None:
             return problem
-        return _evolved(state, record, status=MissionStatus.PAUSED, status_reason=payload.halt.reason)
+        started = AgentTask(
+            agent_id=payload.agent_id,
+            status=AgentTaskStatus.SUBMITTED,
+            a2a_task_id=payload.a2a_task_id,
+            a2a_context_id=payload.a2a_context_id,
+            last_event=record.event.event_id,
+            plan_id=payload.plan_id,
+            step_id=payload.step_id,
+            started_at=record.event.occurred_at,
+        )
+        return _evolved(state, record, agent_tasks=fold_agent_task(state.agent_tasks, started))
+
+    if isinstance(payload, A2ATaskCompletedPayload):
+        problem = _check_node(state, payload.plan_id, payload.step_id, PlanStepKind.AGENT)
+        if problem is not None:
+            return problem
+        existing = next((t for t in state.agent_tasks if t.a2a_task_id == payload.a2a_task_id), None)
+        if existing is None:
+            return _Reject(f"a2a_task {str(payload.a2a_task_id)!r} has no recorded A2A_TASK_STARTED to complete (D-172)")
+        if existing.plan_id != payload.plan_id or existing.step_id != payload.step_id:
+            return _Reject(f"a2a_task {str(payload.a2a_task_id)!r} started for a different plan step")
+        completed = AgentTask(
+            agent_id=existing.agent_id,
+            status=payload.outcome,
+            a2a_task_id=existing.a2a_task_id,
+            a2a_context_id=existing.a2a_context_id,
+            latest_artifact=payload.artifact,
+            last_event=record.event.event_id,
+            plan_id=existing.plan_id,
+            step_id=existing.step_id,
+            started_at=existing.started_at,
+        )
+        return _evolved(state, record, agent_tasks=fold_agent_task(state.agent_tasks, completed))
+
+    if isinstance(payload, MissionPausedPayload):
+        step_ids = (payload.halt.step_id,) if payload.halt is not None else tuple(info.step_id for info in payload.awaiting)
+        for step_id in step_ids:
+            problem = _check_node(state, payload.plan_id, step_id, None)
+            if problem is not None:
+                return problem
+        reason = payload.halt.reason if payload.halt is not None else "; ".join(info.reason for info in payload.awaiting)
+        return _evolved(state, record, status=MissionStatus.PAUSED, status_reason=reason)
 
     if isinstance(payload, MissionCompletedPayload):
         if state.active_plan_id != payload.plan_id:

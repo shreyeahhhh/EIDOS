@@ -8,7 +8,10 @@ from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from eidos.contracts import (
+    A2AContextId,
+    A2ATaskId,
     AgentId,
+    AgentTaskStatus,
     ArtifactRef,
     CapabilityId,
     EventId,
@@ -19,8 +22,10 @@ from eidos.contracts import (
     PlanStepKind,
     StepId,
 )
-from eidos.runtime import HaltInfo, NodeResult, NodeStatus, VerificationVerdict
+from eidos.runtime import AwaitingInfo, HaltInfo, NodeResult, NodeStatus, VerificationVerdict
 from eidos.state import (
+    A2ATaskCompletedPayload,
+    A2ATaskStartedPayload,
     EventRecord,
     MissionCompletedPayload,
     MissionCreatedPayload,
@@ -52,6 +57,14 @@ def at(seconds: int) -> datetime:
 
 def event_id(number: int) -> EventId:
     return EventId(UUID(int=900_000 + number))
+
+
+def a2a_task_id(number: int) -> A2ATaskId:
+    return A2ATaskId(f"remote-task-{number}")
+
+
+def a2a_context_id(number: int) -> A2AContextId:
+    return A2AContextId(f"remote-context-{number}")
 
 
 def make_record(payload, *, state: MissionState, sequence: int, number: int | None = None, seconds: int | None = None) -> EventRecord:
@@ -140,6 +153,26 @@ class LogBuilder:
 
     def paused(self, step: str = "analyse", level: int = 2, reason: str = "held for review"):
         return self.add(MissionPausedPayload(plan_id=self.plan.plan_id, halt=HaltInfo(step_id=StepId(step), level=level, reason=reason)))
+
+    def paused_awaiting(self, *steps: str, level: int = 2, reason: str = "awaiting a remote A2A task"):
+        infos = tuple(AwaitingInfo(step_id=StepId(step), level=level, reason=reason) for step in steps)
+        return self.add(MissionPausedPayload(plan_id=self.plan.plan_id, awaiting=infos))
+
+    def a2a_started(self, step: str, *, task: int = 1, context: int | None = None):
+        agent = AGENT_OF[step]
+        return self.add(A2ATaskStartedPayload(
+            plan_id=self.plan.plan_id, step_id=StepId(step), agent_id=agent,
+            a2a_task_id=a2a_task_id(task), a2a_context_id=a2a_context_id(context) if context is not None else None,
+        ))
+
+    def a2a_completed(self, step: str, *, task: int = 1, outcome: AgentTaskStatus = AgentTaskStatus.COMPLETED,
+                       artifact: ArtifactRef | None = None, reason: str = "the remote task concluded"):
+        if outcome is AgentTaskStatus.COMPLETED and artifact is None:
+            artifact = ArtifactRef(f"artifact:{step}")
+        return self.add(A2ATaskCompletedPayload(
+            plan_id=self.plan.plan_id, step_id=StepId(step), a2a_task_id=a2a_task_id(task),
+            outcome=outcome, artifact=artifact, reason=reason,
+        ))
 
     def completed(self, verified: bool = True):
         return self.add(MissionCompletedPayload(plan_id=self.plan.plan_id, verified=verified))

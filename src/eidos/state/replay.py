@@ -24,6 +24,7 @@ from pydantic import Field, ValidationError, model_validator
 
 from eidos.contracts import EidosModel, EventId, MissionState
 
+from .agent_task_events import AgentTaskEventKey, agent_task_event_key, repeated_agent_task_event
 from .records import EventRecord
 from .reducer import ReduceOutcome, reduce
 from .step_events import StepEventKey, repeated_step_event, step_event_key
@@ -83,7 +84,11 @@ class Checkpoint(EidosModel):
 
 
 def _fold(
-    state: MissionState | None, applied: frozenset[EventId], seen: frozenset[StepEventKey], records: Iterable[EventRecord]
+    state: MissionState | None,
+    applied: frozenset[EventId],
+    seen: frozenset[StepEventKey],
+    task_seen: frozenset[AgentTaskEventKey],
+    records: Iterable[EventRecord],
 ) -> tuple[MissionState | None, ReplayRejection | None]:
     for record in records:
         result = reduce(state, record, applied)
@@ -96,6 +101,14 @@ def _fold(
                     sequence=record.event.sequence,
                     outcome=ReduceOutcome.REPEATED_STEP_EVENT,
                 )
+            repeated_task = repeated_agent_task_event(task_seen, record)  # the intake refuses this live (D-172), so a log it wrote never has one
+            if repeated_task is not None:
+                return state, ReplayRejection(
+                    code=ReplayRejectionCode.NOT_APPLICABLE,
+                    reason=repeated_task,
+                    sequence=record.event.sequence,
+                    outcome=ReduceOutcome.REPEATED_AGENT_TASK_EVENT,
+                )
         else:
             return state, ReplayRejection(
                 code=ReplayRejectionCode.NOT_APPLICABLE,
@@ -107,6 +120,9 @@ def _fold(
         key = step_event_key(record)
         if key is not None:
             seen = seen | {key}
+        task_key = agent_task_event_key(record)
+        if task_key is not None:
+            task_seen = task_seen | {task_key}
     return state, None
 
 
@@ -115,7 +131,7 @@ def replay(records: Iterable[EventRecord]) -> ReplayResult:
     materialized = tuple(records)
     if not materialized:
         return ReplayResult(rejection=ReplayRejection(code=ReplayRejectionCode.EMPTY_LOG, reason="there are no events to replay"))
-    state, rejection = _fold(None, frozenset(), frozenset(), materialized)
+    state, rejection = _fold(None, frozenset(), frozenset(), frozenset(), materialized)
     return ReplayResult(rejection=rejection) if rejection is not None else ReplayResult(state=state)
 
 
@@ -144,7 +160,7 @@ def resume(checkpoint: Checkpoint, tail: Iterable[EventRecord]) -> ReplayResult:
     is judged against nothing earlier: a repeat of an event from before the checkpoint is not seen here. For a log that replays, which is what a
     checkpoint is taken from, ``checkpoint + tail == full replay`` holds; to check a log end to end, replay it (D-157 item 4).
     """
-    state, rejection = _fold(checkpoint.state, frozenset(), frozenset(), tail)
+    state, rejection = _fold(checkpoint.state, frozenset(), frozenset(), frozenset(), tail)
     return ReplayResult(rejection=rejection) if rejection is not None else ReplayResult(state=state)
 
 

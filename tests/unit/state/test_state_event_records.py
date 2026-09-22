@@ -14,6 +14,7 @@ from pydantic import ValidationError
 from eidos.agents import ModelFailureKind
 from eidos.contracts import (
     AgentId,
+    AgentTaskStatus,
     CapabilityId,
     MissionEvent,
     MissionEventType,
@@ -21,9 +22,11 @@ from eidos.contracts import (
     PlanStepKind,
     StepId,
 )
-from eidos.runtime import HaltInfo, NodeResult, NodeStatus
+from eidos.runtime import AwaitingInfo, HaltInfo, NodeResult, NodeStatus
 from eidos.state import (
     PAYLOAD_TYPES,
+    A2ATaskCompletedPayload,
+    A2ATaskStartedPayload,
     EventRecord,
     MissionCompletedPayload,
     MissionFailedPayload,
@@ -42,6 +45,7 @@ from eidos.state import (
 
 from eidos_mission_factories import make_mission, make_mission_plan
 from eidos_state_factories import (
+    a2a_task_id,
     at,
     baseline_state_and_plan,
     event_id,
@@ -59,6 +63,8 @@ EMITTED = (
     MissionEventType.PLAN_COMPILED,
     MissionEventType.NODE_STARTED,
     MissionEventType.NODE_SETTLED,
+    MissionEventType.A2A_TASK_STARTED,
+    MissionEventType.A2A_TASK_COMPLETED,
     MissionEventType.MISSION_PAUSED,
     MissionEventType.MISSION_COMPLETED,
     MissionEventType.MISSION_FAILED,
@@ -80,6 +86,17 @@ def one_record_of_every_emitted_type() -> dict:
     by_type[MissionEventType.MISSION_FAILED] = make_record(
         MissionFailedPayload(plan_id=log.plan.plan_id, cause=MissionFailureCause.NO_RESULT, reason="no text"), state=log.state, sequence=6
     )
+    by_type[MissionEventType.A2A_TASK_STARTED] = make_record(
+        A2ATaskStartedPayload(plan_id=log.plan.plan_id, step_id=StepId("gather"), agent_id=AgentId(UUID(int=501)), a2a_task_id=a2a_task_id(1)),
+        state=log.state, sequence=7,
+    )
+    by_type[MissionEventType.A2A_TASK_COMPLETED] = make_record(
+        A2ATaskCompletedPayload(
+            plan_id=log.plan.plan_id, step_id=StepId("gather"), a2a_task_id=a2a_task_id(1),
+            outcome=AgentTaskStatus.COMPLETED, artifact=None, reason="the remote task concluded",
+        ),
+        state=log.state, sequence=8,
+    )
     return by_type
 
 
@@ -89,15 +106,15 @@ RECORDS = one_record_of_every_emitted_type()
 # --- the vocabulary is exactly what V0.5 emits -----------------------------------------------------------------------------------
 
 
-def test_payload_classes_exist_for_exactly_the_nine_types_v05_emits_and_each_names_its_own_type():
+def test_payload_classes_exist_for_exactly_the_eleven_types_this_package_emits_and_each_names_its_own_type():
     assert set(PAYLOAD_TYPES) == set(EMITTED)
     for event_type, payload_class in PAYLOAD_TYPES.items():
         assert payload_class.model_fields["event_type"].default is event_type
 
 
-def test_the_seven_types_v05_does_not_emit_are_exactly_these():
+def test_the_five_types_this_package_does_not_emit_are_exactly_these():
     assert {t.value for t in NOT_EMITTED} == {
-        "A2A_TASK_STARTED", "A2A_TASK_COMPLETED", "MCP_TOOL_CALLED", "RAG_SEARCH", "EVIDENCE_REJECTED", "REPLAN_TRIGGERED", "VERIFICATION_FAILED",
+        "MCP_TOOL_CALLED", "RAG_SEARCH", "EVIDENCE_REJECTED", "REPLAN_TRIGGERED", "VERIFICATION_FAILED",
     }
 
 
@@ -285,3 +302,58 @@ def test_a_paused_payload_carries_the_runs_own_halt_and_a_failure_names_a_typed_
         MissionCompletedPayload(plan_id=PlanId(UUID(int=1)), verified="yes")  # type: ignore[arg-type]
     with pytest.raises(ValidationError):
         PlanCompiledPayload(plan_id=PlanId(UUID(int=1)), plan_version=0)
+
+
+# --- V0.6 Step 4: A2A_TASK_STARTED / A2A_TASK_COMPLETED and the paused payload's two causes (D-166, D-169, D-174) --------------------------------
+
+
+def test_a_mission_pauses_for_exactly_one_cause_never_both_and_never_neither():
+    halt = HaltInfo(step_id=StepId("analyse"), level=2, reason="held")
+    with pytest.raises(ValidationError, match="exactly one reason"):
+        MissionPausedPayload(plan_id=PlanId(UUID(int=1)))  # neither
+    with pytest.raises(ValidationError, match="exactly one reason"):
+        MissionPausedPayload(
+            plan_id=PlanId(UUID(int=1)), halt=halt, awaiting=(AwaitingInfo(step_id=StepId("gather"), level=1, reason="awaiting"),)
+        )  # both
+    MissionPausedPayload(plan_id=PlanId(UUID(int=1)), halt=halt)  # halt alone: fine
+    MissionPausedPayload(
+        plan_id=PlanId(UUID(int=1)), awaiting=(AwaitingInfo(step_id=StepId("gather"), level=1, reason="awaiting"),)
+    )  # awaiting alone: fine
+
+
+def test_an_a2a_task_started_payload_names_its_agent_and_remote_task_and_the_context_is_optional():
+    started = A2ATaskStartedPayload(
+        plan_id=PlanId(UUID(int=1)), step_id=StepId("gather"), agent_id=AgentId(UUID(int=501)), a2a_task_id=a2a_task_id(1)
+    )
+    assert started.a2a_context_id is None
+    with_context = A2ATaskStartedPayload(
+        plan_id=PlanId(UUID(int=1)), step_id=StepId("gather"), agent_id=AgentId(UUID(int=501)),
+        a2a_task_id=a2a_task_id(1), a2a_context_id="remote-context-1",  # type: ignore[arg-type]
+    )
+    assert with_context.a2a_context_id == "remote-context-1"
+
+
+def test_an_a2a_task_completed_payloads_outcome_must_conclude_the_task_and_only_completed_carries_an_artifact():
+    for non_concluding in (AgentTaskStatus.SUBMITTED, AgentTaskStatus.WORKING, AgentTaskStatus.UNSPECIFIED):
+        with pytest.raises(ValidationError, match="never concludes a task"):
+            A2ATaskCompletedPayload(
+                plan_id=PlanId(UUID(int=1)), step_id=StepId("gather"), a2a_task_id=a2a_task_id(1), outcome=non_concluding, reason="x"
+            )
+    for concluding in (
+        AgentTaskStatus.COMPLETED, AgentTaskStatus.FAILED, AgentTaskStatus.CANCELED, AgentTaskStatus.REJECTED,
+        AgentTaskStatus.INPUT_REQUIRED, AgentTaskStatus.AUTH_REQUIRED, AgentTaskStatus.TIMED_OUT,
+    ):
+        A2ATaskCompletedPayload(
+            plan_id=PlanId(UUID(int=1)), step_id=StepId("gather"), a2a_task_id=a2a_task_id(1), outcome=concluding, reason="x"
+        )
+    A2ATaskCompletedPayload(
+        plan_id=PlanId(UUID(int=1)), step_id=StepId("gather"), a2a_task_id=a2a_task_id(1),
+        outcome=AgentTaskStatus.COMPLETED, artifact="artifact:gather", reason="x",  # type: ignore[arg-type]
+    )
+    with pytest.raises(ValidationError, match="carries no artifact"):
+        A2ATaskCompletedPayload(
+            plan_id=PlanId(UUID(int=1)), step_id=StepId("gather"), a2a_task_id=a2a_task_id(1),
+            outcome=AgentTaskStatus.FAILED, artifact="artifact:gather", reason="x",  # type: ignore[arg-type]
+        )
+    with pytest.raises(ValidationError):
+        A2ATaskCompletedPayload(plan_id=PlanId(UUID(int=1)), step_id=StepId("gather"), a2a_task_id=a2a_task_id(1), outcome=AgentTaskStatus.FAILED, reason="")
