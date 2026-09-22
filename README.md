@@ -7,7 +7,7 @@
 
 ## Status
 
-**V0.7 — Strategy & Candidate Generation: architecture accepted, Steps 2 to 5 (the data contracts, the bounded candidate generator, the feasibility gate, and close-out preparation) implemented, none pushed. V0.6 — A2A: Steps 1–6 of 9 implemented and pushed. V0.5 — the event log and the state reducer: complete as scoped. V0.4 — real local agents: complete as scoped.**
+**V0.7 — Strategy & Candidate Generation: closed as scoped, none pushed. V0.6 — A2A: Steps 1–6 of 9 implemented and pushed. V0.5 — the event log and the state reducer: complete as scoped. V0.4 — real local agents: complete as scoped.**
 
 This repository contains the project rules, the architecture knowledge base, the decision record,
 the V0.1 typed contracts (`eidos.contracts`), the V0.2 plan validator (`eidos.validation`), the V0.3
