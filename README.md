@@ -25,9 +25,10 @@ real-model recording has not been run.
 
 V0.6 moves the Research Agent behind one A2A boundary (D-175). The protocol/contract design is decided (`decisions.md` D-165 to D-176), researched directly against the published A2A Protocol
 Specification rather than assumed: a non-blocking `SUBMITTED`/`AWAITING` execution shape, `AgentTask`'s real lifecycle, one continuous event log across the pause, a hand-rolled `httpx` client (no
-`a2a-sdk`), and no fifth `MissionStatus`. Steps 1–4 of 9 are implemented — the `AgentTask`/state contract changes, the `eidos.runtime` non-blocking extension and the `eidos.state`
-event/reducer integration (`A2A_TASK_STARTED`/`A2A_TASK_COMPLETED`, the D-176 terminal exception) — none pushed. **No `eidos.a2a` package and no A2A dependency exist yet: no transport,
-client, webhook or remote agent** — see [progress.md](progress.md), "V0.6 One A2A Boundary".
+`a2a-sdk`), and no fifth `MissionStatus`. Steps 1–5 of 9 are implemented — the `AgentTask`/state contract changes, the `eidos.runtime` non-blocking extension, the `eidos.state`
+event/reducer integration, and now `eidos.a2a` itself (the client, the Research Agent's remote `WorkAgent`, the webhook-to-event converter) — none pushed. Re-verifying the wire format
+against the live spec while building the client corrected two Step 1 assumptions (`TaskState` casing, the JSON-RPC method names) and **found a real gap**: nothing yet un-pauses a mission once
+its one exempted completion event is accepted, so a resumed mission cannot record further events on the same log — reported, not silently patched. See [progress.md](progress.md), "V0.6 One A2A Boundary".
 
 Current status and the milestone ladder: [progress.md](progress.md).
 Decisions and unresolved questions: [decisions.md](decisions.md).

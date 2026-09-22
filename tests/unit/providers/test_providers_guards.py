@@ -84,8 +84,10 @@ def pyproject() -> dict:
 def test_the_provider_added_no_dependency_and_no_extra():
     project = pyproject()["project"]
     assert project["dependencies"] == ["pydantic>=2"]
-    assert set(project["optional-dependencies"]) == {"langgraph", "dev"}
-    assert project["optional-dependencies"]["dev"] == ["pytest", "eidos[langgraph]"]
+    # D-171 (V0.6 Step 5) added a second optional extra, "a2a" (httpx, the one dependency eidos.a2a needs) — the
+    # same shape as "langgraph" (D-116): an extra eidos.providers itself contributes nothing to and never imports.
+    assert set(project["optional-dependencies"]) == {"langgraph", "a2a", "dev"}
+    assert project["optional-dependencies"]["dev"] == ["pytest", "eidos[langgraph]", "eidos[a2a]"]
 
 
 def test_real_model_tests_are_registered_and_excluded_from_the_default_run_never_skipped():

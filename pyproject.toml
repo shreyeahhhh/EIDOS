@@ -19,9 +19,16 @@ dependencies = [
 langgraph = [
     "langgraph>=1.2.11,<2",
 ]
+# D-171: httpx is the one dependency eidos.a2a adds — no a2a-sdk. An optional extra, the same
+# pattern as langgraph (D-116): core installation and core tests never import it; only
+# eidos.a2a.transport does. The lower bound is the version verified against (V0.6 Step 5).
+a2a = [
+    "httpx>=0.27,<1",
+]
 dev = [
     "pytest",
     "eidos[langgraph]",
+    "eidos[a2a]",
 ]
 
 [tool.setuptools.packages.find]

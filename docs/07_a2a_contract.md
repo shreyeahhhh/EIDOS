@@ -1,16 +1,19 @@
 # 07 — A2A Contract
 
-**Status:** DERIVED — **the V0.6 protocol/contract design is accepted (2026-09-22, D-165 to D-176); Steps 1–4 of 9 are implemented (the `AgentTask`/state contract changes, the `eidos.runtime`
-non-blocking extension, and the `eidos.state` event/reducer integration) — see `progress.md`, "V0.6 One A2A Boundary". No A2A package, dependency or remote agent exists yet.**
+**Status:** DERIVED — **the V0.6 protocol/contract design is accepted (2026-09-22, D-165 to D-176); Steps 1–5 of 9 are implemented (the `AgentTask`/state contract changes, the `eidos.runtime`
+non-blocking extension, the `eidos.state` event/reducer integration, and now `eidos.a2a` itself: the client, the Research Agent's remote `WorkAgent`, the webhook converter) — see `progress.md`,
+"V0.6 One A2A Boundary". A real gap was found while building Step 5: a resumed mission cannot yet record further events on the same log (reported there, not fixed here).**
 **Derived from:** handoff §8, §9, §10, §50, §59, §62, §63
 **Authority:** This document is derived from `EIDOS_CLAUDE_CODE_HANDOFF.md` and subordinate to it.
 If this document and the handoff conflict, stop and report the conflict to the human owner.
 
-> **There is still no `eidos.a2a` package, no A2A dependency and no remote agent.** Per §50, A2A
-> arrives at V0.6 — **after** MissionState and the event reducer are reliable, which V0.5 closed
-> (`decisions.md` D-152 to D-164). See `decisions.md` D-026. What Steps 2–4 built lives in
-> `eidos.contracts`, `eidos.runtime` and `eidos.state` — the receiving end of the contract below,
-> not the A2A client, transport or webhook that will one day drive it.
+> **`eidos.a2a` now exists** (Step 5): the hand-rolled JSON-RPC client, the Research Agent's remote
+> `WorkAgent`, and the webhook-to-event converter. Re-verifying the wire format directly against the
+> live spec while building it corrected two details Step 1 had assumed from an earlier reading —
+> `TaskState`'s wire casing and the JSON-RPC method names — see `progress.md`'s Step 5 row for both.
+> What Steps 2–4 built lives in `eidos.contracts`, `eidos.runtime` and `eidos.state` — the receiving
+> end of the contract below; Step 5 is the sending end. No mission driver, no automatic resume, no
+> `tasks/cancel`, no streaming.
 >
 > **The design below is now decided**, not merely proposed: `decisions.md` D-165 to D-176, researched
 > directly against the published A2A Protocol Specification (a2a-protocol.org, v1.0) rather than
