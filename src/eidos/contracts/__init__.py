@@ -19,7 +19,7 @@ Those arrive at their own milestones — see progress.md.
 """
 
 from ._base import EidosModel
-from .agent_task import AgentTask
+from .agent_task import AgentTask, AgentTaskStatus
 from .enums import (
     AutonomyLevel,
     MissionEventType,
@@ -59,6 +59,7 @@ from .task_genome import TaskGenome
 __all__ = [
     "EidosModel",
     "AgentTask",
+    "AgentTaskStatus",
     "AutonomyLevel",
     "MissionEventType",
     "MissionStatus",

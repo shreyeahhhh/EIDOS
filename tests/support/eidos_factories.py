@@ -18,6 +18,7 @@ from eidos.contracts import (
     AgentId,
     AgentStep,
     AgentTask,
+    AgentTaskStatus,
     AutonomyLevel,
     CapabilityId,
     ControlStep,
@@ -115,7 +116,7 @@ def make_mission_event(**overrides) -> MissionEvent:
 
 
 def make_agent_task(**overrides) -> AgentTask:
-    fields = dict(agent_id=AgentId(uuid4()), status="pending")
+    fields = dict(agent_id=AgentId(uuid4()), status=AgentTaskStatus.SUBMITTED)
     fields.update(overrides)
     return AgentTask(**fields)
 

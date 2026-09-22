@@ -25,9 +25,11 @@ ALLOWED_ROOTS = {"__future__", "collections", "dataclasses", "enum", "types", "t
 ALLOWED_EIDOS = {"eidos.contracts", "eidos.runtime", "eidos.state"}
 
 VENDOR_NAMES = {
-    "anthropic", "claude", "openai", "gpt", "gemini", "mistral", "llama", "cohere", "ollama", "qdrant", "a2a", "mcp",
+    "anthropic", "claude", "openai", "gpt", "gemini", "mistral", "llama", "cohere", "ollama", "qdrant", "mcp",
     "langgraph", "langchain", "langsmith",
 }
+# "a2a" is deliberately not in this set: it is a protocol name, not a vendor, and decisions.md D-166/D-176 (V0.6 Step 2) explicitly permit
+# eidos.state to know about A2A task correlation and state — unlike a vendor SDK name, which stays forbidden everywhere in this package.
 LOWER_PACKAGES = ("contracts", "validation", "compiler", "runtime", "backends", "agents", "capabilities", "providers")
 FORBIDDEN_FOR_LOWER = {"state", "recording"}
 

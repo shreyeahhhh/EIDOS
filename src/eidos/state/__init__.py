@@ -9,8 +9,11 @@ Step 2 — the typed payloads and ``EventRecord`` (D-153, D-154, D-160).
 Step 3 — the pure reducer (D-155, D-156, D-160).
 Step 4 — the event log and intake, checkpoint, replay and the strict JSONL form (D-157).
 Step 6 — ``ExecutionRecord``, the derived read-only projection of a log (D-159).
+
+V0.6 Step 2 — the ``AgentTask`` status mapping and the D-176 fold primitive (``agent_tasks``), not yet wired into the reducer.
 """
 
+from .agent_tasks import AmbiguousAgentTaskCorrelation, fold_agent_task, node_status_for
 from .payloads import (
     PAYLOAD_TYPES,
     EmittedPayload,
@@ -51,6 +54,7 @@ from .replay import (
 
 __all__ = [
     "PAYLOAD_TYPES",
+    "AmbiguousAgentTaskCorrelation",
     "Checkpoint",
     "EmittedPayload",
     "EventLog",
@@ -84,7 +88,9 @@ __all__ = [
     "checkpoint_at",
     "dump_jsonl",
     "execution_record",
+    "fold_agent_task",
     "load_jsonl",
+    "node_status_for",
     "records_after",
     "reduce",
     "replay",
