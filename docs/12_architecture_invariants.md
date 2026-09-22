@@ -160,12 +160,12 @@ out-of-order event, agent restart and partial artifact (§50, §63).
 **Resolved:** `decisions.md` **D-011** — three roles separated. `event_id` is the **idempotency
 key**; a **monotonic per-mission sequence assigned by EIDOS at acceptance** provides the total order
 replay depends on; a producer-assigned per-`a2a_task_id` sequence for remote-lifecycle ordering is
-deferred (D-035). Ordering authority sits with EIDOS, not the producer — which follows from
-invariant 2 rather than from §10, which is silent on assignment.
+**resolved, negatively, by D-172 (2026-09-22): none exists on the wire to adopt**, verified directly against the published A2A specification. Ordering authority sits with EIDOS, not the producer —
+which follows from invariant 2 rather than from §10, which is silent on assignment. **D-036** (the `AgentTask` lifecycle state machine) is resolved by **D-166**: the real ten-value wire `TaskState`
+set plus EIDOS-observed `TIMED_OUT`, giving "accept/reject deterministically" a defined content, and the D-172 guard it needed turned out narrower than expected — "at most one `STARTED`, at most one
+`COMPLETED`, per task". **D-037** (shared vs separate event shapes) is resolved: the shared envelope V0.5 already built needed no change.
 
-**Still open:** D-036 (the `AgentTask` lifecycle state machine — **without it, "accept/reject
-deterministically" has no defined content**, and the V0.6 protocol tests cannot be written), D-037
-(shared vs separate event shapes), D-038 (bounding the processed-`event_id` set).
+**Still open:** D-038 (bounding the processed-`event_id` set).
 
 ## 9. The runtime is model-independent
 
@@ -361,7 +361,9 @@ These come from the handoff and are enforced through `CLAUDE.md` rather than thr
 | ~~repeated node events~~ | 8 | **Resolved by D-162** (V0.5): the intake and replay refuse a repeated `NODE_STARTED` or `NODE_SETTLED` for the same step of a plan; `MissionState` gains no per-node state |
 | D-164 | 8 | A `NODE_STARTED` recorded after the same step's `NODE_SETTLED` is accepted (out of lifecycle order; no counter is affected) |
 | ~~D-163~~ | 15 | **Resolved by D-163** (V0.5): D-158 item 1 was amended; the recorder wraps the agents, the verifier and the model port, and a halt is read from the run's result, in D-160 item 1's order |
-| D-036 | 8 | The `AgentTask` lifecycle state machine required for deterministic accept/reject |
+| ~~D-036~~ | 8 | **Resolved by D-166** (V0.6): the closed ten-value `AgentTask` lifecycle, plus EIDOS-observed `TIMED_OUT` |
+| ~~D-035~~ | 8 | **Resolved by D-172** (V0.6), negatively: no producer-assigned sequence exists on the wire to adopt |
+| ~~D-037~~ | 8 | **Resolved** (V0.6): the shared V0.5 envelope needed no change; A2A fields live only in its payloads |
 | D-046 | 7 | Numerical bound values (V0.2; none established in V0.1 by decision) |
 | D-043 | 7 | Declared plan limits vs actual execution counters share names but count differently |
 | D-029 | 7 | The RAG reformulation loop has no stated bound |

@@ -94,12 +94,12 @@ reliability.
 **V0.1 scope:** `event_id` as idempotency key, plus the EIDOS-assigned mission sequence. No
 A2A-specific producer ordering.
 
-> **Still open:** **D-035** (A2A producer sequence), **D-036** (the `AgentTask` lifecycle state
-> machine), **D-037** (one shared event shape vs separate internal/external shapes), **D-038**
+> **Resolved for V0.6 (2026-09-22):** **D-035** (no producer sequence exists on the wire to adopt — D-172), **D-036** (the closed ten-value `AgentTask` lifecycle — D-166), **D-037** (the shared envelope
+> already built for V0.5 is sufficient, unchanged — see D-037's own resolution). **Still open: D-038**
 > (bounding and persisting the processed-`event_id` set). None blocks V0.1.
 >
-> **D-036 is the sharpest.** §10 mandates deterministic accept/reject against a lifecycle, and §8
-> gives `AgentTask.status` without enumerating states or legal transitions. The V0.6 protocol tests
+> **D-036 was the sharpest**, now resolved. §10 mandates deterministic accept/reject against a lifecycle, and §8
+> gave `AgentTask.status` without enumerating states or legal transitions; D-166 supplies both. The V0.6 protocol tests
 > for late event, out-of-order event, agent restart and partial artifact cannot be written until it
 > is answered.
 
@@ -151,8 +151,8 @@ quality-estimate type (**D-016**), `evidence_requirements` (**D-031**), evidence
 **Built at V0.5 (D-153):** a **typed, discriminated payload representation keyed by event type** — never an untyped mapping — as `EventRecord` in `eidos.state`, beside the unchanged
 `MissionEvent` envelope. It covers the types V0.5 emits; the A2A, MCP and RAG payloads stay undefined (D-075, Open).
 
-> **Still open:** **D-037** (one shared event shape vs separate internal/external shapes),
-> **D-075** (per-type payload definitions, resolving incrementally as milestones land),
+> **Resolved for V0.6 (2026-09-22): D-037** — the shared envelope already built for V0.5 needed no change; A2A-specific fields live only in the `A2A_TASK_STARTED`/`A2A_TASK_COMPLETED` payloads (D-174),
+> never on the envelope. **Still open: D-075** (per-type payload definitions, resolving incrementally as milestones land),
 > **D-076** (what payloads must *contain* for faithful replay).
 >
 > **D-076 carries the real risk.** D-010a makes MissionState a materialized view over the event log,
@@ -346,9 +346,9 @@ see `decisions.md` **D-017**.
 | ~~D-010b~~ | **Resolved for V0.5 by D-157** — a checkpoint is a value taken on request; storage stays with D-017 | V0.5 |
 | ~~D-126~~ | **Resolved by D-154** — `NODE_STARTED`, `NODE_SETTLED` and `MISSION_PAUSED` are added (sixteen types) | V0.5 |
 | D-041 | Evidence and final mission-result fields | V0.4, V0.8 |
-| D-036 | The `AgentTask` lifecycle state machine "validate against lifecycle" presupposes | V0.6 |
-| D-037 | One shared event shape, or separate internal and external shapes? | V0.6 |
-| D-035 | Do A2A events carry a producer-assigned per-task sequence? | V0.6 |
+| ~~D-036~~ | **Resolved by D-166** — the closed ten-value `AgentTask` lifecycle, plus EIDOS-observed `TIMED_OUT` | V0.6 |
+| ~~D-037~~ | **Resolved (V0.6)** — the shared V0.5 envelope needed no change; A2A fields live only in its payloads | V0.6 |
+| ~~D-035~~ | **Resolved by D-172, negatively** — no producer sequence exists on the wire | V0.6 |
 | D-038 | Bounding and persisting the processed-`event_id` set | V0.5+ — answered for V0.5 only (D-155, D-157); stays Open |
 | D-017 | Is the event log or a state snapshot authoritative for persistence and replay? | V0.5+ — the log is authoritative for V0.5 (D-157); persistence stays Open |
 | D-033 | Does `tenant_id` propagate to nested models, or stay root-only? | V0.1 |

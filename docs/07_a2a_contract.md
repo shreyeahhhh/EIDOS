@@ -1,13 +1,18 @@
 # 07 — A2A Contract
 
-**Status:** DERIVED — **DEFERRED to V0.6.** Specification only; nothing is implemented.
+**Status:** DERIVED — **the V0.6 protocol/contract design is accepted (2026-09-22, D-165 to D-176); nothing is implemented.**
 **Derived from:** handoff §8, §9, §10, §50, §59, §62, §63
 **Authority:** This document is derived from `EIDOS_CLAUDE_CODE_HANDOFF.md` and subordinate to it.
 If this document and the handoff conflict, stop and report the conflict to the human owner.
 
 > **Nothing in this document is implemented.** There is no `eidos.a2a` package, no A2A dependency
 > and no remote agent. Per §50, A2A arrives at V0.6 — **after** MissionState and the event reducer
-> are reliable. See `decisions.md` D-026.
+> are reliable, which V0.5 closed (`decisions.md` D-152 to D-164). See `decisions.md` D-026.
+>
+> **The design below is now decided**, not merely proposed: `decisions.md` D-165 to D-176, researched
+> directly against the published A2A Protocol Specification (a2a-protocol.org, v1.0) rather than
+> assumed. `progress.md`'s "V0.6 One A2A Boundary" section summarises it. Sections 1 to 5 below are
+> unchanged by that design — it refines and extends them, it does not contradict them.
 
 ---
 
@@ -54,9 +59,10 @@ V0.1 because §50 explicitly lists it among the Core Contracts, kept minimal and
 **No A2A behaviour is implemented in V0.1.** The A2A fields being optional is what makes the model
 honest in a world without A2A, and what lets V0.6 populate them without a contract change.
 
-⚠️ `status` semantics remain Open under **D-036**. Until the state set and legal transitions are
-defined, `status` is deliberately unconstrained and **nothing may branch on its value** — a
-transition check written against an undefined lifecycle would encode D-036 silently.
+`status` semantics are decided by **D-166** (resolves D-036): the real ten-value wire `TaskState` set
+plus EIDOS-observed `TIMED_OUT`, never collapsed early, with a separate mapping to `NodeStatus`. Not
+yet implemented — `AgentTask.status` in code is still the opaque string D-081 left it as, pending
+V0.6 Step 2.
 
 Per **D-033**, `AgentTask` is a nested model and does **not** carry `tenant_id`.
 
@@ -66,8 +72,9 @@ exempt from D-053's UUID rule, because the remote A2A system assigns them and EI
 
 `latest_artifact` is **`ArtifactRef | None`**, where `ArtifactRef` is an opaque, string-backed
 reference exempt from D-053, following D-095 since artifacts come from remote agents (**D-098**). **No
-`Artifact` model is created** — the handoff never defines what an artifact contains. `status` is an
-**opaque string**, and nothing may branch on it until D-036 defines the lifecycle (**D-081**).
+`Artifact` model is created** — the handoff never defines what an artifact contains. `status` is
+still an **opaque string in code today** — D-081's reason for keeping it so is discharged by **D-166**
+(§2 above), which defines the closed lifecycle; the field itself becomes typed at V0.6 Step 2, not yet.
 
 ## 3. The non-negotiable rules
 
@@ -123,26 +130,24 @@ V0.6 cannot begin until:
 
 | Prerequisite | Where |
 |---|---|
-| MissionState field set and reducer contract decided | `decisions.md` D-010 |
-| Event ordering domain and idempotency key decided | `decisions.md` D-011 |
-| A2A SDK, protocol version and transport chosen | `decisions.md` D-023 |
-| V0.5 complete — "before adding A2A, state handling must already be reliable" (§50) | `progress.md` |
+| MissionState field set and reducer contract decided | resolved — `decisions.md` D-010a (V0.1), D-155/D-157 (V0.5) |
+| Event ordering domain and idempotency key decided | resolved — `decisions.md` D-011 (V0.1) |
+| A2A SDK, protocol version and transport chosen | resolved — `decisions.md` **D-171**: a hand-rolled `httpx` client over A2A v1.0, no `a2a-sdk` |
+| V0.5 complete — "before adding A2A, state handling must already be reliable" (§50) | resolved — `progress.md`, closed 2026-09-21 |
 
-D-011 is the sharpest of these: the wire format determines what ordering guarantees are actually
-available, and the duplicate/late-event semantics in §4 above cannot be specified without it.
+All four prerequisites are resolved. What is **not** yet true is code: V0.6 Step 2 (the `AgentTask` contract extension) has not started (`progress.md`).
 
 ---
 
 ## Open questions
 
-| Id | Question |
-|---|---|
-| D-023 | Which A2A SDK, protocol version and transport |
-| D-011 | Event ordering domain and idempotency key — constrains what the wire format must carry |
-| D-010 | MissionState fields and reducer contract |
-| — | Which agent moves across the boundary first. §50's example is the Research Agent, phrased as an example rather than a decision |
-| — | Timeout values, retry policy at the boundary, and how a partial artifact is represented |
-| — | How `a2a_context_id` relates to `mission_id` and `execution_id` |
+None of the questions this document originally raised are still open. D-023, D-011 and D-010 are resolved (table above). "Which agent moves first" is **D-175** (Research Agent). "Timeout values..." is
+**D-173** (three separate concepts, layered as described there; the exact adapter-level deadline number is pinned at implementation, never invented, same discipline as D-046). "How `a2a_context_id` relates to
+`mission_id`/`execution_id`" is answered by not forcing a relationship: per the published spec, `a2a_context_id` is opaque and server-assigned on first use, exactly as **D-095** already anticipated; EIDOS never
+derives it from or ties it to an EIDOS identifier.
+
+What remains genuinely open, from `decisions.md`'s own "Carried forward, not decided" note on V0.6 (in `progress.md`): **D-038** (bounding/persisting the applied-`event_id` set, unaffected in kind by a
+longer-lived mission), **D-017** (durable persistence), and whether EIDOS ever actively cancels an in-flight A2A task (not built, not needed for V0.6's minimal slice).
 
 ## Out of scope for this document
 

@@ -49,7 +49,9 @@ refuse a repeated `NODE_STARTED` or `NODE_SETTLED` for the same step of a plan, 
 recorded after the same step's settlement). D-163 (the admission guard is not wrapped) was resolved by amending D-158 item 1; the recorder is unchanged. A real-model recording was not run (not required). See "V0.5 Mission State + Event
 Reducer" and "V0.5 close-out review" below.
 
-There is still no planner, no A2A, no MCP, no RAG, no persistence, no telemetry, no API and no frontend.
+**V0.6 (One A2A Boundary): the protocol and contract design is accepted (2026-09-22; D-165 to D-176); no code exists yet.** The owner directed research against the published A2A Protocol Specification and the actual `a2a-sdk` dependency graph before any transport choice, then ruled on all twelve items. This resolves **D-023, D-035, D-036, D-037** and amends **D-160** ruling 4 narrowly (**D-176**): an admission-guard `paused` mission is unchanged from V0.5; a `paused` mission caused by an A2A-awaiting pause is the one exception, resumable on the same log. No fifth `MissionStatus`. No code changed. See "V0.6 One A2A Boundary" below.
+
+There is still no planner, no MCP, no RAG, no persistence, no telemetry, no API and no frontend, and no A2A code — only its contract.
 
 Real-model runs have been recorded (V0.4; see "The first real baseline run" and the sections after it). They record what happened in those runs and are not a benchmark: no quality
 metric exists anywhere in this repository, and the only latencies recorded are the first run's one trivial completion and the runtime-reported durations of the later runs' calls.
@@ -58,7 +60,7 @@ metric exists anywhere in this repository, and the only latencies recorded are t
 
 - [x] `CLAUDE.md` — permanent rules, 18 architecture invariants
 - [x] `progress.md` — this file
-- [x] `decisions.md` — 115 Accepted, 45 Open, 5 Deferred (counts current as of the latest decision below)
+- [x] `decisions.md` — 132 Accepted, 40 Open, 5 Deferred (counts current as of the latest decision below)
 - [x] `README.md`, `pyproject.toml`, `.gitignore`
 - [x] `docs/01`–`docs/12` — the twelve documents required by handoff §81
 - [x] `src/eidos/` and `src/eidos/contracts/` — docstring only, no code
@@ -80,7 +82,7 @@ hold, failure cases are covered, documentation matches reality, a git checkpoint
 | **V0.3** LangGraph Runtime | Map `SEQUENTIAL`, `PARALLEL`, `ROUTE`, `VERIFY`, `RETRY`, `REPLAN` into runtime nodes. Mock agents. | **Complete as scoped — 2026-09-20 (D-112 to D-130). Step 2 (compiled form and `compile_plan`, 276 tests), Step 3 (runtime types, ports, admission, prior outcomes and the sequential reference executor, 431 tests), Step 4 (the LangGraph extra, the S1–S10 spike, the adapter and conformance with the reference executor, 353 tests) and Step 5 (scenario tests, 49 tests) are done.** Narrowed from §50's list: only `agent` and `VERIFY` compile; `ROUTE`, `RETRY`, `REPLAN`, `TERMINATE`, `HUMAN_APPROVAL` are rejected at compile time and D-012 stays Open. **Not delivered, by scope:** mapping `ROUTE`, `RETRY` and `REPLAN` (D-012 and D-125 stay Open), and any importable mock agent — work is exercised by scripted test doubles only, and no product mock agents exist (see "V0.3 close-out" below). |
 | **V0.4** Real Local Agents | Research, Analysis, Verification. Baseline workflow end-to-end. | **Complete as scoped — 2026-09-21 (D-131 to D-151).** `eidos.agents` (the model seam, the artifact store, Research, Analysis and a deterministic Verification rule set), `eidos.capabilities`, `eidos.baseline` and `eidos.providers`; 2,053 tests pass, 2 real-model tests deselected. The baseline works end to end **with a scripted model** on both backends, and **with a real local model the committed opt-in test (4,096 output tokens, 240 s), run once, finished with a verifier PASS** (three deterministic rules; no quality measured). Smaller budgets had failed, as recorded (D-149, D-150). **Not delivered, by scope:** a planner, replan, events and replay, tools, A2A, MCP, RAG and persistence; D-151 (Open) is deliberately left. See "V0.4 close-out review". |
 | **V0.5** MissionState + Event Reducer | `MissionEvent`, `MissionState`, `StateReducer`, checkpoints, replay. §50: state handling must be reliable **before** A2A. | **Complete as scoped — 2026-09-21 (D-152 to D-164).** The event log, a pure outcome-returning reducer, checkpoint and replay, recording adapters outside the runtime, and a thin derived `ExecutionRecord`; in memory with a JSONL round trip, no durable store. Resolves D-010b, D-039 and D-126; D-151, D-129, D-059, D-015 and D-017 stay Open. The intake and replay refuse a repeated node event (D-162); **D-164 stays Open** (D-163 was resolved by amending D-158 item 1). 2,524 tests pass in the default suite. |
-| **V0.6** One A2A Boundary | Move exactly one agent into an independent process. Test: normal completion, timeout, duplicate event, late event, agent restart, partial artifact, failure. | Not started — deferred (D-026) |
+| **V0.6** One A2A Boundary | Move exactly one agent into an independent process. Test: normal completion, timeout, duplicate event, late event, agent restart, partial artifact, failure. | **Protocol/contract design accepted 2026-09-22 (D-165 to D-176), resolving D-023, D-035, D-036, D-037; D-160 amended by D-176. No code — not started.** |
 | **V0.7** MCP | 2–3 real tools only (`search_documents`, `retrieve_evidence`). Test: successful call, invalid arguments, timeout, unavailable tool, unauthorized call, duplicate call. | Not started — deferred (D-027) |
 | **V0.8** Agentic RAG | Qdrant, local embeddings, retrieval, reranking, evidence judge. | Not started — deferred (D-028) |
 | **V0.9** Telemetry | Structured event logging. Measure latency, tokens, agent calls, tool calls, A2A interactions, RAG rounds, retries, quality. | Not started |
@@ -1266,7 +1268,66 @@ labelled lower bound).
 
 **Update (2026-09-21, after the review).** The owner resolved **D-163** by amending D-158 item 1 to match the recording and observer boundary as built: the agents, the verifier and the model port are wrapped, the
 plan stages come from the `observer` hook on `run_baseline`, and a halt is read from the run's result. The recorder was not redesigned and no code changed. **D-164 stays Open by the owner's ruling, and V0.5 is not
-reopened for it.** The default suite was rerun after the documentation change: **2,524 passed, 2 deselected, 118.44 s.** The V0.5 commits were then pushed to origin/master. V0.6 has not been started.
+reopened for it.** The default suite was rerun after the documentation change: **2,524 passed, 2 deselected, 118.44 s.** The V0.5 commits were then pushed to origin/master.
+
+---
+
+## V0.6 One A2A Boundary — protocol and contract design accepted, no code (2026-09-22)
+
+**Step 1 — the exploration, the protocol research and the decision record — is done.** Read-only exploration (D-165 to D-176 drafted with options and a recommendation for each), then owner-directed research against the
+published A2A Protocol Specification (a2a-protocol.org, v1.0) and the actual `a2a-sdk` dependency graph before any transport choice was made, then the owner's rulings, recorded as **D-165 to D-176 (Accepted)**. This
+family resolves **D-023, D-035, D-036, D-037** and amends **D-160** ruling 4 (**D-176**, narrowly: an admission-guard `paused` mission is unchanged from V0.5; a `paused` mission caused by an A2A-awaiting pause is the
+one exception, resumable on the same log). **No fifth `MissionStatus`. No code changed. Nothing in V0.1–V0.5's shipped behaviour is different** except that one amendment, which does not change anything reachable
+before V0.6 code exists.
+
+### The approved shape
+
+- **Non-blocking execution (D-165):** `WorkStatus.SUBMITTED`, `NodeStatus.AWAITING`, `RunOutcome.AWAITING`, `RunResult.awaiting: tuple[AwaitingInfo, ...]` (more than one node can be simultaneously outstanding, unlike a
+  halt). Submission itself stays one ordinary synchronous port call — A2A's own spec confirms the task id returns synchronously — only *completion* is asynchronous. Nothing protocol-specific ever touches `eidos.runtime`.
+- **`AgentTask` (D-166, D-168):** `status` is the real ten-value wire `TaskState` set plus EIDOS-observed `TIMED_OUT`, never collapsed early; a separate, explicit, tested mapping to `NodeStatus` carries EIDOS's own
+  decision about each state. Gains `plan_id`, `step_id`, `started_at` (all optional, additive — checked against D-048, D-033, D-082, D-095, D-096, D-098: no contradiction).
+- **One continuous `EventLog` across the pause (D-167, subject to D-176):** confirmed against the shipped code that `record_baseline(log=...)` and `Recorder` already support this with no new plumbing; the one real
+  blocker was the reducer's unconditional `PAUSED`-is-terminal check, resolved by **D-176**'s narrow, cause-keyed amendment.
+- **`MissionStatus.PAUSED` reused (D-169, subject to D-176):** `MissionPausedPayload` carries exactly one of `halt: HaltInfo` or `awaiting: tuple[AwaitingInfo, ...]` (non-empty), the same "exactly one of two" idiom
+  already used by `ReplayResult`/`LoadResult`. `HaltInfo` itself is untouched.
+- **Caller-orchestrated resume (D-170):** no built-in mission driver or background auto-resume loop. The whole "wait, then continue" story is two ordinary calls a caller makes — append one event, then call
+  `record_baseline` again — matching D-119/D-020's mission driver staying unassigned to any milestone.
+- **Transport (D-171, resolves D-023):** a hand-rolled client over `httpx` plus the existing `pydantic`, speaking A2A v1.0's JSON-RPC directly — no `a2a-sdk` dependency (its core install alone pulls in `protobuf`,
+  `google-api-core`, `googleapis-common-protos`, `json-rpc`, `culsans`, verified from its actual `pyproject.toml`). The EIDOS surface is exactly `message/send`, `tasks/get`, one webhook shape. Protocol conformance
+  tests required.
+- **No producer sequence (D-172, resolves D-035 negatively):** verified against the spec that none exists on the webhook path. Idempotency stays `event_id` (D-011, unchanged); lateness/duplication is a legal-transition
+  guard keyed by `a2a_task_id`, narrower than first proposed once D-174 was settled: "at most one `STARTED`, at most one `COMPLETED`, per task" — the same shape D-162 already built for local node events.
+- **Three separate timeout concepts, no new `SystemLimits` dimension (D-173):** transport timeout (adapter HTTP client), A2A task deadline (adapter-level config, produces `TIMED_OUT`), mission execution budget (existing
+  counters, unchanged rule; a remote node's duration is computed from `occurred_at` timestamps via `AgentTask.started_at`, never a cross-process monotonic subtraction).
+- **Exactly two event types (D-174):** `A2A_TASK_STARTED`, `A2A_TASK_COMPLETED` (already reserved in the vocabulary since D-090) — no new `MissionEventType` member. Completion carries a typed outcome; no separate
+  `FAILED`/`TIMED_OUT`/`CANCELED` event types. An intermediate `WORKING` notification is observed by the adapter and produces no event.
+- **Research Agent is the single boundary (D-175).**
+- **The new reducer operation, named (D-176):** folding `agent_tasks` needs a third pattern beyond the two the reducer already has (append-only for `plans`; first-wins-refuse-the-repeat for node settlement, D-162) —
+  find the existing `AgentTask` by `a2a_task_id` and replace that one tuple entry; `A2A_TASK_STARTED` appends instead, since D-172's guard already refuses a second `STARTED` for one id. `MissionState.agent_tasks` stays
+  an immutable tuple (D-082 untouched); only the fold rule is new.
+
+### Implementation sequence (proposed; unchanged in shape from the exploration, Step 1 now done)
+
+| Step | What | Proves |
+|---|---|---|
+| **1** | Exploration, protocol research, the decision record | **Done** — D-165 to D-176 recorded; D-023, D-035, D-036, D-037 resolved; D-160 amended by D-176 |
+| **2** | `AgentTask` contract extension: `plan_id`, `step_id`, `started_at`, the closed `TaskState`-plus-`TIMED_OUT` enum replacing the opaque `status` string | Round-trips with the new fields; the lifecycle enum rejects an unenumerated string; the four original V0.1 fields are unaffected |
+| **3** | Runtime extension: `WorkStatus.SUBMITTED`, `NodeStatus.AWAITING`, `RunOutcome.AWAITING`, `RunResult.awaiting`, `AwaitingInfo` | `RunResult`'s validator accepts the new shape the way it already does `halt`/`NOT_REACHED`; no executor control-flow change; mutation-checked like every other runtime change |
+| **4** | `eidos.state`: `A2A_TASK_STARTED`/`A2A_TASK_COMPLETED` payloads, the `NodeStatus` mapping (D-166), the `agent_tasks` find-and-replace fold (D-176), the `agent_task_events.py` guard (D-172) | Duplicate `event_id` ignored; a second `STARTED`/`COMPLETED` for one `a2a_task_id` refused, live and on replay, at the same record; the `paused`-cause-aware terminal check (D-176) holds the admission-halt case byte-for-byte |
+| **5** | `eidos.a2a` (new package): the hand-rolled client, the non-blocking `WorkAgent` implementation, the webhook receiver | A scripted/fake transport for unit tests, exactly as `ScriptedModel` stands in for a real model; the submission call is shown not to block |
+| **6** | The recording adapter: appends to a caller-held, still-open `EventLog` after the owning run has returned | The resulting log replays; `checkpoint_at`/`resume`/`records_after` need no change |
+| **7** | `tests/protocol/`: normal completion, timeout, duplicate event, late event, out-of-order event, agent restart, partial artifact, failure — written against D-166's lifecycle, per §59, before the implementation they cover | Every scenario asserts `MissionState` stays authoritative, the remote agent never mutates it, `task_id`/`context_id` are preserved |
+| **8** | Scenario: submit → pause `AWAITING` → external completion → resume via `PriorOutcomes` → `VERIFY` → complete, on the reference executor | The whole mission's log — spanning the pause — replays from a fresh interpreter with no agent invoked |
+| **9** | Close-out: full suite, LangGraph-blocked unit suite, import audit, frozen-path check, mutation checks, docs | Same rigor as V0.5's close-out |
+
+### Carried forward, not decided
+
+Nothing from D-023, D-035, D-036 or D-037 remains open. What genuinely stays open, unaffected by today's rulings: **D-038** (bounding/persisting the applied-`event_id` set — a longer-lived, paused mission does not change
+its kind, only how long it might matter, and it stays with D-017); **D-017** (durable persistence, still not built); **D-129** (the general artifact/data-flow question — a remote task's artifact, once produced, is
+written exactly once at final settlement, the same write-once rule D-147 already enforces, needing no store change); whether EIDOS ever actively cancels an in-flight A2A task (`tasks/cancel` — not built, not needed for
+V0.6's minimal slice, left for a later milestone if wanted). Two small items are pinned by tests at implementation rather than decided here, matching D-118's own precedent: whether a `COMPLETED` report with no artifact
+maps to `SUCCEEDED` or `NO_RESULT` (D-166 proposes: `NO_RESULT`, since a completed task with nothing usable is not a failure of execution), and the exact adapter-level deadline value for `TIMED_OUT` (D-173 — a number,
+never invented here, same discipline as D-046).
 
 ---
 
@@ -1302,7 +1363,6 @@ Highest-impact first.
 | Item | Blocks | Why it matters |
 |---|---|---|
 | **D-015** verification confidence computation | V0.4 verification, V1.2 | §31 compares a scalar confidence against a threshold while §18 forbids trusting a model-asserted score. Implementing §31 naively builds the exact anti-pattern the handoff warns against. **V0.4 (D-138):** the verifier is a deterministic rule set, no model verdict, no scalar; stays Open for a scalar (V1.2). |
-| **D-036** `AgentTask` lifecycle state machine | V0.6 | §10 mandates deterministic accept/reject "against lifecycle"; §8 never enumerates states or transitions. V0.6 protocol tests cannot be written without it. |
 | **D-043** declared plan limits vs execution counters | **V0.3** (corrected 2026-09-19; was mislabelled V0.2/V0.3) | V0.2 can only count *declared* steps on a static plan, so it needs no reconciliation. The ambiguity becomes live once the V0.3 runtime exists to count actual invocations. Most likely of the bound family to cause a real defect *then*. **V0.3 (D-119, D-127): dormant** — no runtime counting is performed and each node is dispatched at most once per run; still Open. |
 | **D-046** numerical bound values | V0.2 values, V0.9+ tuning | Mechanism is unblocked (D-103). Governs only the actual numbers for all seven bound dimensions; never presented as tuned before V0.9 telemetry. |
 | **D-111** V0.2 implementation details left unspecified | none blocking | Eight small behaviours implemented conservatively (identity mismatch under SCHEMA; strict `accepted`; dependency re-check; complexity skip rules; limits range; violation order; two exception exports; report carries `plan_id` only). Cheap to reverse; awaiting confirmation. |
@@ -1339,6 +1399,7 @@ Full detail for each is in [decisions.md](decisions.md).
 
 | Date | Milestone | Outcome |
 |---|---|---|
+| 2026-09-22 | **V0.6 protocol and contract design accepted (D-165 to D-176); no code** | Read-only exploration, then owner-directed research against the published A2A Protocol Specification (v1.0) and the actual `a2a-sdk` dependency graph, then two rounds of owner rulings. Recorded **D-165 to D-176 (Accepted)**: a non-blocking `SUBMITTED`/`AWAITING` execution shape; `AgentTask`'s closed ten-value lifecycle with a separate mapping to `NodeStatus`; one continuous `EventLog` across the pause; `AgentTask` gains `plan_id`/`step_id`/`started_at`; `MissionStatus.PAUSED` reused, payload-distinguished; caller-orchestrated resume, no built-in driver; a hand-rolled `httpx` client over A2A v1.0, no `a2a-sdk`; no producer sequence (verified none exists on the wire); three separate timeout concepts, no new `SystemLimits` dimension; exactly two event types; Research Agent as the sole boundary. Resolved **D-023, D-035, D-036, D-037**. **Found and reported, not silently resolved, a contradiction** between the newly-approved D-167/D-169 and the already-shipped D-160 ruling 4 (`paused` unconditionally terminal); the owner ruled **D-176**, a narrow, cause-keyed amendment — an admission-guard pause is unchanged; an A2A-awaiting pause is the one exception. Decision counts: **132 Accepted, 40 Open, 5 Deferred.** Updated `docs/07`, `docs/06`, `docs/12`, `docs/03`, `tests/protocol/README.md`, the README, this file. **No source code changed; the full default suite was rerun for confirmation** (unaffected, as expected). Step 2 not started. |
 | 2026-09-21 | **D-163 resolved (D-158 item 1 amended); D-164 left Open; V0.5 pushed** | The owner resolved D-163 by amending D-158's wording to match the implemented recording and observer boundary (the agents, the verifier and the model port are wrapped; the plan stages come from the `observer` hook; a halt is read from the run's result). **No code changed and the recorder was not redesigned.** D-163 moved to Accepted (116 Accepted, 44 Open, 5 Deferred). D-164 stays Open and V0.5 was not reopened for it. Updated D-158, D-162, the README, `docs/03` and `docs/12`. Reran the default suite: **2,524 passed, 2 deselected (118.44 s)**. Pushed the V0.5 commits to origin/master. V0.6 not started. |
 | 2026-09-21 | **V0.5 closed as scoped; D-162 ruled (the intake refuses repeated node events); D-163 and D-164 recorded (Open)** | The owner approved D-162 item 1 with the recommended option and kept items 2 to 10 unless one contradicted an Accepted decision. **Implemented the guard:** `eidos.state.step_events`, the intake and the fold refuse a repeated `NODE_STARTED` or `NODE_SETTLED` for the same step of a plan (`REPEATED_STEP_EVENT`), with no per-node state in `MissionState`; removed `ExecutionRecord.repeated_step_events` (a replayed log has none); 21 of 21 mutations caught. **Checked D-162 items 2 to 10 against the Accepted decisions:** item 7 contradicts the wording of D-158 item 1 (the admission guard is not wrapped), so it is **not** kept and is recorded as D-163 (Open); the adjacent question of a start after a settlement is D-164 (Open). Recorded D-162 as Accepted, updated the docs and this file. **Evidence:** full default suite **2,524 passed, 2 deselected (107.66 s)**; unit suite with the LangGraph family blocked **1,985 passed (22.00 s)**; an independent import audit (no layer violation); frozen paths unchanged (`MissionState` and `MeasuredFacts` untouched). All twelve acceptance criteria met; V0.5 closed as scoped. The real-model recording was not run. Nothing pushed. |
 | 2026-09-21 | **V0.5 Step 8: close-out review prepared (not accepted)** | Ran the full default suite (**2,503 passed, 2 deselected, 136.19 s**), the unit suite with the LangGraph family blocked (**1,964 passed, 29.29 s**), an independent AST import audit of `src/eidos` (no layer violation) and a frozen-path check (the handoff and the V0.3 and V0.4 packages unchanged apart from the approved observer hook and three event types). Wrote "V0.5 close-out review" and marked each acceptance criterion with its evidence; **criterion 4 is met except for the D-162 item 1 gap**. Updated the README, `docs/03`, `docs/06`, `docs/11`, `docs/12`, the scenarios README, the ladder and the not-built table. V0.5 is not closed; nothing pushed. |

@@ -2932,13 +2932,15 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
   1. `VERIFICATION_FAILED` is not emitted in V0.5; `NODE_SETTLED` carries the verification verdict, and the event type is retained for future use.
   2. The optional `observer=None` hook in `run_baseline` is approved, for recording real plan-stage timestamps. It is observational only and must not mutate state or affect execution.
   3. Ordering is the deterministic, EIDOS-assigned sequence. No semantic ordering is inferred from wall-clock timestamps, especially for parallel nodes.
-  4. `paused` stays terminal in V0.5; resume is deferred.
+  4. `paused` stays terminal in V0.5; resume is deferred. *(Amended 2026-09-22 by D-176: `paused` caused by an admission-guard halt stays terminal exactly as here; `paused` caused by an
+     A2A-awaiting pause is the one exception — it is resumable on the same log. No fifth `MissionStatus` was added.)*
   5. A finished run without a successful `VERIFY` is `MISSION_COMPLETED` with `verified` false; a refused plan is `PLAN_REJECTED` followed by `MISSION_FAILED`.
   6. `execution_time_used_ms` is not defined as wall-clock duration: node durations are recorded as observed facts, the counter is accumulated accounted node execution time, and no wall-clock metric
      is invented when one is unavailable.
   7. D-151 stays Open and `MeasuredFacts` is not modified.
   8. Proceed with the implementation sequence, with no further exploration unless a genuine contradiction with an Accepted decision is found.
 - **Effect:** none on existing code until the steps that implement it.
+- **Amended (2026-09-22, D-176):** ruling 4 is amended narrowly. An admission-guard `paused` mission stays fully terminal, byte-for-byte as shipped. A `paused` mission caused by an A2A-awaiting pause (D-169) is resumable — the reducer accepts a subsequent event for that cause on the same log. Nothing else in D-160 changed.
 
 ### D-162 — Repeated node events are refused at the intake; the V0.5 implementation details are confirmed
 
@@ -3013,6 +3015,66 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
 
 ---
 
+### D-023 — A2A implementation: SDK, version, transport
+
+- **Status:** Accepted · **Date:** 2026-09-22 · **Decided by:** human owner · **Resolved by D-171** (originally Open) · **Source:** handoff §8, §51, §76
+- **Finding:** A2A (Agent2Agent) is named as the agent protocol and §8 specifies the conceptual
+  mapping (`agent_id`, `a2a_task_id`, `a2a_context_id`, `status`, `latest_artifact`, `last_event`),
+  but no SDK, protocol version or transport is named.
+- **Needs:** A choice before V0.6. Related to D-011, since the wire format determines what ordering
+  guarantees are actually available.
+- **Resolution (V0.6, 2026-09-22):** resolved by **D-171.** A hand-rolled client over `httpx` and the existing `pydantic` dependency speaks the published A2A v1.0 JSON-RPC wire format directly; no `a2a-sdk`
+  dependency is added. The EIDOS surface is exactly `message/send`, `tasks/get` and receiving one webhook shape, with protocol conformance tests required.
+
+### D-035 — Do A2A events carry a producer-assigned per-`a2a_task_id` sequence?
+
+- **Status:** Accepted · **Date:** 2026-09-22 · **Decided by:** human owner · **Resolved by D-172, negatively** (originally Open) · **Source:** handoff §10 · **Split out of D-011, left Open by the owner**
+- **Finding:** D-011 adopts the layered model in principle but scopes V0.1 to identity plus an
+  EIDOS-assigned mission sequence. Whether remote events additionally carry a producer-assigned
+  per-task sequence — layer 3 of the model — is deferred. A producer-assigned value is only
+  trustworthy for detecting ordering within that producer's own stream, which is the sole use it
+  would have.
+- **Effect while Open:** none on V0.1. Blocks V0.6 lateness detection for remote tasks.
+- **Needs:** Owner decision at V0.6, informed by **D-023** (the A2A wire format determines what
+  ordering guarantees are actually available to carry).
+- **Resolution (V0.6, 2026-09-22):** resolved by **D-172**, in the negative. Verified directly against the published A2A specification: no producer-assigned sequence field exists on the webhook delivery path
+  at all — the spec defines no ordering, retry or deduplication guarantee there. Lateness and duplication are instead detected by `event_id` (D-011, unchanged) plus a legal-transition guard over the
+  `AgentTask` lifecycle (D-166), the same structural pattern D-162 already proved for local node events.
+
+### D-036 — The `AgentTask` lifecycle state machine
+
+- **Status:** Accepted · **Date:** 2026-09-22 · **Decided by:** human owner · **Resolved by D-166** (originally Open) · **Source:** handoff §10 vs §8 · **Split out of D-011, left Open by the owner**
+- **Finding:** §10 mandates that late and out-of-order events be "validated against lifecycle" and
+  accepted or rejected **deterministically**. §8 gives `AgentTask` a `status` field but **never
+  enumerates the states or the legal transitions**. Without that state machine, "validate against
+  lifecycle" has no defined content and "deterministically" cannot be satisfied.
+- **Effect while Open:** none on V0.1, which has no remote tasks. **Blocks V0.6 protocol tests for
+  late event, out-of-order event, agent restart and partial artifact** (§50, §63) — those tests
+  cannot be written against an unspecified lifecycle without encoding the decision silently.
+- **Needs:** The state set and the legal transition table, including which states are terminal and
+  what an event arriving for a terminal task does.
+- **Resolution (V0.6, 2026-09-22):** resolved by **D-166.** `AgentTask.status` is the real ten-value wire `TaskState` set (nine states verified against the published A2A specification, plus EIDOS-observed
+  `TIMED_OUT`), never collapsed early; a separate, explicit mapping to `NodeStatus` is where EIDOS's own decision about each state lives. The legal-transition table this finding anticipated turns out
+  narrower once built: V0.6 records only a task's first acknowledgment and its terminal outcome (D-174), so **D-172**'s guard needs only "at most one `STARTED`, at most one `COMPLETED`, per `a2a_task_id`" —
+  the same shape D-162 already built for local node events, not a full nine-state transition validator.
+
+### D-037 — One common event shape, or separate internal and external shapes?
+
+- **Status:** Accepted · **Date:** 2026-09-22 · **Decided by:** human owner · **Resolved by the shape already built for V0.5** (originally Open) · **Source:** handoff §10 vs §33 · **Split out of D-011, left Open by the owner**
+- **Finding:** §10 specifies the field set for "every **external** event", including `a2a_task_id`.
+  But eleven of §33's thirteen event types are **internal** — `MISSION_CREATED`, `PLAN_GENERATED`,
+  `PLAN_REJECTED`, `PLAN_COMPILED`, `MCP_TOOL_CALLED`, `RAG_SEARCH`, `EVIDENCE_REJECTED`,
+  `VERIFICATION_FAILED`, `REPLAN_TRIGGERED`, `MISSION_COMPLETED`, `MISSION_FAILED` — and
+  `a2a_task_id` is meaningless on them. Either internal and external events have different shapes,
+  or they share one shape on which `a2a_task_id` is optional.
+- **Effect while Open:** V0.1 emits only internal events, so it can proceed. The question becomes
+  material at V0.6.
+- **Needs:** Owner decision. Note that a shared shape with optional fields is easier now and vaguer
+  later; separate shapes are stricter but require a discriminated hierarchy from the start.
+- **Resolution (V0.6, 2026-09-22):** resolved by the shape D-153/D-154 already built for V0.5, now confirmed sufficient for V0.6 without change — a **third** option beyond this entry's original two.
+  `MissionEvent`'s envelope is fully shared across every event type and carries no protocol-specific field at all; `a2a_task_id` and every other A2A-specific field live only inside the `A2A_TASK_STARTED`/
+  `A2A_TASK_COMPLETED` payloads (D-174), never on the envelope. One wholly generic envelope, plus payloads that vary per type and carry nothing the envelope doesn't need.
+
 ### D-126 — `MissionEvent` vocabulary for local node lifecycle events
 
 - **Status:** Accepted · **Date:** 2026-09-21 · **Decided by:** human owner · **Resolved by D-154** (originally Open) · **Source:** handoff §33; invariant 15; D-067, D-075, D-076, D-090, D-123; raised in V0.3 exploration
@@ -3062,12 +3124,143 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
 
 ---
 
+### D-165 — Non-blocking execution shape for a remote work node
+
+- **Status:** Accepted · **Date:** 2026-09-22 · **Decided by:** human owner
+- **Source:** D-118, D-122; invariants 2, 9 and 10; the V0.6 exploration
+- **Decision:**
+  1. **`WorkStatus` gains `SUBMITTED`.** A work node's port has dispatched the work and does not yet know the outcome. It carries **no artifact and no reason field beyond a short, generic description** ("dispatched; outcome pending") — the same shape discipline `FAILED`/`NO_RESULT` already have, and **nothing protocol-specific**: `eidos.runtime` stays vendor- and protocol-free (invariant 9), so `WorkResult.SUBMITTED` carries no `a2a_task_id` and no correlation handle of any kind. Which remote task a submitted node belongs to is answered one layer up, in `eidos.state`, which already names `a2a_task_id` at the contract level (`AgentTask`, D-048) and is where `A2A_TASK_STARTED`'s payload carries it (D-174).
+  2. **`NodeStatus` gains `AWAITING`.** A node the run dispatched but whose outcome is not yet known. Not `NOT_REACHED` (which means never dispatched because the run halted) and not any of the other six.
+  3. **`RunOutcome` gains `AWAITING`**, taking precedence over `FINISHED`/`FAILED` the same way `HALTED` already does (D-118 rule 4).
+  4. **`RunResult` gains `awaiting: tuple[AwaitingInfo, ...]`** (default empty), **not a single optional value.** Unlike a `HALT` — which the executor's own design makes single-node (the run stops at the first one, D-117) — more than one node in the same level can independently return `SUBMITTED` (if more than one compiled node requests the remote-backed capability), so every outstanding node must be named, not just the first. `AwaitingInfo` is `(step_id: StepId, level: int, reason: str)`, mirroring `HaltInfo`'s shape but deliberately carrying **no protocol-specific field** for the same layering reason as rule 1.
+  5. **The submission call itself stays synchronous**, exactly as D-122 already requires of every port: `WorkAgent.run()` makes one ordinary blocking call (in A2A's case, one HTTP round trip that returns a server-assigned task id **synchronously** — verified against the published spec, not assumed), then returns `SUBMITTED` immediately. It is only **completion** that becomes asynchronous. D-122's "ports are synchronous" is not violated: every port call still returns before the run needs it to.
+- **Consequences:** `RunResult`'s consistency validator gains one more branch (an `AWAITING`-status result is accounted for in `awaiting`, exactly as a `NOT_REACHED` one is accounted for in `halt`'s absence check). Nothing about a purely local mission changes: `SUBMITTED`/`AWAITING` are reachable only when a port actually returns them, and no V0.4 agent does.
+- **Affects:** D-118 (exactly seven `NodeStatus` / exactly three `RunOutcome`, both extended by one), D-122 (unchanged in kind — still synchronous ports, still exactly one call per dispatch).
+
+### D-166 — `AgentTask.status` preserves the real A2A `TaskState` vocabulary; a separate typed mapping to `NodeStatus` (resolves D-036)
+
+- **Status:** Accepted · **Date:** 2026-09-22 · **Decided by:** human owner
+- **Source:** D-036, D-081; the A2A Protocol Specification v1.0 (a2a-protocol.org), verified 2026-09-22; invariant 12 ("verification is separate from completion" — the parallel principle applied here: *recording* the remote's state is separate from *what EIDOS does about it*)
+- **Decision:**
+  1. **`AgentTask.status` is the closed, ten-value set:** the real wire `TaskState` — `SUBMITTED, WORKING, INPUT_REQUIRED, AUTH_REQUIRED, COMPLETED, FAILED, CANCELED, REJECTED, UNSPECIFIED` — **plus one EIDOS-observed value, `TIMED_OUT`**, which no wire message ever carries; it is what the adapter itself concludes when no terminal report arrives within its own configured deadline (D-173 item 2). This **resolves D-036** and **D-081** (the opaque string is replaced by this enumeration) without inventing a smaller vocabulary: the remote's exact reported state is preserved, never collapsed early, matching the project's existing habit of carrying a verifier's or a model's exact wording through unmodified (D-146's `NOT_EVALUATED` clauses, D-150's failure messages).
+  2. **A separate, explicit, tested mapping from this ten-value set to the seven-plus-`AWAITING` `NodeStatus` set** (D-165) is the only place EIDOS's own decision about "what this means for the node" lives — the same two-tier pattern already used twice in this codebase: `ModelFailureKind → WorkResult.status` (in `eidos.agents.base.ask_model`) and `VerificationVerdict → NodeStatus` (`_VERDICT_STATUS` in `eidos.recording.adapters`). Proposed mapping, to be pinned by tests at implementation exactly as D-118's own "intended meaning" was:
+     - `COMPLETED` → `SUCCEEDED` if a usable artifact was produced, else `NO_RESULT` (a completed task with no result is possible under the protocol — "returns either a task... or a direct response message" — and is not a failure);
+     - `FAILED`, `CANCELED`, `REJECTED`, `TIMED_OUT` → `FAILED`, each preserving the exact wire state name in `NodeResult.reason` so nothing is lost;
+     - `INPUT_REQUIRED`, `AUTH_REQUIRED` → `FAILED`, with a reason stating plainly that the V0.6 boundary does not support an interactive/authenticated remote task — a scope limit, stated honestly, never silently ignored (this is not the Research Agent's expected behaviour, D-140, but the mapping must exist for whatever the remote genuinely reports);
+     - `SUBMITTED`, `WORKING`, `UNSPECIFIED` → no terminal mapping; the node stays `AWAITING` (these never produce an `A2A_TASK_COMPLETED` event at all — see D-174).
+  3. **No new `MissionFailureCause` member.** A remote-caused `FAILED` node folds into the existing `EXECUTION_FAILED` cause, exactly as a local port fault does — the existing catch-all already fits.
+- **Consequences:** `AgentTask` becomes fully typed with no branch-on-opaque-string anywhere (discharging D-081's stated reason for keeping `status` opaque). Nothing about the *reachable* states changes if the remote never reports `INPUT_REQUIRED`/`AUTH_REQUIRED`/`CANCELED`/`REJECTED` — the mapping exists for correctness, not because V0.6 expects to exercise every branch.
+- **Affects:** resolves **D-036**; discharges **D-081**'s deferral; extends the two-tier mapping pattern already established by D-135/D-121.
+
+### D-167 — One continuous `EventLog` across the asynchronous pause/resume boundary
+
+- **Status:** Accepted, subject to D-176 · **Date:** 2026-09-22 · **Decided by:** human owner
+- **Source:** invariant 15; D-120, D-157; the V0.6 exploration, checked directly against the shipped `eidos.state`/`eidos.recording` code
+- **Decision:** a mission that pauses `AWAITING` a remote task and later resumes stays **one log**, not two. Confirmed against the actual code that this needs **no new plumbing**: `record_baseline(..., log=...)` already accepts an existing `EventLog`, and `Recorder` already takes one in its constructor with no other state that must survive between calls. The caller (D-170) keeps `RecordedRun.log` after a pass returns `AWAITING`, and when the remote task settles: (1) builds a short-lived `Recorder` around that same log and calls `.record(A2ATaskCompletedPayload(...))` directly, then (2) builds `PriorOutcomes` including the newly-known result and calls `record_baseline(..., log=the_same_log, prior=...)` again, which naturally produces the post-hoc `NODE_SETTLED` and, if nothing else is outstanding, the mission's real terminal event — entirely through machinery that already exists.
+- **What this needs, precisely (the only things that change):** (a) `run.py`'s `_finish()` gains one new branch, parallel to its existing `HALTED`/`FINISHED`/`FAILED` branches, for `RunOutcome.AWAITING` → `MissionPausedPayload` carrying `awaiting` (D-169); (b) the reducer's terminal check must stop refusing *every* event once `status == PAUSED` — **this is D-176**, and D-167 cannot be finalized in code before D-176 is. `checkpoint_at`, `resume`, `records_after`, the JSONL round trip and `execution_record` need **no change at all** — they are already generic over an arbitrarily long-lived, arbitrarily-many-events log.
+- **Consequences:** invariant 15 is satisfied for the *whole* mission, including the paused stretch, not just per attempt — a fuller reading than V0.5's admission-halt case needed, since that pause is (by design, D-160 ruling 4, unamended for that cause) never reopened.
+- **Affects:** D-120 (unchanged — still the resume mechanism), D-157 (unchanged — still one log, still a value-checkpoint), **D-176** (the precondition).
+
+### D-168 — `AgentTask` gains `plan_id`, `step_id` and `started_at`
+
+- **Status:** Accepted · **Date:** 2026-09-22 · **Decided by:** human owner
+- **Source:** D-048; the V0.6 exploration
+- **Decision:** three fields are added to `AgentTask`, all optional, all additive:
+  - **`plan_id: PlanId | None`, `step_id: StepId | None`** — correlate the mirrored remote task to the plan node it serves. Without them nothing ties an `AgentTask` entry to a compiled node at all.
+  - **`started_at: UtcDateTime | None`** — the `occurred_at` of the `A2A_TASK_STARTED` event that created this entry, carried forward so that when `A2A_TASK_COMPLETED` later replaces it (D-176's new reducer operation), the reducer can compute elapsed wall-clock duration by subtracting two envelope timestamps it already has — **no new duration field on the payload, and no monotonic-clock subtraction across a possible process restart** (D-173 item 2's instruction, satisfied exactly).
+  - **Checked against D-048, D-033, D-082, D-095, D-096, D-098 — no contradiction found.** D-048 explicitly anticipated additive fields ("kept minimal and future-compatible for V0.6"); D-033 (no `tenant_id`) is untouched; D-082 fixes `agent_tasks`'s *type* (an immutable tuple) not the rule that transforms it (see D-176); D-095/D-096/D-098 are untouched by this addition.
+- **Consequences:** every existing `AgentTask` construction (there are none yet outside tests, since V0.1–V0.5 never populate this field) is unaffected; the three new fields default to absent.
+- **Affects:** D-048 (extended, not redefined).
+
+### D-169 — `MissionStatus.PAUSED` is reused for "awaiting a remote task"; `MissionPausedPayload` names which kind
+
+- **Status:** Accepted, subject to D-176 · **Date:** 2026-09-22 · **Decided by:** human owner
+- **Source:** D-052; D-160 items 3 and 10 (`MISSION_PAUSED`'s existing `HaltInfo` shape); the V0.6 exploration
+- **Decision:** no fifth `MissionStatus` is added (D-052's "no additional in-progress states invented" stands untouched). `MissionPausedPayload` carries **exactly one of two** shapes, matching the codebase's existing "exactly one of two" idiom (`ReplayResult`, `LoadResult`):
+  - `halt: HaltInfo` — an admission-guard pause, unchanged from V0.5 in every respect: still terminal (D-160 ruling 4, unamended for this cause), still one node (the executor's own halt-is-single-node design).
+  - `awaiting: tuple[AwaitingInfo, ...]` (non-empty) — an A2A-awaiting pause (D-165's `AwaitingInfo`), possibly naming more than one outstanding node, and **the one exception to `paused`-is-terminal** (D-176).
+  `status_reason` continues to carry the human-readable explanation, exactly as D-052 already anticipated.
+- **Consequences:** `HaltInfo` itself is untouched — reused exactly as V0.5 shipped it, never generalized or overloaded to also describe an A2A wait, which would have blurred two genuinely different kinds of pause.
+- **Affects:** D-052 (reused, not extended), D-160 (item 3's payload shape gains the second variant; item 9/ruling 4 amended narrowly by **D-176**).
+
+### D-170 — Caller-orchestrated resume; no built-in mission driver in V0.6
+
+- **Status:** Accepted · **Date:** 2026-09-22 · **Decided by:** human owner
+- **Source:** D-119, D-020, D-127, D-161 ("a planner and the mission driver loop... not assigned to a milestone"); the V0.6 exploration
+- **Decision:** V0.6 builds no component that watches for a remote task's completion and re-invokes the runtime on its own. Confirmed workable directly from the shipped D-120 resume mechanism (§ D-167): the whole "wait, then continue" story is exactly two ordinary calls a caller makes — append one event, then call `record_baseline` again — needing no new persistent process, thread or loop inside EIDOS. Building such a loop would be pulling forward part of the still-unassigned mission driver (D-119/D-020), which nothing in V0.6's scope requires.
+- **Consequences:** the A2A adapter (`eidos.a2a`) provides the pieces (a client, a webhook receiver, the payload construction) but never itself decides *when* to resume a mission — that is the calling application's responsibility, exactly as it already is for every existing use of `record_baseline`.
+- **Affects:** none of D-119/D-020/D-127 is resolved or narrowed; they stay exactly as unassigned as before.
+
+### D-171 — A2A transport: a hand-rolled client over `httpx`, not `a2a-sdk`; protocol version A2A v1.0 (resolves D-023)
+
+- **Status:** Accepted · **Date:** 2026-09-22 · **Decided by:** human owner
+- **Source:** D-023, D-136 (the precedent against a new vendor dependency where the wire protocol is speakable directly); researched directly against the published A2A Protocol Specification (a2a-protocol.org, v1.0 current stable, Linux Foundation-hosted) and the `a2a-sdk` package's actual `pyproject.toml` (github.com/a2aproject/a2a-python), 2026-09-22
+- **Decision:**
+  1. **No new SDK dependency.** `eidos.a2a` speaks the published JSON-RPC 2.0 wire format directly, using `httpx` (one new, narrow dependency) and the `pydantic` EIDOS already requires. `a2a-sdk`'s core install alone pulls in `protobuf`, `google-api-core`, `googleapis-common-protos`, `json-rpc` and `culsans` beyond `httpx`/`pydantic` — verified from its actual dependency list — for a surface EIDOS only needs a thin, exact slice of (submission, an optional poll, receiving one webhook shape). This follows D-136's precedent rather than repeating it verbatim: A2A's JSON-RPC-plus-task-lifecycle-plus-webhook-config surface is genuinely more complex than Ollama's completion endpoint, so EIDOS **owns getting the schema right** and re-verifying it if the protocol version moves — an explicit, accepted cost, not an oversight.
+  2. **The EIDOS A2A surface stays exactly:** `message/send` (submission — the only call that must return the task id synchronously, per the spec), `tasks/get` (polling, only if a webhook is unavailable or as a reconciliation check), receiving one HTTP POST at a configured webhook URL, and the typed `Task`/`TaskStatus` payload shapes the spec defines. Nothing else — no streaming (SSE), no `tasks/cancel`, no push-notification-config management beyond registering the one webhook EIDOS needs.
+  3. **Protocol version: A2A v1.0**, the current stable spec, targeted directly (not the compatibility-mode 0.3 shim `a2a-sdk` offers, which EIDOS has no reason to need since it isn't using that SDK).
+  4. **Protocol conformance tests are required**, validating EIDOS's hand-rolled request/response construction and parsing against the published schema — independent of and in addition to the D-166/D-172 lifecycle tests in `tests/protocol/`. **EIDOS invents no protocol detail**: every field name, every state name and every rule cited in D-165–D-176 traces to the verified spec text, not to an assumption.
+- **Consequences:** `eidos.a2a`'s dependency footprint is `httpx` alone, beyond what EIDOS already requires. The risk this accepts (owning schema correctness, re-verifying on a protocol version bump) is explicit and recorded, not hidden.
+- **Affects:** resolves **D-023** in full (SDK, version and transport all pinned); **D-136** cited as precedent, not extended (Ollama's provider is untouched).
+
+### D-172 — No producer-assigned sequence (resolves D-035); idempotency and lateness are `event_id` plus a legal-transition guard
+
+- **Status:** Accepted · **Date:** 2026-09-22 · **Decided by:** human owner
+- **Source:** D-011, D-035; the A2A Protocol Specification, verified 2026-09-22; D-162 (`step_events.py`) as the direct structural precedent
+- **Decision:**
+  1. **No producer-assigned per-task sequence is adopted, because none exists to adopt.** Verified directly against the spec: a push-notification (webhook) delivery carries no event/delivery id distinct from `taskId`, and the specification explicitly defines no ordering, retry or deduplication guarantee for that path (only the SSE streaming path — not used here, D-171 item 2 — has a MUST-preserve-order guarantee). **D-035 is resolved in the negative.**
+  2. **Two layers, both already-established patterns, neither new in kind:**
+     - **Identity (D-011, unchanged):** the adapter's own `event_id` (from the same injected `IdSource` V0.5 already has) is the idempotency key for the *EIDOS-side proposal*, exactly as for every other event.
+     - **Legal-transition guard (new, but the same shape as D-162's, keyed differently):** because V0.6 records **only** a task's first acknowledgment and its terminal outcome (D-174 — no intermediate `WORKING` notification is ever proposed as an event, since `MissionState` has nothing new to fold from "still working"), the guard reduces to exactly what D-162 already proved: **one `A2A_TASK_STARTED` creates the `AgentTask` entry for an `a2a_task_id` that must not already exist; at most one `A2A_TASK_COMPLETED` settles it, and a second one for the same `a2a_task_id` — whether identical or not — is refused**, the same intake-level, fold-from-scratch-replays-the-same-way pattern D-162 already built and tested. This is **narrower** than the full nine-state transition table I first proposed: EIDOS never needs to validate `WORKING`/`SUBMITTED`-to-`WORKING` transitions at all, because it never records them.
+- **Consequences:** `eidos.state` gains one sibling to `step_events.py` (an `agent_task_events.py`-shaped guard, keyed by `a2a_task_id`, exactly two operations: refuse-a-second-`STARTED`, refuse-a-second-`COMPLETED`), not a general state-machine validator.
+- **Affects:** resolves **D-035** (negatively — nothing is adopted); D-011 unchanged; direct structural reuse of **D-162**.
+
+### D-173 — Three separate timeout concepts, none a new `SystemLimits` dimension
+
+- **Status:** Accepted · **Date:** 2026-09-22 · **Decided by:** human owner
+- **Source:** D-042, D-046; D-160 item 6; the V0.6 exploration; verified against the A2A spec (which defines no timeout/deadline/TTL concept at all)
+- **Decision:** kept strictly separate, at three different layers:
+  1. **Transport/network timeout** — lives entirely inside the `eidos.a2a` HTTP client's own configuration. Never a domain contract field, exactly as `OllamaModel`'s HTTP timeout isn't one.
+  2. **A2A task waiting deadline** — "how long EIDOS's adapter will wait for a terminal report before declaring `TIMED_OUT`" (D-166). Lives in `eidos.a2a`'s own adapter-level configuration, **not** `SystemLimits` or `ReliabilityContract` — D-042 already closed the mission-level budget group at exactly six dimensions, and this stays outside core domain contracts entirely, per the owner's own stated constraint.
+  3. **EIDOS mission execution budget** (`SystemLimits.max_execution_time`, `MissionState.execution_time_used_ms`) — unchanged in meaning. D-160 item 6's existing rule already means an `AWAITING` node contributes nothing while outstanding (it has no recorded duration yet); once it settles, its contribution is computed from **`occurred_at` timestamps** between its `A2A_TASK_STARTED` and `A2A_TASK_COMPLETED` events (D-168's `started_at` field makes this a plain subtraction the reducer can do), **not** the recorder's monotonic clock, which cannot be safely compared across a possible process restart between submission and completion.
+- **Consequences:** no seventh `SystemLimits` dimension; D-042/D-046 untouched. A remote node's `duration_ms`-equivalent contribution is measured differently in kind (wall-clock, cross-process-safe) from a local node's (monotonic, single-process) — a real, disclosed difference, not a silent inconsistency.
+- **Affects:** extends D-160 item 6's rule to a second measurement method for the one case it's needed; D-042, D-046 untouched.
+
+### D-174 — Exactly two A2A event types; completion carries a typed outcome, never split further
+
+- **Status:** Accepted · **Date:** 2026-09-22 · **Decided by:** human owner
+- **Source:** D-090, D-154, D-160 item 2 (the precedent for not splitting an outcome into separate event types); the V0.6 exploration
+- **Decision:** exactly the two `MissionEventType` members V0.1 already reserved (D-090) are used — **no new member is added**:
+  - **`A2A_TASK_STARTED`** — `plan_id`, `step_id`, `agent_id`, `a2a_task_id`, `a2a_context_id`. Proposed once, at submission, alongside the existing `NODE_STARTED`.
+  - **`A2A_TASK_COMPLETED`** — `plan_id`, `step_id`, `a2a_task_id`, a typed `outcome: AgentTaskStatus` (the ten-value set from D-166), `artifact: ArtifactRef | None`, `reason: str`. Proposed once, whenever the task reaches a terminal outcome (including EIDOS-observed `TIMED_OUT`) — mirroring exactly how the real protocol itself reports outcome as one field's value, never a different message per outcome, and matching `NODE_SETTLED`'s own precedent (one type, a typed payload) rather than inventing `A2A_TASK_FAILED`/`A2A_TASK_TIMED_OUT`/`A2A_TASK_CANCELED`.
+  - **An intermediate `WORKING` (or a repeated `SUBMITTED`) notification is never proposed as an event.** `MissionState` has nothing to fold from "still not done" that it doesn't already know from the node being `AWAITING`, so the adapter observes it and does nothing with it.
+- **Consequences:** the D-172 guard stays exactly two-operation-simple (§D-172); no `EmittedPayload` member beyond these two is added for A2A.
+- **Affects:** none — the vocabulary slots were already reserved by D-090; only their payload classes are new.
+
+### D-175 — Research Agent is the single A2A boundary for V0.6
+
+- **Status:** Accepted · **Date:** 2026-09-22 · **Decided by:** human owner
+- **Source:** §50's own example; `docs/07_a2a_contract.md` §4 ("one boundary, not three")
+- **Decision:** the Research Agent (and only it) moves behind the A2A boundary in V0.6. The Analysis and Verification agents stay exactly as they are — local, synchronous `WorkAgent`/`Verifier` implementations, unchanged.
+- **Consequences:** `docs/07_a2a_contract.md`'s open question on this point is closed.
+- **Affects:** none — purely a scope statement.
+
+### D-176 — D-160 ruling 4 amended: `PAUSED` stays terminal for an admission-guard halt; an A2A-awaiting `PAUSED` is resumable on the same log; a new reducer operation, "find by correlation key and replace," is named for `agent_tasks`
+
+- **Status:** Accepted · **Date:** 2026-09-22 · **Decided by:** human owner
+- **Source:** D-160 ruling 4 ("`paused` stays terminal in V0.5; resume is deferred"); the reducer's `_TERMINAL` check (`eidos.state.reducer`); D-167, D-169; the V0.6 exploration, which found this contradiction directly against the shipped code and stopped rather than resolving it silently
+- **The contradiction found (and reported, not resolved, at the time):** D-167 (one continuous log across an async pause) and D-169 (reuse `PAUSED` for that pause) together require the reducer to accept further events after `status == PAUSED` for that one cause — but D-160 ruling 4, as shipped, and the reducer's `_TERMINAL = (COMPLETED, FAILED, PAUSED)` check, refuse **every** event once `status == PAUSED`, unconditionally, for **any** cause.
+- **The owner's ruling (2026-09-22):** amend D-160 ruling 4 **narrowly**. `PAUSED` caused by an admission-guard halt (`MissionPausedPayload.halt` present) **stays terminal, exactly as V0.5 shipped it** — resume-after-human-review-halt is still genuinely undecided policy and nothing here changes that. `PAUSED` caused by an A2A-awaiting pause (`MissionPausedPayload.awaiting` present, D-169) is **resumable**: the reducer accepts a subsequent `A2A_TASK_COMPLETED` (and whatever it triggers) on the **same** log. **No fifth `MissionStatus` is added. The V0.5 state machine is not redesigned** — this is the one, cause-keyed exception, not a new mechanism, following the same amendment style already used once this project for D-158 (amended by D-163): the original ruling's text is kept, and this amendment is recorded beside it rather than silently rewritten.
+- **The new reducer operation, named explicitly:** folding `agent_tasks` needs a **third** pattern, distinct from the two the reducer already has (*append-only*, for `plans`; *first-wins, refuse the repeat*, for node settlement via D-162). `AgentTask` genuinely changes over its own lifetime — the same record moves `SUBMITTED → ... → COMPLETED` — so the rule is: **find the existing `AgentTask` entry whose `a2a_task_id` matches the incoming event's, and produce a new tuple with that one entry replaced** (`A2A_TASK_STARTED` instead *appends* a new entry, since no matching `a2a_task_id` can already exist — D-172's own guard already refuses a second `STARTED` for one). `MissionState.agent_tasks` **remains an immutable tuple** (D-082, untouched — its *type* was never in question); only the rule that transforms it from one state to the next is new. This is not a contradiction of D-082, and is recorded here precisely so it is visible before it is written, not discovered mid-implementation.
+- **Consequences:** the admission-halt case is **byte-for-byte unchanged** — same tests, same behaviour, same "the pause is not reopened" guarantee V0.5 shipped and pushed. Only a *new* cause of `PAUSED`, which did not exist before this decision, gets different treatment.
+- **Affects:** amends **D-160** ruling 4 (narrowly, in the same style D-163 already used on D-158); **D-052** is untouched (still exactly four `MissionStatus` values); **D-082** is untouched (still an immutable tuple; only the fold rule is new); resolves the tension between **D-167** and **D-169**, which are now both final.
+
 ## Open — require the human owner
 
 These are ambiguities, contradictions and gaps found in the handoff during the bootstrap read. None
 has been resolved. Work that depends on one of them is blocked until the owner decides.
 
-Count: 44. Highest-impact first is **D-015** (how verification confidence is computed), then
+Count: 40. Highest-impact first is **D-015** (how verification confidence is computed), then
 **D-007** (now V0.4-only, not V0.2 — see D-102) and **D-046** (bound values, mechanism unaffected —
 see D-103) for later V0.2 work. **D-012** (predicate language) was corrected 2026-09-18 to no longer
 be listed as a V0.2 item — it blocks the V0.3 compiler. **D-102** and **D-103**, logged the same day,
@@ -3319,15 +3512,6 @@ one is not.
   TypeScript and Tailwind CSS. Unresolved, though not blocking until V1.3.
 - **Needs:** A choice before V1.3.
 
-### D-023 — A2A implementation: SDK, version, transport
-
-- **Status:** Open · **Source:** handoff §8, §51, §76
-- **Finding:** A2A (Agent2Agent) is named as the agent protocol and §8 specifies the conceptual
-  mapping (`agent_id`, `a2a_task_id`, `a2a_context_id`, `status`, `latest_artifact`, `last_event`),
-  but no SDK, protocol version or transport is named.
-- **Needs:** A choice before V0.6. Related to D-011, since the wire format determines what ordering
-  guarantees are actually available.
-
 ### D-024 — Placement of the FAISS vs Qdrant experiment
 
 - **Status:** Open · **Source:** handoff §26
@@ -3427,45 +3611,6 @@ one is not.
   this decision.
 - **Needs:** Owner to either ratify the seven-identifier list or reduce invariant 18 to §54's five
   and let `plan_id`/`event_id` be required by their own sections instead.
-
-### D-035 — Do A2A events carry a producer-assigned per-`a2a_task_id` sequence?
-
-- **Status:** Open · **Source:** handoff §10 · **Split out of D-011, left Open by the owner**
-- **Finding:** D-011 adopts the layered model in principle but scopes V0.1 to identity plus an
-  EIDOS-assigned mission sequence. Whether remote events additionally carry a producer-assigned
-  per-task sequence — layer 3 of the model — is deferred. A producer-assigned value is only
-  trustworthy for detecting ordering within that producer's own stream, which is the sole use it
-  would have.
-- **Effect while Open:** none on V0.1. Blocks V0.6 lateness detection for remote tasks.
-- **Needs:** Owner decision at V0.6, informed by **D-023** (the A2A wire format determines what
-  ordering guarantees are actually available to carry).
-
-### D-036 — The `AgentTask` lifecycle state machine
-
-- **Status:** Open · **Source:** handoff §10 vs §8 · **Split out of D-011, left Open by the owner**
-- **Finding:** §10 mandates that late and out-of-order events be "validated against lifecycle" and
-  accepted or rejected **deterministically**. §8 gives `AgentTask` a `status` field but **never
-  enumerates the states or the legal transitions**. Without that state machine, "validate against
-  lifecycle" has no defined content and "deterministically" cannot be satisfied.
-- **Effect while Open:** none on V0.1, which has no remote tasks. **Blocks V0.6 protocol tests for
-  late event, out-of-order event, agent restart and partial artifact** (§50, §63) — those tests
-  cannot be written against an unspecified lifecycle without encoding the decision silently.
-- **Needs:** The state set and the legal transition table, including which states are terminal and
-  what an event arriving for a terminal task does.
-
-### D-037 — One common event shape, or separate internal and external shapes?
-
-- **Status:** Open · **Source:** handoff §10 vs §33 · **Split out of D-011, left Open by the owner**
-- **Finding:** §10 specifies the field set for "every **external** event", including `a2a_task_id`.
-  But eleven of §33's thirteen event types are **internal** — `MISSION_CREATED`, `PLAN_GENERATED`,
-  `PLAN_REJECTED`, `PLAN_COMPILED`, `MCP_TOOL_CALLED`, `RAG_SEARCH`, `EVIDENCE_REJECTED`,
-  `VERIFICATION_FAILED`, `REPLAN_TRIGGERED`, `MISSION_COMPLETED`, `MISSION_FAILED` — and
-  `a2a_task_id` is meaningless on them. Either internal and external events have different shapes,
-  or they share one shape on which `a2a_task_id` is optional.
-- **Effect while Open:** V0.1 emits only internal events, so it can proceed. The question becomes
-  material at V0.6.
-- **Needs:** Owner decision. Note that a shared shape with optional fields is easier now and vaguer
-  later; separate shapes are stricter but require a discriminated hierarchy from the start.
 
 ### D-038 — Bounding and persisting the processed-`event_id` set
 
@@ -3839,6 +3984,8 @@ one is not.
   specifies. §50 places it at V0.6, after MissionState and the event reducer are reliable (§50
   V0.5: "Before adding A2A, state handling must already be reliable"). No A2A code, dependency or
   package exists.
+- **V0.6 (2026-09-22):** the protocol/contract design is decided — **D-165 to D-176** — resolving **D-023, D-035, D-036, D-037** along the way. **No code exists yet**; this entry stays Deferred until
+  implementation begins.
 
 ### D-027 — MCP tool boundary deferred to V0.7
 

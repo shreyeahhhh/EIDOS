@@ -31,10 +31,19 @@ invalid arguments  unavailable tool    duplicate call
 
 Plus, from §63: malformed tool output.
 
-## Blocked
+## Status (2026-09-22)
 
-The duplicate-, late- and out-of-order-event tests cannot be written until the event ordering domain
-and the idempotency key are defined — `decisions.md` **D-011**. Writing them against a guessed key
-would encode a silent architectural decision.
+The duplicate-, late- and out-of-order-event tests could not be written until the event ordering
+domain, the idempotency key and the `AgentTask` lifecycle were defined. That citation was stale —
+`decisions.md` **D-011** was resolved back at V0.1; the real blockers were **D-035**, **D-036** and
+**D-037**, all Open until today. **They are now resolved**: `decisions.md` **D-165 to D-176**
+(2026-09-22) accept the full A2A contract design, researched directly against the published A2A
+Protocol Specification (a2a-protocol.org, v1.0) — no producer sequence exists to guess at (D-172);
+the `AgentTask` lifecycle is the real ten-value wire `TaskState` set plus EIDOS-observed `TIMED_OUT`
+(D-166); the shared event envelope V0.5 already built needs no change (D-037's resolution).
 
-Currently empty. The first protocol tests arrive with V0.6.
+**Still currently empty.** These tests are written against the runtime and state contracts V0.6 Step
+2 onward adds (`plan_id`/`step_id`/`started_at` on `AgentTask`, `WorkStatus.SUBMITTED`,
+`NodeStatus.AWAITING`, the `A2A_TASK_STARTED`/`A2A_TASK_COMPLETED` payloads) — none of which exists
+in code yet (`progress.md`, "V0.6 One A2A Boundary"). The design is decided; the implementation has
+not started.

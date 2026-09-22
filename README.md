@@ -7,7 +7,7 @@
 
 ## Status
 
-**V0.5 — the event log and the state reducer: complete as scoped. V0.4 — real local agents: complete as scoped.**
+**V0.6 — A2A protocol/contract design accepted, not implemented. V0.5 — the event log and the state reducer: complete as scoped. V0.4 — real local agents: complete as scoped.**
 
 This repository contains the project rules, the architecture knowledge base, the decision record,
 the V0.1 typed contracts (`eidos.contracts`), the V0.2 plan validator (`eidos.validation`), the V0.3
@@ -22,6 +22,10 @@ planner, no A2A, no MCP, no RAG, no persistence, no API and no frontend.
 V0.5 adds the typed event records, a pure state reducer, an in-memory event log with a JSONL round trip, checkpoint and replay (`eidos.state`), recording adapters around the baseline
 (`eidos.recording`) and a derived, read-only `ExecutionRecord`. A recorded baseline replays to the same `MissionState` and the same record with no agent run, and the intake refuses a repeated node event for a step (D-162). One question stays open (D-164), and a
 real-model recording has not been run.
+
+V0.6 moves the Research Agent behind one A2A boundary (D-175). The protocol/contract design is decided (`decisions.md` D-165 to D-176), researched directly against the published A2A Protocol
+Specification rather than assumed: a non-blocking `SUBMITTED`/`AWAITING` execution shape, `AgentTask`'s real lifecycle, one continuous event log across the pause, a hand-rolled `httpx` client (no
+`a2a-sdk`), and no fifth `MissionStatus`. **No `eidos.a2a` package, no A2A dependency and no code exist yet** — see [progress.md](progress.md), "V0.6 One A2A Boundary".
 
 Current status and the milestone ladder: [progress.md](progress.md).
 Decisions and unresolved questions: [decisions.md](decisions.md).
