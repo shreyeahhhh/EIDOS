@@ -7,7 +7,7 @@
 
 ## Status
 
-**V0.7 — Strategy & Candidate Generation: architecture accepted, Steps 2 and 3 (the data contracts and the bounded candidate generator) implemented, none pushed. V0.6 — A2A: Steps 1–6 of 9 implemented and pushed. V0.5 — the event log and the state reducer: complete as scoped. V0.4 — real local agents: complete as scoped.**
+**V0.7 — Strategy & Candidate Generation: architecture accepted, Steps 2 to 4 (the data contracts, the bounded candidate generator, and the feasibility gate) implemented, none pushed. V0.6 — A2A: Steps 1–6 of 9 implemented and pushed. V0.5 — the event log and the state reducer: complete as scoped. V0.4 — real local agents: complete as scoped.**
 
 This repository contains the project rules, the architecture knowledge base, the decision record,
 the V0.1 typed contracts (`eidos.contracts`), the V0.2 plan validator (`eidos.validation`), the V0.3
@@ -47,10 +47,13 @@ stays Open). Step 2 built the data contracts — `eidos.planning` (`Strategy`, `
 `Protocol`, pure function of `TaskGenome.required_capabilities` only), the deterministic reference
 `RuleBasedCandidateGenerator` (linear/parallel/staged shapes, gated so a guaranteed duplicate is never even
 constructed; verification posture derived, not permuted as an independent axis), and `generate_candidate_strategies`
-(structural dedup, a capability-membership re-check, and identity injection via a new `StrategyIdSource` — no
-uuid-drawing implementation lives in `eidos.planning` itself). No feasibility filtering (D-180's own later shape/
-resource ceilings), no Strategy-to-Plan expansion, no selection yet. See [progress.md](progress.md), "V0.7
-Strategy & Candidate Generation".
+(structural dedup and identity injection via a new `StrategyIdSource` — no uuid-drawing implementation lives in
+`eidos.planning` itself). Step 4 built the feasibility gate: `check_feasibility` runs three narrower,
+strategy-level analogues of V0.2's CAPABILITY/COMPLEXITY/RESOURCE stages, reusing the existing `SystemLimits`/
+`ReliabilityContract` — no new numeric limit anywhere, and the actual Plan validator (`eidos.validation.stages`/
+`.pipeline`) is never imported or called. `generate_candidate_strategies` now stamps identity, filters through
+this gate, and caps only the feasible pool. No Strategy-to-Plan expansion, no selection yet. See
+[progress.md](progress.md), "V0.7 Strategy & Candidate Generation".
 
 Current status and the milestone ladder: [progress.md](progress.md).
 Decisions and unresolved questions: [decisions.md](decisions.md).
