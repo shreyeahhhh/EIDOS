@@ -5,10 +5,12 @@ package source, so they fail the moment someone adds a forbidden dependency, a v
 non-determinism, or one of the concepts the V1.0 decision revision explicitly excluded (a quality/confidence
 score, a strategy signature/genome encoding, embeddings) — not merely when behaviour visibly changes.
 
-Scoped to what V1.0 Steps 1 and 2 actually built (``__init__.py``, ``experience.py``, ``relevance.py``).
-``store.py`` (Step 3, the one file in this package ever permitted file I/O) will extend
-``test_the_package_has_the_expected_modules`` and the forbidden-imports check when it lands — not weakened
-early, extended on schedule, exactly like ``eidos.planning``'s own guards grew across V0.7 Steps 2 to 5.
+Scoped to what V1.0 Steps 1 to 3 actually built (``__init__.py``, ``experience.py``, ``relevance.py``,
+``store.py``). ``store.py`` is the one file in this package ever permitted file I/O — it is deliberately
+excluded from the strict "no I/O at all" check (``PURE_MODULES``, below) and checked against its own, narrower
+allowed list instead (``test_store_may_use_the_filesystem_but_nothing_else_forbidden``): pathlib/file I/O is
+permitted there and nowhere else in the package, and network/database/vendor libraries stay forbidden even
+there — this is persistence only, never a database, never a network call.
 """
 
 import ast
@@ -22,6 +24,9 @@ import pytest
 SRC = Path(__file__).resolve().parents[3] / "src" / "eidos"
 MEMORY = SRC / "memory"
 MODULES = sorted(MEMORY.glob("*.py"))
+# store.py is the one file in this package ever permitted file I/O (D-198) — excluded from the strict
+# "no I/O at all" check below and checked against its own, narrower allowed list instead.
+PURE_MODULES = [m for m in MODULES if m.name != "store.py"]
 
 # I/O, network, clock, randomness, process state, and graph/model libraries this core layer must never depend on
 # (mirrors eidos.planning's own list, D-198's own "pure logic free of I/O, clock, randomness, network").
@@ -62,14 +67,30 @@ def imports_of(path: Path) -> list[tuple[str, tuple[str, ...], int]]:
 
 
 def test_the_package_has_the_expected_modules():
-    # Extended at Step 3 (store.py, not built yet) — per D-198's own step order.
-    assert [m.name for m in MODULES] == ["__init__.py", "experience.py", "relevance.py"]
+    assert [m.name for m in MODULES] == ["__init__.py", "experience.py", "relevance.py", "store.py"]
 
 
-@pytest.mark.parametrize("module", MODULES, ids=lambda m: m.name)
+@pytest.mark.parametrize("module", PURE_MODULES, ids=lambda m: m.name)
 def test_no_module_imports_io_network_clock_randomness_or_process_state(module):
     top_level = {name.split(".")[0] for name, _, level in imports_of(module) if level == 0}
     assert top_level & FORBIDDEN_IMPORTS == set()
+
+
+# store.py may use pathlib for local file I/O (D-198's own approved exception) but nothing else on the forbidden
+# list — no network, no database driver, no clock, no randomness, no process/thread state.
+STORE_ALLOWED_EXTRA = {"pathlib"}
+
+
+def test_store_may_use_the_filesystem_but_nothing_else_forbidden():
+    store = MEMORY / "store.py"
+    top_level = {name.split(".")[0] for name, _, level in imports_of(store) if level == 0}
+    assert top_level & (FORBIDDEN_IMPORTS - STORE_ALLOWED_EXTRA) == set()
+
+
+@pytest.mark.parametrize("module", PURE_MODULES, ids=lambda m: m.name)
+def test_only_store_py_may_import_pathlib(module):
+    top_level = {name.split(".")[0] for name, _, level in imports_of(module) if level == 0}
+    assert "pathlib" not in top_level, f"{module.name} imports pathlib — only store.py may (D-198)"
 
 
 @pytest.mark.parametrize("module", MODULES, ids=lambda m: m.name)
@@ -127,6 +148,17 @@ def test_task_relevance_has_exactly_the_three_approved_members():
     from eidos.memory import TaskRelevance
 
     assert {member.value for member in TaskRelevance} == {"same", "similar", "irrelevant"}
+
+
+def test_store_never_mentions_relevance_or_selection_logic():
+    # "The store is persistence only" (D-198 Step 3 scope) — proven by absence, the same discipline
+    # test_relevant_experience_and_experience_for_never_mention_the_selection_algorithm applies one module over.
+    text = (MEMORY / "store.py").read_text(encoding="utf-8")
+    for symbol in (
+        "task_relevance", "relevant_experience", "experience_for", "TaskRelevance",
+        "structural_cost", "DeterministicSelector", "ExperienceInformedSelector", "SelectorChoice",
+    ):
+        assert symbol not in text, f"store.py mentions {symbol}"
 
 
 def test_relevant_experience_and_experience_for_never_mention_the_selection_algorithm():
