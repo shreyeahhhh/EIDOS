@@ -1,4 +1,4 @@
-"""``project`` — the deterministic multi-execution telemetry projection (decisions.md D-159, D-196; V0.9 Step 2).
+"""``project`` — the deterministic multi-execution telemetry projection (decisions.md D-159, D-196; V0.9 Steps 2-4).
 
 **Event Log is authoritative. ``ExecutionRecord`` is a derived, single-execution projection of it (D-159). Telemetry
 is one more projection, over the same already-recorded facts, generalized to be read alongside other executions'
@@ -23,6 +23,19 @@ unchanged); it does not attempt to name a ``Strategy`` (no execution today is pr
 stay untouched); and it computes no quality, confidence, rate or score of any kind (D-159 item 2's own exclusion,
 applied identically one layer up).
 
+**V0.9 Step 4 adds two fields, both already computed by ``ExecutionRecord`` and simply copied through, not newly
+measured.** ``execution_time_used_ms`` is the sixth ``MissionState`` counter — present on ``ExecutionRecord``
+since D-159, missing here since Step 2 (an implementation gap found by inspection, not a deliberate scope
+decision anyone had ruled on). It matters specifically because it is **not** the same signal as
+``mission_wall_clock_ms``: the reducer sums each node's own ``duration_ms``, so a strategy whose stages run in
+parallel can show a wall-clock span shorter than its own accumulated node time, while a sequential strategy's
+two numbers track closely — the distinction between "fast because parallel" and "fast because cheap." Never
+combined with ``mission_wall_clock_ms`` into a third number (D-158 item 4's "labelled by source, never
+combined," applied here too). ``plan_rejected_at`` is copied from ``ExecutionRecord.plan_rejected_at`` alone —
+deliberately **not** ``plan_rejection_reasons``, which stays a per-case, free-text-bearing detail one hop away in
+``ExecutionRecord``/the raw log, consistent with this type's own "counts and typed enums, not per-case detail"
+shape.
+
 **``mission_wall_clock_ms`` may be negative.** ``ExecutionRecord.first_occurred_at``/``last_occurred_at`` are
 documented as "bounds of the log, never an ordering" — ``occurred_at`` is the producer's own domain timestamp
 (D-086), not the log's own monotonic ``sequence``, so a pathological or externally-produced log could record an
@@ -37,7 +50,14 @@ from pydantic import Field
 from eidos.contracts import EidosModel, ExecutionId, MissionId, MissionStatus, PlanId, TenantId
 from eidos.contracts._validators import UtcDateTime
 from eidos.runtime import NodeStatus, RunOutcome
-from eidos.state import A2ATaskStartedPayload, EventRecord, MissionFailureCause, ReplayRejection, execution_record
+from eidos.state import (
+    A2ATaskStartedPayload,
+    EventRecord,
+    MissionFailureCause,
+    PlanRejectionStage,
+    ReplayRejection,
+    execution_record,
+)
 
 
 class TelemetryRecord(EidosModel):
@@ -56,11 +76,13 @@ class TelemetryRecord(EidosModel):
     retries_used: int = Field(ge=0)
     replans_used: int = Field(ge=0)
     tokens_used: int = Field(ge=0)
+    execution_time_used_ms: int = Field(ge=0)  # accumulated accounted node time (sum of each node's own duration_ms), not wall-clock (D-160 item 6)
     responses_missing_token_counts: int = Field(ge=0)
 
     mission_status: MissionStatus
     run_outcome: RunOutcome | None = None
     failure_cause: MissionFailureCause | None = None
+    plan_rejected_at: PlanRejectionStage | None = None
     verified: bool | None = None
 
     succeeded_count: int = Field(ge=0)
@@ -108,10 +130,12 @@ def project(records: Iterable[EventRecord]) -> TelemetryRecord | ReplayRejection
         retries_used=record.retries_used,
         replans_used=record.replans_used,
         tokens_used=record.tokens_used,
+        execution_time_used_ms=record.execution_time_used_ms,
         responses_missing_token_counts=record.responses_missing_token_counts,
         mission_status=record.mission_status,
         run_outcome=record.run_outcome,
         failure_cause=record.failure_cause,
+        plan_rejected_at=record.plan_rejected_at,
         verified=record.verified,
         succeeded_count=counts[NodeStatus.SUCCEEDED],
         failed_count=counts[NodeStatus.FAILED],
