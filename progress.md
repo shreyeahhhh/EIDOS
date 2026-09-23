@@ -1900,12 +1900,103 @@ guard tests repo-wide: **532 passed**. Full default suite: **3,125 passed, 2 des
 of V0.7 and V0.8 Steps 2–3) confirmed untouched by diff. **No new `decisions.md` entry beyond D-190–D-193**
 (formally recorded as part of this step, mirroring Step 2's own "approved in chat, written up when implemented"
 pattern) — nothing implementation revealed needed a further decision. Committed as one focused commit; not
-pushed. **Step 6 has not started.**
+pushed.
+
+### Step 6 — selection integration + deterministic end-to-end evaluation (2026-09-23; no `decisions.md` entry)
+
+**Part 1, the actual gap.** Inspected before writing anything: `CandidateGenerationResult.candidates` (V0.7 Step
+4) is already exactly the `tuple[Strategy, ...]` `select_strategy` (V0.8 Step 2) takes as its own second
+parameter — the two already-public functions compose directly, with no adapter, wiring function or new
+abstraction required. **The gap was a missing test, not a missing component.** Confirmed by the diff at the end
+of this step: zero lines changed anywhere under `src/eidos/planning/` or `src/eidos/selectors/`. The one new
+test-support addition, `generate_feasible` (`eidos_planning_factories.py`), is a thin, branch-free composition of
+`generate_candidate_strategies` with the existing fixtures — proof of the composition, not a new mechanism.
+
+**New suite: `tests/integration/planning/`** (33 tests, four files) — chosen over `tests/scenarios/` because this
+step explicitly stops at `SelectionResult`: no `Plan` is built or executed (Strategy-to-Plan expansion does not
+exist yet, D-183's own ordering), so it is not a "whole mission" in `tests/scenarios/`'s own sense; it is exactly
+`tests/integration/README.md`'s own definition — two or more real components (the reference generator, the
+feasibility gate, both `Selector` implementations) working together, deliberately substituting only a
+`ScriptedModel` for the one component this project never calls for real in the default suite (D-136's own
+established substitution point).
+
+- **`test_selection_pipeline.py`** (12 tests, Part 2) — `TaskGenome` → `RuleBasedCandidateGenerator` → feasibility
+  → `DeterministicSelector`, over the specified shapes: zero capabilities and one capability each yield a single
+  feasible candidate and **bypass the selector entirely** (a `CountingSelector` test double proves 0 calls, not
+  merely that the outcome looks right); two capabilities yield linear+parallel and the selector is actually
+  invoked (D-188's tie-break picks the 1-stage shape); three capabilities yield all three structurally distinct
+  shapes; a tight `max_depth` rejects only the 3-stage linear shape while parallel+staged still reach the selector
+  (proving rejected candidates never reach it, by direct set-disjointness, not by absence of a crash); `max_nodes
+  = 0` rejects every candidate, `NO_FEASIBLE_CANDIDATES`, selector never called; the selected `Strategy` is the
+  exact feasible-tuple object, checked by `is`; identical input reproduces identical candidate order and selection
+  across repeated runs; `SelectionResult` round-trips through `model_validate_json` (not
+  `model_validate(json.loads(...))` — strict-mode `EidosModel` only coerces `str -> UUID`/enum when validating
+  directly from JSON text, mirroring `eidos.state.records`'s own established round-trip; caught immediately by
+  running the test, not assumed).
+- **`test_model_assisted_selection.py`** (12 tests, Part 3) — the same pipeline through `ModelAssistedSelector`
+  with a `ScriptedModel`: a valid choice; an out-of-set label (`SELECTOR_FAILED`); malformed prose; a `ModelFailure`
+  (`TIMEOUT`/`UNAVAILABLE`, parametrized); a genome whose own `goal` carries an injected instruction telling the
+  model to answer with an out-of-set label, and a model scripted to actually obey it — still only ever
+  `MALFORMED_CHOICE`, never an accepted out-of-set id; a model scripted to *ignore* the injection and answer with
+  a real label — still only ever resolves to a real, feasible `StrategyId`; one and zero feasible candidates each
+  bypass the model entirely (`model.calls == 0`); a model failure never silently falls back to a deterministic
+  choice (`SELECTOR_FAILED`, not `SELECTED`, even though feasible candidates existed); the same scripted answer
+  reproduces the same `SelectionResult` across repeated calls; a model-assisted `SelectionResult` round-trips
+  through JSON with zero model calls at replay time.
+- **`test_selector_comparison.py`** (5 tests, Part 4) — a test-only `SelectionComparison` dataclass (selector name,
+  outcome, selected id, feasible-set membership, `structural_cost`, failure reason — no score/rank/best field,
+  pinned directly against the dataclass's own field names) built from both selectors run over the *identical*
+  candidate tuple: agreement is recorded as equality, a difference is recorded as inequality, neither is called
+  correct or better; a `SELECTOR_FAILED` case reports the fact (`structural_cost` is `None`, a reason string is
+  present) rather than a missing result.
+- **`test_selection_integration_boundaries.py`** (4 tests, Part 6) — this suite itself never imports
+  `eidos.compiler`/`.runtime`/`.backends`/`.baseline` (structural proof that "no Plan is built or executed" is
+  true of the test file, not only claimed in its docstring); a combined, real run of both packages together (built
+  from bare `eidos.contracts`/`eidos.validation` constructors, deliberately not through the shared test-support
+  factory hub — see the finding below) loads no `eidos.a2a`/`.recording`/`.backends`/`.providers`/`.state`/
+  `.baseline` and no LangGraph/LangChain/LangSmith/`httpx`/`requests`/`mcp`; `eidos.planning`'s own source still
+  never imports `eidos.selectors`; `eidos.selectors`'s own source still depends only on
+  `eidos.agents`/`.contracts`/`.planning`.
+
+**One genuine, harmless finding, checked rather than assumed.** The first version of the combined-import subprocess
+check also forbade `eidos.compiler`/`.runtime`/`.capabilities` and failed — not because `eidos.planning` or
+`eidos.selectors` import them (the per-package guards already prove neither does), but because `eidos.agents`
+itself (needed for `ModelPort`, D-190) already, legitimately, imports them for its own unrelated `WorkAgent`/
+artifact concerns — pre-existing V0.4 architecture, untouched by V0.8. The check was corrected to assert what
+actually matters (no protocol/vendor/storage-layer package, no LangGraph/vendor SDK), not to weaken it to pass;
+the corrected version was then sanity-checked the other way, by a manufactured `import eidos.recording` added
+temporarily to `model_assisted.py` — caught by both this new integration check and the existing Step 5 unit guard
+simultaneously, then reverted.
+
+**Mutation testing.** No new non-trivial *production* logic exists to mutate — confirmed by `git diff --stat` on
+`src/eidos/planning/` and `src/eidos/selectors/` showing zero changes for this entire step. The new guard logic
+(all in `test_selection_integration_boundaries.py`) was instead verified the way this project already verifies
+guards: two separate manufactured violations (a fake `import eidos.compiler` inside a test file; a fake
+`import eidos.recording` inside `model_assisted.py`), each confirmed caught, then reverted.
+
+**Part 7 (benchmark boundary): not built, only noted.** The future V0.9 benchmark will likely need, as plain
+recorded facts and nothing fabricated: a mission/task identifier, candidate and feasible-candidate counts, the
+selected `StrategyId`, which selector implementation ran, the selection outcome, the selected candidate's
+structural properties, a model call count, a model failure kind when one occurs, and — only once Plan expansion
+and execution exist — a verified execution result. No metric on this list is computed, recorded or claimed by
+Step 6; `SelectionResult` is unchanged.
+
+**Part 8 (decisions): none created.** Checked against D-186 to D-193 first: every property Step 6 needed to prove
+(membership, bypass behavior, no fallback, JSON round-trip) was already a consequence of the existing, unchanged
+contracts — nothing here exposed a genuine new architectural question. The one real finding (`eidos.agents`'s own
+pre-existing transitive dependencies) is a fact about already-accepted V0.4 architecture, not a new decision.
+
+Full planning suite: **224 passed** (unchanged — no `eidos.planning` code touched). All guard tests repo-wide:
+**532 passed** (unchanged — the new checks live in `tests/integration/`, outside that filter, and are reported
+separately above). New integration suite: **33 passed**. Full default suite: **3,158 passed, 2 deselected** (was
+3,125; +33, none skipped or weakened). `src/eidos/planning/` and `src/eidos/selectors/` confirmed byte-for-byte
+untouched by `git diff --stat`. Committed as one focused commit; not pushed. **The V0.9 benchmark has not
+started.**
 
 ### Carried forward, not decided
 
 Everything Step 1 left unresolved stays exactly as recorded, except where Steps 4–5 explicitly resolved it
-(package placement, D-190 to D-193): none of the rest was touched by Steps 2, 3, 4 or 5's own, narrower scope.
+(package placement, D-190 to D-193): none of the rest was touched by Steps 2, 3, 4, 5 or 6's own, narrower scope.
 Laya's real semantics remain unknown; Strategy-to-Plan expansion's mechanism (not just its ordering, D-183) is
 still untouched.
 

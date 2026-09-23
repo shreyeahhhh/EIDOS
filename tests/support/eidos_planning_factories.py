@@ -11,7 +11,14 @@ duplicated, per D-180's own "reuse the existing contracts" instruction.
 from uuid import UUID
 
 from eidos.contracts import CapabilityId, MissionId, StrategyId, TenantId
-from eidos.planning import Strategy, StrategyStage, VerificationPosture
+from eidos.planning import (
+    CandidateGenerationResult,
+    RuleBasedCandidateGenerator,
+    Strategy,
+    StrategyStage,
+    VerificationPosture,
+    generate_candidate_strategies,
+)
 from eidos.validation import SystemLimits
 
 from eidos_factories import make_reliability_contract, make_task_genome
@@ -72,3 +79,19 @@ class FixedStrategyIdSource:
         strategy_id = make_strategy_id(self._next)
         self._next += 1
         return strategy_id
+
+
+def generate_feasible(genome, *, limits: SystemLimits | None = None, contract=None, max_candidates: int = 3) -> CandidateGenerationResult:
+    """``generate_candidate_strategies`` over the reference generator and the existing fixtures (V0.8 Step 6
+    integration tests) — a thin composition of two already-public functions, not a new production abstraction:
+    ``CandidateGenerationResult.candidates`` is already exactly the ``tuple[Strategy, ...]``
+    ``selection.select_strategy`` expects, so nothing new needed to be built to connect them."""
+    return generate_candidate_strategies(
+        RuleBasedCandidateGenerator(),
+        genome,
+        mission_id=MISSION,
+        reliability_contract=contract or GENEROUS_CONTRACT,
+        limits=limits or GENEROUS_LIMITS,
+        max_candidates=max_candidates,
+        ids=FixedStrategyIdSource(),
+    )
