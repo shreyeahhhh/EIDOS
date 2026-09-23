@@ -4288,3 +4288,32 @@ one is not.
 - **Affects:** `progress.md`'s milestone ladder and session log, `README.md`, `docs/03_architecture.md`.
   Resolves the V0.9-numbering half of the gap D-184 found and left open at V0.7 Step 1 (mirrors D-178's
   "resolves D-020" precedent). Does not reopen D-178 through D-195.
+
+### D-197 — The first controlled benchmark's harness lives under `tests/`, not `src/eidos`; no new top-level directory
+
+- **Status:** Accepted · **Date:** 2026-09-23 · **Decided by:** human owner (delegated the location call to inspection)
+- **Source:** the owner's own final-approval instruction for "the first controlled EIDOS benchmark" ("Inspect the
+  repository and determine the narrowest existing location/convention for experimental benchmark code. Do not
+  assume the location from the design document... The benchmark must remain outside `src/eidos`"); CLAUDE.md §3
+  ("do not create a package, module or directory before the milestone that fills it"); `progress.md`'s own
+  "Intentionally not built yet" table, which already reserves `evaluation/` for **V1.1** specifically
+- **The question, inspected before any file was written:** the benchmark itself is explicitly unassigned a
+  milestone number (D-196), and `evaluation/` is explicitly reserved for a *different*, later milestone (V1.1,
+  "evaluation harness, experiments") — so neither `src/eidos/evaluation` nor any other new package could be
+  created for it without contradicting an already-Accepted decision. The repository has no `scripts/`,
+  `tools/`, `benchmarks/` or `experiments/` directory of any kind (checked directly: the only top-level
+  directories are `.claude`, `docs`, `src`, `tests`), so there was no existing non-`tests` convention to reuse.
+- **Decision:** the benchmark's reusable machinery (`eidos_benchmark_harness.py`) lives in `tests/support/` —
+  pythonpath'd, never itself collected, exactly like every other `eidos_*_factories.py` module already there.
+  Its actual assertions and case tables live in `tests/scenarios/test_benchmark_execution_control.py` —
+  `tests/scenarios/` is already scoped by CLAUDE.md §6 to "full missions, replanning, verification failure,
+  budget exhaustion, policy violation," which the benchmark's own five task classes match almost verbatim, and
+  it is already a collected `testpaths` entry in `pyproject.toml`. No new top-level directory is created; no
+  `pyproject.toml` change is needed.
+- **Consequences:** the benchmark composes only already-shipped `eidos` code (`eidos.agents`, `eidos.baseline`,
+  `eidos.recording`, `eidos.planning`, `eidos.expansion`, `eidos.validation`, `eidos.telemetry`) — no core
+  contract, `MissionEvent`, or `src/eidos` package is added or changed by this decision or by the benchmark it
+  authorizes the location for. If a later milestone (most plausibly V1.1's own `evaluation/`) needs this
+  machinery promoted into `src/eidos`, that is that milestone's own decision, not implied by this one.
+- **Affects:** where this session's benchmark files were placed only. Does not reopen D-184 or D-196, and does
+  not reserve or rename anything in `progress.md`'s "Intentionally not built yet" table.
