@@ -1,4 +1,4 @@
-"""Static guards on ``eidos.planning`` (decisions.md D-178 to D-182; CLAUDE.md §2 invariants 1, 2, 9, 11; V0.7 Steps 2 to 4).
+"""Static guards on ``eidos.planning`` (decisions.md D-178 to D-189; CLAUDE.md §2 invariants 1, 2, 9, 11; V0.7 Steps 2 to 5; V0.8 Step 2).
 
 Mirrors ``tests/unit/compiler/test_compiler_guards.py``'s own discipline for a sibling core layer: these read the
 package source, so they fail the moment someone adds a forbidden dependency, a vendor name, a hidden source of
@@ -16,6 +16,11 @@ those modules legitimately appear in ``sys.modules`` after `import eidos.plannin
 own import mechanics, not evidence of anything being *called*. The precise, correct guard is therefore static
 (source text and imports), not a ``sys.modules`` presence check — mirroring
 ``test_compiler_guards.py::test_the_compiler_does_not_reimplement_the_v02_stages`` exactly.
+
+**V0.8 Step 2 adds no new dependency.** ``selector.py``/``selection.py`` still import only ``eidos.contracts``
+(``Selector`` needs no ``SystemLimits``/``ReliabilityContract`` — admissibility was already fully decided by
+feasibility filtering, V0.7 Step 4) and never ``eidos.agents`` (``ModelPort``, D-135): a model-assisted ``Selector``
+is a future adapter *outside* this core layer, not built here.
 """
 
 import ast
@@ -41,8 +46,8 @@ FORBIDDEN_IMPORTS = {
 }
 
 VENDOR_NAMES = (
-    "anthropic", "claude", "openai", "gpt", "gemini", "mistral", "llama", "cohere",
-    "langgraph", "langchain", "networkx", "qdrant", "a2a", "mcp",
+    "anthropic", "claude", "openai", "gpt", "gemini", "mistral", "llama", "cohere", "litellm",
+    "langgraph", "langchain", "networkx", "qdrant", "a2a", "mcp", "rag",
 )
 
 # D-179's explicit exclusions: a Strategy names capabilities only, never any of these. Checked both as an
@@ -68,7 +73,8 @@ def imports_of(path: Path) -> list[tuple[str, tuple[str, ...], int]]:
 
 def test_the_package_has_the_expected_modules():
     assert [m.name for m in MODULES] == [
-        "__init__.py", "feasibility.py", "generator.py", "pipeline.py", "results.py", "strategy.py",
+        "__init__.py", "feasibility.py", "generator.py", "pipeline.py", "results.py",
+        "selection.py", "selector.py", "strategy.py",
     ]
 
 
@@ -132,6 +138,9 @@ def test_strategy_and_stage_declare_none_of_the_forbidden_field_names():
         FeasibilityReport,
         FeasibilityViolation,
         RejectedCandidate,
+        SelectedCandidate,
+        SelectionResult,
+        SelectorFailure,
         Strategy,
         StrategyShape,
         StrategyStage,
@@ -139,17 +148,26 @@ def test_strategy_and_stage_declare_none_of_the_forbidden_field_names():
 
     for model in (
         Strategy, StrategyShape, StrategyStage, CandidateGenerationResult, RejectedCandidate,
-        FeasibilityReport, FeasibilityViolation,
+        FeasibilityReport, FeasibilityViolation, SelectedCandidate, SelectorFailure, SelectionResult,
     ):
         assert FORBIDDEN_FIELD_NAMES & set(model.model_fields) == set(), model.__name__
 
 
-def test_candidate_generation_result_never_names_a_winner_or_a_score():
-    # Candidate generation is not strategy selection (V0.8, not built): no ranking vocabulary anywhere.
-    from eidos.planning import CandidateGenerationResult
+def test_no_ranking_or_scoring_vocabulary_anywhere_in_planning_results():
+    # Candidate generation and selection are not ranking: no "best"/"preferred"/"winner"/"score"/"rank" field
+    # on any report-shaped result this package returns.
+    from eidos.planning import CandidateGenerationResult, SelectionResult
 
-    forbidden = {"best", "preferred", "winner", "rank", "score", "selected"}
-    assert forbidden & set(CandidateGenerationResult.model_fields) == set()
+    forbidden = {"best", "preferred", "winner", "rank", "score"}
+    for model in (CandidateGenerationResult, SelectionResult):
+        assert forbidden & set(model.model_fields) == set(), model.__name__
+
+
+def test_no_selection_id_field_exists_anywhere_yet():
+    # D-189: SelectionResult carries no identity of its own.
+    from eidos.planning import SelectionResult
+
+    assert "selection_id" not in SelectionResult.model_fields
 
 
 # Frozen-in-practice module-level lookup tables (dict literals, never mutated after definition), matching the

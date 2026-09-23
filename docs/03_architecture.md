@@ -182,6 +182,22 @@ future decisions. A model-asserted quality score is **not** ground truth.
 > on. **D-184:** MCP and RAG are deferred, unassigned extensions outside the V0.7–V1.0
 > strategy-intelligence sequence — see §11's package table. **D-185:** candidate generation and
 > feasibility filtering are not `MissionEvent`s in V0.7; `MissionEventType` gains no member for either.
+> **V0.7 closed as scoped, 2026-09-22.**
+>
+> **V0.8 (Strategy Selection, 2026-09-22):** given a bounded, feasibility-filtered candidate set, choose
+> one `Strategy` without the selector becoming an uncontrolled LLM planner — the same bounded-decision
+> principle one step further. **D-186:** a `Selector` returns only a `StrategyId`, never a `Strategy`
+> value or Plan DSL (`ModelPort`, D-135, is text-in/text-out only, so a model literally cannot return a
+> `Strategy` — the mechanical reason this is enforceable in code). **D-187:** `Selector.select(candidates,
+> task_genome) -> SelectorChoice`, paired with a deterministic orchestration boundary,
+> `select_strategy`, that short-circuits zero/one-candidate cases and is the one place a selector's
+> claim is checked against the real candidate set by `strategy_id` — never re-running
+> `check_feasibility`, which already decided admissibility once. **D-188:** the reference
+> `DeterministicSelector` orders candidates by a structural tuple (total capability occurrences, then
+> stage count), never a scalar score. **D-189:** `SelectionResult` is a typed, replay-ready value only —
+> no `SelectionId`, no `MissionEvent`, no Strategy Memory yet, mirroring D-185's own deferral. Step 2
+> implemented exactly this; a model-assisted `Selector` stays a future adapter outside `eidos.planning`
+> (a core layer that cannot import `eidos.agents`/`ModelPort`).
 
 ## 8. The feedback loop
 
@@ -246,7 +262,7 @@ the architectural map; `progress.md` tracks which of these exist.
 |---|---|---|---|
 | `eidos.contracts` | Typed contracts: TaskGenome, ReliabilityContract, MissionState, MissionEvent, Plan, PlanStep, AgentTask | V0.1 | **yes** |
 | `eidos.capabilities` | The V0.4 capability set (five exact-string, lowercase names, D-132, D-144), the agent descriptor and a deterministic registry that resolves a capability to an agent; an unbound capability is a typed pre-run rejection (D-134) | V0.4 (V0.2 needed neither — D-102) | **yes** — vocabulary, descriptor, registry and `bind_plan` (Step 4) |
-| `eidos.planning` | Candidate strategy generation, strategy selection | V0.7 | **yes** — the `Strategy`/`StrategyStage`/`VerificationPosture` data contracts (Step 2), the bounded `CandidateGenerator` boundary (Step 3: `RuleBasedCandidateGenerator`, `generate_candidate_strategies`) and the feasibility gate (Step 4: `check_feasibility`, reusing `SystemLimits`/`ReliabilityContract`, never the Plan validator); no Strategy-to-Plan expansion, no selection yet |
+| `eidos.planning` | Candidate strategy generation, strategy selection | V0.7 (contracts, generator, feasibility) / V0.8 (selection) | **yes** — the `Strategy`/`StrategyStage`/`VerificationPosture` data contracts (V0.7 Step 2), the bounded `CandidateGenerator` boundary (V0.7 Step 3), the feasibility gate (V0.7 Step 4, closed as scoped), and the `Selector`/`DeterministicSelector`/`select_strategy` selection boundary (V0.8 Step 2, D-186–D-189); no Strategy-to-Plan expansion, no model-assisted selector yet |
 | `eidos.validation` | The validation pipeline of §14 — depends only on `eidos.contracts` | V0.2 | **yes** |
 | `eidos.compiler` | Validated `Plan` + accepted `PlanValidationReport` → an immutable, backend-neutral compiled form; deterministic; compiles only `agent` and `VERIFY` (D-112, D-114); imports no LangGraph | V0.3 | **yes** — the compiled form and `compile_plan` only (Step 2) |
 | `eidos.runtime` | Backend-neutral execution: level-synchronous semantics, node and run results, synchronous execution ports, frozen `ExecutionContext` including the frozen `ReliabilityContract` (D-113, D-115, D-117, D-118, D-122, D-139); imports no LangGraph | V0.3 | **yes** — ports, results, `ExecutionContext` and the sequential reference executor (Step 3) |

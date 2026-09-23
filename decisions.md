@@ -3348,6 +3348,43 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
 - **Consequences:** matches D-165-style scope discipline — event vocabulary is added only at the milestone that needs it, never speculatively. Strategy-related event vocabulary (for replay, evaluation or Strategy Memory, V1.0) **may be introduced later**, when one of those milestones actually needs it — this decision does not pre-approve any specific future shape, only confirms none is needed now.
 - **Affects:** `eidos.state` is untouched by V0.7 in every step. Does not reopen D-090, D-154 or any other `MissionEventType` decision.
 
+### D-186 — A selected Strategy is always one of the supplied feasible candidates; a Selector never emits a new Strategy or Plan DSL
+
+- **Status:** Accepted · **Date:** 2026-09-22 · **Decided by:** human owner
+- **Source:** the Jev-inspired bounded-decision-space principle (V0.7 Step 1, D-179/D-183's own application of it); invariant 14 ("governance is deterministic... never by prompt"); `eidos.agents.model.ModelPort` (D-135) — text-in, text-out only, confirmed by inspection
+- **The finding this rests on:** `ModelPort.complete()` returns text, never a structured value — a model can never return a `Strategy` object directly, only name one. This is the mechanical reason the constraint below is enforceable in code, not merely policy.
+- **Decision:** a `Selector` may choose **only** from the candidate set it is given. It returns a `StrategyId` — never a `Strategy` value, never Plan DSL, never a newly constructed strategy of any kind. The actual admission of that choice (proving the id names a real member of the candidate set) is performed by a separate, deterministic orchestration boundary (D-187), never trusted from the selector itself.
+- **Consequences:** this is the V0.8-level restatement of the same discipline `eidos.planning`'s own candidate generator already applies at the layer below it (a `CandidateGenerator` cannot name a capability outside `TaskGenome.required_capabilities`, D-178 onward) — governance never depends on the selector, deterministic or model-assisted, behaving correctly.
+- **Affects:** D-187 (the contract this constrains). Does not reopen D-178 through D-185.
+
+### D-187 — The Selector contract and its orchestration boundary
+
+- **Status:** Accepted · **Date:** 2026-09-22 · **Decided by:** human owner
+- **Source:** `CandidateGenerator`/`generate_candidate_strategies`'s own two-layer split (D-178 onward); `ModelResult`'s total-function shape (D-135); `docs/03_architecture.md`'s pre-existing package table ("candidate strategy generation, strategy selection" under `eidos.planning`)
+- **Decision:**
+  1. **`Selector.select(candidates, task_genome) -> SelectorChoice`**, where `SelectorChoice = SelectedCandidate | SelectorFailure` — mirrors `ModelResult`'s own total, never-raising shape.
+  2. **`select_strategy(selector, candidates, task_genome) -> SelectionResult`** is the deterministic orchestration boundary, mirroring `generate_candidate_strategies`'s own role: zero candidates → `NO_FEASIBLE_CANDIDATES`, the selector is never called; exactly one candidate → selected directly, the selector is never called; otherwise the selector is invoked and its claim is checked against the actual candidate tuple by `strategy_id` — a match returns the exact existing `Strategy` object (never reconstructed); no match is `INVALID_CANDIDATE_RETURNED`, never substituted; a `SelectorFailure` is `SELECTOR_FAILED`, the message preserved, never retried, never silently falling back.
+  3. **`check_feasibility` is not re-run inside this boundary.** Every candidate offered to a `Selector` is, by construction, already the feasibility-filtered output of `generate_candidate_strategies` (V0.7 Step 4); the membership check here is an identity check, not a second admissibility pass.
+  4. **Lives in `eidos.planning`** (no new package) — the core `Selector` Protocol and one deterministic reference implementation only. A future model-assisted `Selector` (needing `eidos.agents.ModelPort`) is a separate adapter *outside* this core layer, not built now.
+- **Consequences:** `eidos.planning` needs no new dependency for this — `Selector`/`select_strategy` take no `SystemLimits`/`ReliabilityContract` at all, since admissibility was already fully decided by feasibility filtering before a candidate ever reaches selection.
+- **Affects:** D-186 (the constraint this contract enforces), D-188 (the one reference implementation this step ships).
+
+### D-188 — The reference DeterministicSelector's tie-break is structural, never a scalar score
+
+- **Status:** Accepted · **Date:** 2026-09-22 · **Decided by:** human owner
+- **Source:** invariant 13/17 discipline ("never manufacture confidence," "no fabricated numbers") applied to strategy comparison; handoff §18's own cold-start sequence ("rules and heuristics" before any measured signal exists)
+- **Decision:** `DeterministicSelector` orders candidates by `structural_cost(strategy) = (total capability occurrences, stage count)` — a **tuple**, compared lexicographically, never weighted or combined into a single number. Tie-break order: fewest total capability occurrences first, then fewest stages, then the candidate set's own generation order (via `min()`'s own stability — the first minimal element in iteration order wins, so no separate tie-break code exists). No scalar quality score is introduced at this step or implied for later.
+- **Consequences:** this is deliberately the first, plainest rung of handoff §18's own progressive cold-start sequence ("rules and heuristics → small pilot → measure actual signals...") — not a placeholder for a future weighted score, a considered choice to avoid fabricating a quality judgment this milestone has no measured basis for.
+- **Affects:** `eidos.planning.selector`'s own reference implementation only. Does not constrain a future model-assisted `Selector`'s own internal reasoning, only that it must still resolve to a `StrategyId` a real candidate carries (D-186).
+
+### D-189 — SelectionResult is a typed, replay-ready value only; no SelectionId, no MissionEvent, no Strategy Memory
+
+- **Status:** Accepted · **Date:** 2026-09-22 · **Decided by:** human owner
+- **Source:** D-185's own identical deferral for candidate generation; invariant 15 (replayability)
+- **Decision:** `SelectionResult` (`outcome`, `selected`, `reason`) is a complete, frozen, JSON-round-trippable value — nothing more. It is **not** a `MissionEvent`, **not** a `MissionState` field, and carries **no identity of its own** (no `SelectionId`). Nothing records a selection anywhere yet.
+- **Consequences:** exactly mirrors D-185's own reasoning: the contract is shaped to be recordable later (a future event, not built) without needing to exist as one now. A completed mission still replays deterministically once a selection is eventually recorded as a fact — the *selection mechanism* need not be deterministic itself (a future model-assisted one likely won't be), the same way a model call inside an agent already isn't, without breaking mission replay.
+- **Affects:** nothing in `eidos.state` is touched. Does not reopen D-185.
+
 ## Open — require the human owner
 
 These are ambiguities, contradictions and gaps found in the handoff during the bootstrap read. None

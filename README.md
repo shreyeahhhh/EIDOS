@@ -7,7 +7,7 @@
 
 ## Status
 
-**V0.7 — Strategy & Candidate Generation: closed as scoped, none pushed. V0.6 — A2A: Steps 1–6 of 9 implemented and pushed. V0.5 — the event log and the state reducer: complete as scoped. V0.4 — real local agents: complete as scoped.**
+**V0.8 — Strategy Selection: architecture accepted, Step 2 (the Selector contracts and orchestration boundary) implemented, none pushed. V0.7 — Strategy & Candidate Generation: closed as scoped, none pushed. V0.6 — A2A: Steps 1–6 of 9 implemented and pushed. V0.5 — the event log and the state reducer: complete as scoped. V0.4 — real local agents: complete as scoped.**
 
 This repository contains the project rules, the architecture knowledge base, the decision record,
 the V0.1 typed contracts (`eidos.contracts`), the V0.2 plan validator (`eidos.validation`), the V0.3
@@ -56,9 +56,23 @@ this gate, and caps only the feasible pool. Step 5 resolved the three questions 
 with no code change: **D-183** (candidates are feasibility-filtered before selection; full Plan validation runs
 once, only on the selected strategy's expanded `Plan`), **D-184** (MCP and RAG are deferred, unassigned extensions
 outside the V0.7–V1.0 sequence — not renumbered into it), **D-185** (candidate generation and feasibility are not
-`MissionEvent`s in V0.7). A close-out review was prepared but not declared closed — that is the owner's own call.
-No Strategy-to-Plan expansion, no selection yet. See [progress.md](progress.md), "V0.7 Strategy & Candidate
-Generation".
+`MissionEvent`s in V0.7). **V0.7 is closed as scoped** (the owner's own confirmation, 2026-09-22). See
+[progress.md](progress.md), "V0.7 Strategy & Candidate Generation".
+
+V0.8 is the next link the fundamental loop names: feasible Strategy candidates → **[V0.8 Strategy Selection]** →
+selected Strategy → Strategy-to-Plan expansion (future) → the existing Plan Validation → compilation/execution.
+The central problem: choose one strategy from a bounded, already-feasible candidate set without turning the
+selector into an uncontrolled LLM planner. Step 1 (architecture only) found that `ModelPort` (D-135) is text-in,
+text-out only — a model can never return a `Strategy` directly, only name one — the mechanical reason a selector
+structurally cannot invent a strategy. Recorded **D-186** (a selector returns only a `StrategyId`, never a
+`Strategy` value or Plan DSL), **D-187** (the `Selector` contract — `select(candidates, task_genome) ->
+SelectorChoice` — paired with a deterministic orchestration boundary, `select_strategy`, that performs the
+zero/one-candidate short-circuit and the actual membership check no untrusted selector can bypass), **D-188**
+(the reference `DeterministicSelector`'s tie-break is a structural tuple, never a scalar quality score), and
+**D-189** (`SelectionResult` is a typed, replay-ready value only — no `SelectionId`, no `MissionEvent`, no
+Strategy Memory yet). Step 2 implemented exactly that: `eidos.planning.selector` and `.selection`, still a core
+layer, still no `eidos.agents`/`ModelPort` dependency — a model-assisted `Selector` is a future adapter outside
+this layer, not built now. See [progress.md](progress.md), "V0.8 Strategy Selection".
 
 Current status and the milestone ladder: [progress.md](progress.md).
 Decisions and unresolved questions: [decisions.md](decisions.md).

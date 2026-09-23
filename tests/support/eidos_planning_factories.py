@@ -1,4 +1,5 @@
-"""Minimal valid-object factories for ``eidos.planning`` tests (decisions.md D-178 to D-182; V0.7 Steps 2 to 4).
+"""Minimal valid-object factories for ``eidos.planning`` tests (decisions.md D-178 to D-189; V0.7 Steps 2 to 5;
+V0.8 Step 2).
 
 Mirrors ``eidos_factories.py``'s own discipline: every factory returns a fresh, structurally valid instance so a
 test starts from something known-good and mutates exactly the field under test. Fixed ids only — nothing here
@@ -49,6 +50,16 @@ def genome_with(*capabilities: str, **overrides):
     """A ``TaskGenome`` requiring exactly ``capabilities`` (in the order given, duplicates allowed on purpose —
     some tests exercise the generator's own deduplication)."""
     return make_task_genome(required_capabilities=tuple(CapabilityId(c) for c in capabilities), **overrides)
+
+
+def strategy_with_stages(number: int, *stage_capabilities: tuple, **overrides) -> Strategy:
+    """A ``Strategy`` with id ``make_strategy_id(number)`` and one stage per entry in ``stage_capabilities``
+    (each entry a tuple of capability names) — a convenience for selector/selection tests that build several
+    strategies with specific, comparable shapes."""
+    stages = tuple(make_strategy_stage(*caps) for caps in stage_capabilities) or (make_strategy_stage("research"),)
+    fields = dict(strategy_id=make_strategy_id(number), stages=stages)
+    fields.update(overrides)
+    return make_strategy(**fields)
 
 
 class FixedStrategyIdSource:
