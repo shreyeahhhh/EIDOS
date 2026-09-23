@@ -3421,6 +3421,22 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
 - **Consequences:** the caller — never the selection boundary itself — decides what happens after `SELECTOR_FAILED` (retry, switch selectors, halt for review). A future *opt-in* composition (e.g. a wrapper `Selector` that tries one implementation then another) would itself be an ordinary `Selector` implementation the existing Protocol already supports — not proposed or built now.
 - **Affects:** the not-yet-built model-assisted `Selector`'s own failure handling. Does not change `select_strategy`, `SelectionResult`, or `SelectionOutcome`.
 
+### D-194 — Strategy-to-Plan expansion lives in a new sibling core layer, `eidos.expansion`
+
+- **Status:** Accepted · **Date:** 2026-09-23 · **Decided by:** human owner
+- **Source:** D-178 ("whatever later expands a selected Strategy into a Plan must still pass that Plan through the unmodified V0.2 validation and V0.3 compiler pipeline"); D-180's own precedent (`eidos.planning` becomes a core layer with a named, narrow set of approved dependencies); `tests/unit/planning/test_planning_guards.py`'s existing `FORBIDDEN_CONCEPT_IMPORTS` guard, which already forbids `eidos.planning` from ever importing `StepId` (enforcing D-179's own exclusion of step ids and edges from `Strategy`); V0.9 Step 1 exploration.
+- **Decision:** the mechanism that expands a selected `Strategy` into a concrete `Plan` lives in a **new sibling core layer, `eidos.expansion`** — not inside `eidos.planning` (structurally impossible without violating the existing guard above, which is not weakened by this decision) and not inside `eidos.contracts`, `eidos.validation` or `eidos.compiler`. It joins the existing core-layer set (`eidos.contracts`, `eidos.validation`, `eidos.compiler`, `eidos.runtime`, `eidos.state`, `eidos.planning`) with the same discipline: deterministic, no I/O, no clock, no randomness, no model/vendor/tool name. It may depend only on `eidos.contracts` (`Plan`, `PlanStep`/`AgentStep`/`ControlStep`, `PlanId`, `StepId`) and `eidos.planning` (`Strategy`, `StrategyStage`, `VerificationPosture`) — never `eidos.validation`, `eidos.compiler`, `eidos.runtime`, `eidos.agents`, `eidos.providers`, `eidos.backends`, `eidos.a2a`, `eidos.recording` or `eidos.selectors`.
+- **Consequences:** its output is an ordinary `Plan` — no new entry point into V0.2 validation or V0.3 compilation is created; both remain exactly as they are, per D-178's own promise that a `Strategy` grants no shortcut. `eidos.expansion` does not call `eidos.planning.feasibility.check_feasibility` (already decided admissibility, D-180/D-183) and does not duplicate any V0.2 validation rule.
+- **Affects:** establishes the package boundary and its approved dependency edges ahead of V0.9 Step 2, which implements it. Does not reopen D-178, D-179, D-180 or D-183.
+
+### D-195 — `VerificationPosture.FINAL` expands to exactly one VERIFY step depending exactly on the final stage's own step ids
+
+- **Status:** Accepted · **Date:** 2026-09-23 · **Decided by:** human owner
+- **Source:** the real, already-shipped V0.4 baseline plan precedent (`{"gather": "", "analyse": "gather", "check": "analyse"}` — the `VERIFY` step depends only on the immediately preceding step, never transitively on an earlier one); `eidos.agents.verification`'s own documented behavior ("over the artifacts the VERIFY node's predecessors produced" — a `VerifyNode`'s `predecessors`, i.e. its `depends_on` edges, are the actual boundary of what gets verified, not a redundant ordering hint); D-146 (`minimum_distinct_sources` follows citations transitively through the artifact graph, not through Plan dependency edges, so evidence from an earlier stage remains reachable without a direct edge); V0.9 Step 1 exploration.
+- **Decision:** when a `Strategy.verification` is `FINAL`, expansion appends **exactly one** `VERIFY` `ControlStep` to the produced `Plan`, whose `depends_on` is **exactly** the complete set of `PlanStep` ids generated from the strategy's **final** stage — never every agent step in the Plan, and never a subset of the final stage. `VerificationPosture.NONE` produces no `VERIFY` step at all (unchanged from D-179's own definition of the field).
+- **Consequences:** verification's own direct scope is the final stage's output only; an earlier stage's evidence remains reachable only through citation-following (D-146), exactly mirroring the existing V0.4 precedent. This does not resolve D-129 (how a work node receives its predecessors' outputs stays Open) — the edges this decision fixes are for the `VERIFY` control step only, which already has a settled, documented data-flow (`eidos.agents.verification`), not for `AgentStep`-to-`AgentStep` edges.
+- **Affects:** `eidos.expansion`'s own expansion rule for the `VERIFY` step. Does not change `PlanStepKind`, `VerifyNode`, `VerificationAgent`, or any V0.2/V0.3 contract. Does not close D-129.
+
 ## Open — require the human owner
 
 These are ambiguities, contradictions and gaps found in the handoff during the bootstrap read. None
@@ -4230,4 +4246,32 @@ one is not.
   | Artifact persistence and the general question of how a node receives its predecessors' outputs | **D-129, D-017 (stay Open)** | not assigned |
   | LangGraph checkpointing and interrupts | D-113, D-120, D-127 | not assigned |
   | Enforcement of any budget or limit against the counters | D-043, D-044, D-046 | V1.2 |
+
+### D-196 — The milestone number "V0.9" now has three different meanings on record
+
+- **Status:** Open · **Date:** 2026-09-23 · **Source:** D-161's own deferral table (2026-09-21: "the telemetry
+  platform... | V0.9"); `progress.md`'s milestone ladder (pre-existing row: "**V0.9** Telemetry... Not started");
+  D-184's own V0.7 Step 1 sequence note ("V0.8 Selector, V0.9 benchmark, V1.0 Strategy Memory"); this session's
+  own V0.8 Step 6 brief ("Do NOT build the full V0.9 controlled benchmark yet... Step 6 is an integration proof,
+  not the research result"); this session's own most recent instruction, naming the work just implemented "V0.9
+  Step 1 — Strategy → Plan Expansion Architecture" and "V0.9 Step 2."
+- **Finding:** "V0.9" has now been used, on the record, for three different things: (1) the original handoff
+  ladder's **Telemetry** milestone (D-161, `progress.md`'s own pre-existing row — never renumbered by D-184,
+  unlike V0.7/V0.8), (2) a **controlled benchmark** (V0.7 Step 1's own sequence note, and V0.8 Step 6's explicit
+  "not yet the V0.9 benchmark" framing — consistent with each other, but distinct from (1)), and (3) **Strategy-
+  to-Plan Expansion** (this session's own most recent, explicit instruction and the work actually built by it,
+  `eidos.expansion`, D-194/D-195). This mirrors exactly the D-027/D-028/D-184 situation for V0.7/V0.8 before it
+  was resolved — except here it was found, not asked about, and is reported rather than silently picked.
+- **What was done meanwhile:** nothing was renamed. `progress.md`'s pre-existing milestone-ladder row ("**V0.9**
+  Telemetry... Not started") was left exactly as it was; the Strategy-to-Plan expansion work actually
+  implemented is documented under its own "V0.9 Strategy-to-Plan Expansion" heading in `progress.md`, using the
+  literal label the owner's own instruction used, without erasing or contradicting the older ladder row. Which
+  reading of "V0.9" governs going forward — and where Telemetry and the benchmark then land instead — is left
+  entirely to the owner, mirroring D-184's own resolution of the identical class of question for V0.7/V0.8.
+- **Needs:** the owner's own ruling on what "V0.9" means from here, and a renumbering (or explicit confirmation
+  of the current one) for whichever of Telemetry and the benchmark it displaces — exactly as D-184 did for MCP
+  and RAG.
+- **Effect while Open:** none on work already done — `eidos.expansion` (V0.9 Step 2, this session) is complete
+  and correct under any reading of the number; only the milestone *label* is ambiguous, not the work or its
+  decisions (D-194, D-195).
   | Reinforcement learning, DSPy optimisation, a vector database and an AI planner | handoff §22, §24 | outside V0.5 |
