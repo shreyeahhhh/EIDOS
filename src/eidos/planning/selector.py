@@ -8,9 +8,9 @@ own membership check, not here: this module only ever proposes a choice, it neve
 
 **Why a new, narrower failure vocabulary, not ``eidos.agents.model.ModelFailureKind``:** ``eidos.planning`` is a
 core layer and may not import ``eidos.agents`` (the existing guard already forbids it) — reuse was checked, not
-assumed, and is architecturally impossible here, the identical reason ``feasibility.py``'s own
-``FeasibilityViolationCode`` is a separate, narrower vocabulary from ``eidos.validation.results.ViolationCode``
-rather than an import. ``SelectorFailureKind`` has three members, deliberately narrower than
+assumed, and is architecturally impossible here, the identical reason the feasibility gate's own violation
+vocabulary (one layer below this one) is already a separate, narrower vocabulary from the Plan validator's own,
+rather than an import of it. ``SelectorFailureKind`` has three members, deliberately narrower than
 ``ModelFailureKind``'s four (no ``EMPTY_RESPONSE`` — a selector's own answer is either a valid id, an invalid one,
 or absent; "empty" and "malformed" are the same case from the orchestration boundary's point of view). None of
 the three is exercised by ``DeterministicSelector``, which can never fail — the vocabulary is intentionally scoped

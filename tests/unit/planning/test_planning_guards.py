@@ -78,6 +78,31 @@ def test_the_package_has_the_expected_modules():
     ]
 
 
+def test_all_exports_exactly_what_init_imports_from_its_own_submodules():
+    # V0.8 Step 3: proves __all__ neither leaks a name nobody imported nor silently omits one that was —
+    # a future submodule import added without a matching __all__ entry (or vice versa) fails this, not just
+    # a manual read of the file.
+    init_path = PLANNING / "__init__.py"
+    tree = ast.parse(init_path.read_text(encoding="utf-8"))
+
+    imported_names: set[str] = set()
+    all_names: list[str] | None = None
+    for node in tree.body:
+        if isinstance(node, ast.ImportFrom) and node.level > 0:  # a relative "from .module import ..." only
+            imported_names.update(alias.asname or alias.name for alias in node.names)
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "__all__" for t in node.targets):
+            assert isinstance(node.value, ast.List)
+            all_names = [elt.value for elt in node.value.elts if isinstance(elt, ast.Constant)]
+
+    assert all_names is not None, "__init__.py declares no __all__"
+    assert len(all_names) == len(set(all_names)), f"__all__ has a duplicate entry: {all_names}"
+    assert set(all_names) == imported_names, (
+        f"__all__ and the package's own relative imports disagree: "
+        f"only in __all__: {set(all_names) - imported_names}; only imported: {imported_names - set(all_names)}"
+    )
+    assert not any(name.startswith("_") for name in all_names), f"__all__ exports a private-looking name: {all_names}"
+
+
 @pytest.mark.parametrize("module", MODULES, ids=lambda m: m.name)
 def test_no_module_imports_io_network_clock_randomness_or_process_state(module):
     top_level = {name.split(".")[0] for name, _, level in imports_of(module) if level == 0}
@@ -118,6 +143,19 @@ def test_feasibility_does_not_reimplement_or_call_the_plan_validator():
         "StageResult", "StageStatus",
     ):
         assert symbol not in text, f"feasibility.py/pipeline.py mentions {symbol}"
+
+
+def test_selection_does_not_rerun_or_reimplement_feasibility():
+    # V0.8 Step 3: the same "each layer's own authority is not duplicated one layer up" discipline, one level
+    # further — every candidate offered to a Selector is already feasibility-filtered (V0.7 Step 4); selection
+    # re-checks candidate-set membership only, never feasibility itself. Proven by absence, not merely by
+    # non-import, mirroring test_feasibility_does_not_reimplement_or_call_the_plan_validator exactly.
+    text = " ".join(m.read_text(encoding="utf-8") for m in MODULES if m.name in {"selector.py", "selection.py"})
+    for symbol in (
+        "check_feasibility", "FeasibilityReport", "FeasibilityViolation", "FeasibilityViolationCode",
+        "FeasibilityCheck",
+    ):
+        assert symbol not in text, f"selector.py/selection.py mentions {symbol}"
 
 
 @pytest.mark.parametrize("module", MODULES, ids=lambda m: m.name)

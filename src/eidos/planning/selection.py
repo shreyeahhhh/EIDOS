@@ -12,8 +12,8 @@ proposal is honoured — governance never depends on the selector behaving, mirr
 **Feasibility is not re-run here.** ``candidates`` is trusted to already be the feasibility-filtered output of
 ``pipeline.generate_candidate_strategies`` (V0.7) — every candidate offered to a ``Selector`` is, by construction,
 already admissible. The membership check below is an identity check (did the selector name one of *these exact*
-objects), not a second feasibility pass; re-running ``feasibility.check_feasibility`` here would be exactly the
-kind of duplicated authority D-180 already ruled against for the Plan validator, applied to itself.
+objects), not a second admissibility pass; re-running the feasibility gate here would be exactly the kind of
+duplicated authority D-180 already ruled against for the Plan validator, applied to itself one layer up.
 
 **The exact object is returned, never a reconstructed copy.** ``matched`` is the same ``Strategy`` instance found
 in ``candidates`` by identity of ``strategy_id`` — never rebuilt through the constructor, so a caller holding a
