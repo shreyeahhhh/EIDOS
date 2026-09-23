@@ -4317,3 +4317,120 @@ one is not.
   machinery promoted into `src/eidos`, that is that milestone's own decision, not implied by this one.
 - **Affects:** where this session's benchmark files were placed only. Does not reopen D-184 or D-196, and does
   not reserve or rename anything in `progress.md`'s "Intentionally not built yet" table.
+
+### D-198 — V1.0 Execution Experience / Strategy Memory architecture (approved with a decision revision, 2026-09-23)
+
+- **Status:** Accepted · **Date:** 2026-09-23 · **Decided by:** human owner, in two rounds — an initial architecture
+  approval ("approved in direction, do not implement yet") followed by a detailed decision revision resolving nine
+  named open items before any code was written
+- **Source:** the V1.0 design-proposal inspection turn (no code); `docs/03_architecture.md`'s own pre-existing
+  `eidos.memory | Strategy and execution memory | V1.0` package-table row; D-015/D-016/D-017/D-020/D-021/D-063/D-064
+  (all confirmed still Open — no quality/confidence/persistence/signature mechanism exists anywhere to build on);
+  `tests/unit/selectors/test_selectors_guards.py`'s own pre-existing, by-name prohibition on `"StrategyMemory"`
+- **The research question:** "can measured execution experience from previous missions improve future strategy
+  selection?" — answered by a new architecture layer, never by making EIDOS merely *appear* adaptive (ruling 12).
+
+**Decision, in full:**
+
+1. **`ExecutionExperience`** (`eidos.memory.experience`, pure) is the smallest immutable, factual record of one
+   completed mission: identity, `strategy_id` + structural shape (`strategy_stage_shapes`, `strategy_verification`
+   — no signature, D-021 stays untouched), task characteristics (`task_required_capabilities`, `task_risk_level`,
+   `task_autonomy_level` — the only fields ever used for relevance), and every cost/outcome fact `TelemetryRecord`
+   already carries, copied verbatim. No quality score, no confidence score, no strategy signature, no embeddings,
+   no artifact text, no subjective judgment of any kind. `evaluate_experience(strategy, task_genome, telemetry, *,
+   recorded_at)` is a pure function — `recorded_at` is caller-supplied, never read from a clock inside it.
+2. **Strategy↔execution linkage lives only inside `ExecutionExperience`**, made once by whichever caller already
+   holds both objects in scope at the moment a mission concludes. **No `strategy_id` is added to `Plan`,
+   `MissionState`, `TelemetryRecord`, `ExecutionRecord`, or any `MissionEvent`** — inspection found this genuinely
+   unavoidable to be untrue; the existing "external correlation suffices" reasoning (V0.9 Step 4) extends cleanly
+   one layer further.
+3. **Relevance** (`eidos.memory.relevance`, pure, V1.0 Step 2 — not yet built): a record is task-relevant to a new
+   `TaskGenome` as **"same"** only if `required_capabilities` (as a set), `risk_level` and `autonomy_level` all
+   match exactly; **"similar"** only if `risk_level`/`autonomy_level` still match exactly and the capability sets
+   merely intersect (non-empty, non-total); **"irrelevant"** on any risk/autonomy mismatch, regardless of capability
+   overlap, or on zero capability overlap. No cross-level transfer, ever. No embeddings, no semantic similarity.
+   **No staleness/recency/decay rule in V1.0** — every relevant record is equally eligible regardless of age;
+   recorded here explicitly as a deferred future limitation, not an oversight.
+4. **Strategy relevance is separate from task relevance**: `StrategyId` is fresh every generation round (D-182), so
+   a stored record is matched to a *current candidate* by structural shape (`strategy_stage_shapes`/
+   `strategy_verification` equality), never by id.
+5. **`eidos.memory` package boundary**: `experience.py` (pure, this step), `relevance.py` (pure, Step 2),
+   `store.py` (Step 3 — the `ExperienceStore` Protocol and its one real JSONL implementation, the *only* file in
+   the package ever permitted file I/O, mirroring `eidos.recording.ports.py`'s own established "Protocol and real
+   implementation co-located" precedent). Depends only on `eidos.contracts`, `eidos.planning`, `eidos.runtime`,
+   `eidos.state`, `eidos.telemetry` — the identical dependency shape `eidos.telemetry` itself already has, one
+   layer further. **Not placed in `eidos.recording`**: that package wraps *live* injection points during one
+   execution; `eidos.memory` constructs and queries a *derived, cross-mission* record strictly after execution — a
+   different temporal/functional category, closer in kind to `eidos.telemetry`'s own "pure projection" role.
+6. **`ExperienceInformedSelector`** (`eidos.selectors.experience_informed`, Step 4 — not yet built) is a fourth
+   `Selector` implementation, alongside `DeterministicSelector`/`ModelAssistedSelector`. **No change to the
+   `Selector` Protocol, `SelectorChoice`, or `select_strategy`'s own orchestration** — the new dependency
+   (`eidos.memory`) and the actual relevance/history read happen inside `select()` itself, exactly where
+   `ModelAssistedSelector.select()` already does its own I/O (a `ModelPort` call).
+7. **Cold start**: `ExperienceInformedSelector(store, fallback=DeterministicSelector())`. No relevant experience for
+   any candidate is **not** a `SelectorFailure` — it is the ordinary, common case, and collapses the algorithm to
+   exactly `DeterministicSelector.select(candidates, task_genome)`, a provable equivalence (every candidate lands
+   in the same tier, so only `structural_cost` differentiates them, bit-for-bit what `DeterministicSelector` already
+   computes).
+8. **The selection algorithm** — a lexicographic tuple comparison, never a scalar, mirroring D-188's own
+   "`structural_cost` compared lexicographically, never weighted" discipline one layer up. Per candidate, using
+   only its own structurally-matched, task-relevant `ExecutionExperience` records:
+   - **Tier 0** — at least one record with `mission_status == COMPLETED and verified is True`. Broken, in order,
+     by: (a) more verified successes (a plain count, never a rate); (b) fewer observed non-successes; (c) lower
+     **sum** (never a mean — comparable only because (a)/(b) are already tied at that point) of
+     `execution_time_used_ms` across its own verified-success records — cost/time used only this late, exactly as
+     required.
+   - **Tier 1** — no relevant record at all (genuinely untested). Ranked *above* Tier 2 deliberately: absence of
+     evidence is neutral; observed failure is negative evidence and should count against a candidate more than
+     having none. Falls straight to (d) below.
+   - **Tier 2** — relevant records exist, none is a verified success. Broken only by fewer observed non-successes.
+     **Deliberately not distinguishing by `failure_cause`** — ranking one failure type against another would need a
+     subjective severity judgment with no basis in directly observed facts; considered and rejected.
+   - **(d) Final, universal tie-break**: `structural_cost` (`eidos.planning.selector`, unmodified, reused directly)
+     — applied within Tier 1 always, and wherever the above still ties.
+   Preserves: candidate-set membership (chooses only from `candidates`), exact `StrategyId` identity (never
+   reconstructs a `Strategy`), full determinism, no combined/composite score, no subjective failure-severity
+   ranking. Not to be reinterpreted as a weighted-ranking model.
+9. **Storage**: append-only JSONL (mirrors `EventLog`'s own D-157 precedent), local, zero new dependencies. The
+   real adapter loads its file into an immutable tuple once; `append()` persists the new record **and** updates
+   the in-memory tuple; `all()` returns the current cached tuple — the hot-path read is bounded and in-memory,
+   never a per-call disk re-scan.
+10. **Selector guards are deliberately revised, not deleted or weakened**:
+    `tests/unit/selectors/test_selectors_guards.py`'s `ALLOWED_EIDOS` gains `"eidos.memory"`;
+    `FORBIDDEN_CONCEPT_NAMES` drops `"StrategyMemory"` (with the module docstring's own explanatory sentence
+    corrected to state why — V1.0 makes the original assumption genuinely false, mirroring the exact wording
+    discipline D-196/V0.9 Step 3 already used for their own guard corrections);
+    `test_the_package_has_the_expected_modules` gains `"experience_informed.py"`. A new
+    `tests/unit/memory/test_memory_guards.py` mirrors `test_planning_guards.py`'s own discipline, scoped to
+    whichever modules exist at each step.
+11. **Benchmark 2** (Step 7, design only — not implemented): a genuine confound was found and avoided, not
+    silently accepted — a *content*-based verification-failure design (one capability scripted to under-cite
+    evidence) is structurally biased toward whichever topology gives `VERIFY` the broadest predecessor visibility
+    (always the parallel shape, under D-195's own "`FINAL` depends on exactly the final stage" rule), which is
+    *also* what `DeterministicSelector`'s own tie-break always prefers (fewest stages) — the two would coincide,
+    leaving E1 nothing to demonstrably improve on. Revised to a **topology-driven** mechanism instead: a
+    deterministic `AdmissionGuard` (`halt_when(lambda r: r.rank_in_level >= 1, ...)`, the existing test double
+    already used in Benchmark 1's own constraint-violation case) halts any shape that dispatches more than one node
+    per level. A two-capability `TaskGenome` yields exactly two candidates — linear (never halts, verifies
+    successfully every time with uniformly sufficient citations) and parallel (always halts before `VERIFY`,
+    non-success every time) — deliberately arranged so `DeterministicSelector`'s own bias and the reliably-failing
+    shape coincide, so any behavioral shift by E1 is attributable only to memory. N = 5 sequential missions per
+    task shape, across three independent two-capability pairs (research+cost, research+security, cost+security).
+    D1 (`DeterministicSelector`, no memory), D2 (`ModelAssistedSelector`, no memory, scripted to the same parallel
+    choice every time), E1 (`ExperienceInformedSelector`, memory accumulating within the sequence — mission 1
+    falls back to `DeterministicSelector` identically to D1/D2, by ruling 7's own cold-start equivalence; from
+    mission 2 onward, parallel's observed halt and linear's untested status should make E1 prefer linear). Reports
+    a plain per-mission table only — never a combined score, a win rate, or a superiority claim (ruling 12).
+- **Consequences:** `eidos.memory` is the milestone `docs/03_architecture.md`'s own package table already
+  reserved for V1.0 — unlike D-197, no new decision is needed to justify the package's existence, only its
+  internal shape (this entry). No existing contract changes. `Selector`/`SelectionResult`/`select_strategy` stay
+  byte-for-byte as V0.8 left them.
+- **Affects:** `eidos.memory` (new, this decision), `eidos.selectors` (Step 4, adds a module and revises two named
+  guard checks), `tests/unit/memory/` (new). Does not reopen D-178 through D-197, D-015/D-016/D-017/D-021 (all
+  stay Open, untouched), or any V0.1–V0.9 contract.
+- **Implementation order** (each step its own inspect → implement → test → guard → mutation → report cycle, no
+  step begun without the prior one's own explicit go-ahead): 1 `ExecutionExperience`/`evaluate_experience`; 2
+  `relevant_experience`/`task_relevance`/`experience_for`; 3 `ExperienceStore`/the JSONL adapter; 4
+  `ExperienceInformedSelector`; 5 guard revisions + dedicated memory guard tests; 6 an integration test proving the
+  complete chain, `TaskGenome` → candidates → experience-aware selection → Strategy→Plan → execution → Telemetry →
+  Experience → Memory → future selection; 7 Benchmark 2.
