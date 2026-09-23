@@ -210,6 +210,13 @@ future decisions. A model-asserted quality score is **not** ground truth.
 > exactly one `VERIFY` step depending on the final stage's own step ids alone, never transitively on an
 > earlier stage (D-195, matching the real V0.4 baseline precedent). The produced `Plan` still goes through
 > the existing, unmodified V0.2 validation and V0.3 compiler — no shortcut, per D-178.
+>
+> **V0.9 Step 2** (D-196 confirms this is Telemetry's own numbering, not Strategy-to-Plan expansion): a new
+> core layer, `eidos.telemetry`, projects already-recorded facts across many executions — `TelemetryRecord`,
+> built by composing `execution_record` (D-159) rather than re-folding events. Depends only on
+> `eidos.contracts`, `eidos.runtime` and `eidos.state`; no I/O, no clock, no randomness. No model identifier,
+> no `strategy_id`, no quality/confidence/ranking field, no durable store, no benchmark logic — each flagged
+> as a separate, future, narrow extension point, none built here.
 
 ## 8. The feedback loop
 
@@ -288,7 +295,7 @@ the architectural map; `progress.md` tracks which of these exist.
 | `eidos.recording` | Recording adapters: an injected clock and id source, and wrappers over the existing injection points (agents, verifier, model port) that propose events to the log; holds no `MissionState`; the runtime emits nothing (D-158); there is no admission-guard wrapper, a halt is read from the run's result (D-158 item 1, amended by D-163) | V0.5 | **yes** — the clock and id ports, the recorder, the wrappers and `record_baseline` (Step 5b), with the observer hook on `run_baseline` (Step 5a) |
 | `eidos.a2a` | The A2A boundary: a hand-rolled client over `httpx` speaking A2A v1.0 directly (D-171, no `a2a-sdk`), the non-blocking `WorkAgent` implementation for the Research Agent (D-175), the webhook receiver, and the recording adapter that appends to a caller-held, still-open `EventLog` (D-167). Holds no `MissionState`, decides nothing about when to resume a mission (D-170) | V0.6 | **no** — protocol/contract design accepted (D-165 to D-176), not built |
 | `eidos.policy` | Governance, autonomy levels, budgets | V1.2 (V0.2 has only a `NOT_APPLICABLE` stage in `eidos.validation` — D-110) | no |
-| `eidos.telemetry` | Structured events, metrics | V0.9 | no |
+| `eidos.telemetry` | A pure, deterministic multi-execution projection over already-recorded facts — one more projection beside `eidos.state.execution_record` (D-159), never a second authoritative store; depends only on `eidos.contracts`, `eidos.runtime` and `eidos.state` | V0.9 | **yes** — `TelemetryRecord`/`project` (`project.py`, Step 2); no model identifier, no `strategy_id`, no quality/confidence field, no durable store, no benchmark logic |
 | `eidos.memory` | Strategy and execution memory | V1.0 | no |
 | `eidos.evaluation` | Evaluation harness, experiments | V1.1 | no |
 | `eidos.a2a` | A2A boundary | V0.6 | no |

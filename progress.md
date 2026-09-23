@@ -7,7 +7,7 @@ Status only. Rules live in [CLAUDE.md](CLAUDE.md). Decisions and open questions 
 
 ## Current state
 
-**Milestone: V0.8 Strategy Selection — architecture accepted (D-186 to D-193), Steps 2, 3, 5, 6, 7 and 8 of its sequence implemented (Step 3 a boundary-hardening audit, no contract change; Step 4 a design-only step accepted as D-190 to D-193; Step 5 the model-assisted `Selector` adapter, `eidos.selectors`; Step 6 a deterministic selection-integration suite proving the boundary end to end; Step 7 the Strategy-to-Plan expansion design, D-194/D-195; Step 8 its implementation, `eidos.expansion`; none pushed), on top of V0.7 Strategy & Candidate Generation (closed as scoped, D-178 to D-185, none pushed), V0.6 One A2A Boundary (protocol/contract design accepted, Steps 1–6 of 9 implemented, D-177; none pushed), V0.5 Mission State + Event Reducer (complete as scoped, D-152 to D-164, pushed), V0.4 Real Local Agents (complete as scoped, D-131 to D-151), V0.1 Core Contracts, V0.2 Plan Validation and V0.3 LangGraph Runtime (complete as scoped, D-112 to D-130). *(V0.9 remains Telemetry, unbuilt — D-196.)*
+**Milestone: V0.9 Telemetry — Step 2 implemented (`eidos.telemetry`, a pure multi-execution projection over already-recorded facts), on top of V0.8 Strategy Selection (architecture accepted, D-186 to D-193, Steps 2, 3, 5, 6, 7 and 8 of its sequence implemented — Step 3 a boundary-hardening audit, no contract change; Step 4 a design-only step accepted as D-190 to D-193; Step 5 the model-assisted `Selector` adapter, `eidos.selectors`; Step 6 a deterministic selection-integration suite proving the boundary end to end; Step 7 the Strategy-to-Plan expansion design, D-194/D-195; Step 8 its implementation, `eidos.expansion`; none pushed), V0.7 Strategy & Candidate Generation (closed as scoped, D-178 to D-185, none pushed), V0.6 One A2A Boundary (protocol/contract design accepted, Steps 1–6 of 9 implemented, D-177; none pushed), V0.5 Mission State + Event Reducer (complete as scoped, D-152 to D-164, pushed), V0.4 Real Local Agents (complete as scoped, D-131 to D-151), V0.1 Core Contracts, V0.2 Plan Validation and V0.3 LangGraph Runtime (complete as scoped, D-112 to D-130). *(This is the correct, D-196-resolved meaning of "V0.9" — Telemetry, not Strategy-to-Plan expansion, which is filed as V0.8 Steps 7–8 above.)*
 
 All seven V0.1 contracts (`ReliabilityContract`, `TaskGenome`, `Plan`, `PlanStep`, `MissionEvent`,
 `MissionState`, `AgentTask`) are implemented in `src/eidos/contracts/`, immutable, in-memory only
@@ -102,7 +102,7 @@ hold, failure cases are covered, documentation matches reality, a git checkpoint
 > requirement fixes its slot; Strategy-to-Plan expansion is filed as **V0.8 Steps 7–8** (the row above),
 > matching D-183's own pre-existing "Strategy-to-Plan expansion (V0.8+, not built)" phrasing. Nothing historical
 > was renumbered; only this session's own mislabeling moved.
-| **V0.9** Telemetry | Structured event logging. Measure latency, tokens, agent calls, tool calls, A2A interactions, RAG rounds, retries, quality. | Not started |
+| **V0.9** Telemetry | Structured event logging. Measure latency, tokens, agent calls, tool calls, A2A interactions, RAG rounds, retries, quality. | **Step 2 implemented 2026-09-23: `eidos.telemetry.project` — a pure, multi-execution projection over already-recorded facts (`ExecutionRecord`, D-159), none pushed.** Only what's already recorded/derivable: identity, counters, mission/run outcome, per-status node counts, model-call and remote-task counts, event bounds, mission wall-clock span. No quality/confidence/rate (D-015/D-016 stay Open), no model identifier, no `strategy_id`, no MCP/RAG/cache/policy/human-intervention fields (no such subsystem exists). See "V0.9 Telemetry" below. |
 | **V1.0** Strategy Optimization | Historical strategy memory, strategy ranking, constraint-based selection, pilot execution. | Not started |
 | **V1.1** Adaptive Learning | Strategy memory, historical ranking, exploration, empirical estimation, prediction-error tracking. | Not started |
 | **V1.2** Reliability / Governance | Policy engine, autonomy levels, human approval, failure recovery, replan limits, execution budgets. | Not started |
@@ -2112,6 +2112,111 @@ real semantics remain unknown.
 
 ---
 
+## V0.9 Telemetry — Step 2 implemented, none pushed (2026-09-23)
+
+The D-196-resolved meaning of "V0.9" — Telemetry, not Strategy-to-Plan expansion (filed as V0.8 Steps 7–8 above).
+V0.8 is complete at `6f191c8` (V0.9's own numbering resolved separately at `3ff21d3`, D-196).
+
+### Step 1 — architecture and design only (accepted 2026-09-23; no code)
+
+Inspection first. `eidos.state.execution_record`'s own module docstring already states the governing boundary,
+verbatim: *"It describes one execution. It is not strategy memory (V1.0) and not the telemetry platform (V0.9)."*
+— D-159 item 3, already Accepted. Telemetry's job was therefore already scoped by an existing decision before
+this step began: a further pure projection over the same already-recorded facts, generalized across executions,
+never a second authoritative store. `docs/11_evaluation.md` (a bootstrap-era, DERIVED document) independently
+confirms the same boundary in its own words and already reserves three separate future packages —
+`eidos.telemetry` (V0.9), `eidos.memory` (V1.0), `eidos.evaluation` (V1.1) — none of which this step builds
+beyond the first.
+
+Inventory taken directly from source, not assumed: most of the handoff §33 field list is **already recorded**
+(`ExecutionRecord`'s own counters, per-node facts, mission outcome) or **cleanly derivable** (per-status node
+counts, a remote-task count from existing `A2ATaskStartedPayload` events, a wall-clock span from the log's own
+bounds). Two things are available only *transiently*: the model identifier already flows through
+`RecordingModel.complete()` but is never extracted into `ModelCallFacts`. One thing does not exist at all:
+`Strategy`→`Plan` linkage — no execution today is ever produced from a `Strategy` (no mission driver calls
+`expand_strategy` yet), so nothing can carry a `strategy_id` regardless of what Telemetry does. Both are flagged
+as future, separate, narrow extension points — neither built now.
+
+No durable storage proposed (the existing JSONL log is already enough for a pure projection); no benchmark logic
+sketched (`docs/11_evaluation.md` §10–12 already describes that separately, untouched); no quality/confidence
+field (D-015/D-016 stay Open, unfabricated). No code, no `decisions.md` change — proposal only.
+
+### Step 2 — implement the projection (2026-09-23)
+
+**No new decision was required** — the package boundary was already anticipated in `docs/03_architecture.md`'s
+own pre-existing table (`eidos.telemetry`, V0.9), and D-159 already fixed the Event-Log/`ExecutionRecord`/
+Telemetry boundary this step builds on rather than revisits.
+
+New core layer **`eidos.telemetry`** (`project.py` — `TelemetryRecord`, `project(records) -> TelemetryRecord |
+ReplayRejection`), depending only on `eidos.contracts`, `eidos.runtime` and `eidos.state` — verified by both a
+static per-module import guard and a subprocess check of the actual combined import graph. **Pure and
+deterministic, exactly like `execution_record` itself**: no I/O, no clock, no randomness; `project` takes an
+in-memory `Iterable[EventRecord]` — precisely `execution_record`'s own signature — and composes it rather than
+re-folding events. No filesystem loader was built: nothing in this step's approved scope needed one, and the
+brief's own boundary correction (keep the pure projection free of I/O; any outer loader stays strictly separate)
+is honoured by simply not building a loader at all yet, rather than building one and then having to keep it
+apart.
+
+**Fields added, all genuinely derived**: identity; the six existing budget counters; mission/run outcome and
+verification status; eight per-`NodeStatus` counts; the model-call count; a `remote_task_count` (counts
+`A2ATaskStartedPayload` occurrences — named protocol-neutrally, not `a2a_task_count`, since the field itself
+never needs to know which remote-execution boundary produced the submission, and the module never imports the
+protocol package itself); the log's own event count and bounds; and `mission_wall_clock_ms`, the bounds' own
+span. **Left deliberately signed, not clamped to zero**: `ExecutionRecord`'s own bounds are documented as "never
+an ordering," so a pathological log could record an earlier bound after a later one — clamping that away would
+hide a real anomaly rather than report it (D-158 item 4's "facts only," applied one layer up).
+
+**Explicitly not added**, exactly as scoped: a model identifier on `ModelCallFacts`; `strategy_id`; any
+quality/confidence/ranking/scoring field; any new `MissionEvent` type; any durable store; any benchmark or
+Strategy Memory logic; any new external dependency.
+
+**Two docstring/guard false positives, the same established class this project always hits and fixes the same
+way**: the literal word "A2A" in two explanatory sentences tripped the vendor-name guard (mirroring
+`eidos.recording`'s own precedent of treating "a2a" as a protocol name worth flagging by default) — fixed by
+rewording the prose *and*, more substantively, renaming the field itself from `a2a_task_count` to
+`remote_task_count`, since the field genuinely has no reason to name a specific protocol; and the transitive-load
+subprocess check initially (wrongly) forbade `eidos.compiler`/`eidos.validation`, which `eidos.runtime` (an
+approved dependency, needed for `NodeStatus`/`RunOutcome`) already, legitimately, loads for its own
+pre-existing `ExecutionContext` — the identical class of finding V0.8 Step 6 made for `eidos.agents`, fixed the
+same way: the check corrected to exclude the already-approved transitive load, not weakened.
+
+**34 new tests** in `tests/unit/telemetry/`: `test_telemetry_project.py` (15 — a verified baseline's every copied
+field cross-checked directly against `execution_record`'s own independently-computed value; the fixed test
+values; determinism across repeated calls and a plain generator input; JSONL round-trip reconstruction equal to
+the live projection; per-status node counts for a fully-succeeded mission, a halted mission with `NOT_REACHED`
+nodes, and a plan-rejected mission with zero node activity; a remote-task count derived from a hand-built log
+carrying `A2ATaskStartedPayload`/`A2ATaskCompletedPayload`; a failed model call leaving `tokens_used` at 0 rather
+than guessed; `mission_wall_clock_ms` shown distinct from accumulated node duration; no mutation of the input;
+the same typed `ReplayRejection` `execution_record` itself gives for an empty log); `test_telemetry_guards.py`
+(19 — module list; forbidden stdlib imports; depends only on `eidos.contracts`/`.runtime`/`.state`; never
+`eidos.agents`/`.providers`/`.backends`/`.a2a`/`.recording`/`.capabilities`/`.selectors`/`.planning`/`.expansion`/
+`.baseline`/`.compiler`/`.validation`; never imports the reducer; does not duplicate event-folding logic
+(`execution_record(` must actually appear; `reduce(`/`replay(`/`EventLog(` must not); no vendor name; no
+quality/ranking/scoring field on `TelemetryRecord`; no `strategy_id`/`model` field; no dynamic-code builtin call;
+no module-level mutable state; lower layers never import `eidos.telemetry`; importing it loads no agent/provider/
+backend/protocol layer, sanity-checked against a manufactured import that all three relevant guards caught
+simultaneously).
+
+**Mutation check: 7 of 7 caught on the first pass** — node-status counting collapsed to a single status instead
+of accumulating, the remote-task count counting every record instead of only submissions, the wall-clock span
+computed from one bound twice, a missing seconds-to-milliseconds conversion, `tokens_used` silently substituted
+with a different counter, `verified` hardcoded to `False`, and `ReplayRejection` propagation removed entirely.
+Each applied to a pristine copy, confirmed to fail the suite, then reverted and confirmed restored.
+
+Full existing `tests/unit/state/` and `tests/unit/recording/` suites unchanged: **508 passed** (proves the V0.5/
+V0.6 event/replay authority this step reads from, never writes to, is untouched). All guard tests repo-wide:
+**568 passed** (was 549; +19). Full default suite: **[to be filled in by the commit]**. No source file outside
+`src/eidos/telemetry/` and `tests/unit/telemetry/` was created or modified. No `decisions.md` entry was required.
+Committed as one focused commit; not pushed. **V0.9 Step 3 has not started.**
+
+### Carried forward, not decided
+
+The model-identifier and `strategy_id` extension points from Step 1 stay exactly as flagged — neither is decided
+or built. D-129 stays Open. No durable telemetry store exists. The future benchmark (`eidos.evaluation`, V1.1)
+and Strategy Memory (`eidos.memory`, V1.0) remain entirely unbuilt and undesigned by this step.
+
+---
+
 ## Intentionally not built yet
 
 Per CLAUDE.md §3, a package is created only when the milestone that fills it begins. These
@@ -2178,6 +2283,7 @@ Full detail for each is in [decisions.md](decisions.md).
 
 | Date | Milestone | Outcome |
 |---|---|---|
+| 2026-09-23 | **V0.9 Step 2 implemented: `eidos.telemetry.project`** | Step 1 (design only, 2026-09-23) found `eidos.state.execution_record`'s own module docstring already states the Event-Log/`ExecutionRecord`/Telemetry boundary verbatim ("not the telemetry platform (V0.9)," D-159 item 3, already Accepted) and that `docs/11_evaluation.md` (bootstrap-era, DERIVED) independently confirms it and already reserves `eidos.telemetry`/`eidos.memory`/`eidos.evaluation` as three separate future packages. Inventory: most of handoff §33's field list is already recorded or cleanly derivable; the model identifier flows through `RecordingModel.complete()` but is never captured; `strategy_id` cannot be captured at all yet since no mission driver ever produces an execution from a `Strategy`. Both flagged as future, narrow, separate extension points, neither built. No new decision needed: the package boundary was already anticipated in `docs/03_architecture.md`'s own table, and D-159 already fixed the boundary this step builds on. Implemented `project(records: Iterable[EventRecord]) -> TelemetryRecord \| ReplayRejection` — pure, deterministic, composes `execution_record` rather than re-folding events; no filesystem loader was built, since nothing in the approved scope needed one. Fields: identity, the six existing budget counters, mission/run outcome, verification status, eight per-`NodeStatus` counts, model-call count, a protocol-neutral `remote_task_count` (not `a2a_task_count` — the field never needs to name which remote-execution boundary produced a submission), event bounds, and a deliberately signed `mission_wall_clock_ms` (never clamped to zero, since `ExecutionRecord`'s own bounds are documented as "never an ordering" — clamping would hide a real anomaly, D-158 item 4). No model identifier, no `strategy_id`, no quality/confidence/ranking field, no new `MissionEvent` type, no durable store, no benchmark logic — exactly as scoped. Two docstring/guard false positives (the literal word "A2A" in explanatory prose; the transitive-load subprocess check wrongly forbidding the already-approved `eidos.compiler`/`.validation` load via `eidos.runtime`) fixed by rewording plus a genuine field rename (`a2a_task_count` → `remote_task_count`, protocol-neutral on its own merits) and by correcting the check to exclude the approved transitive load — the identical class of finding V0.8 Step 6 made for `eidos.agents`. 34 new tests in `tests/unit/telemetry/` (15 behavior, 19 guards). Mutation check: 7 of 7 caught (status-counting collapse, remote-task count counting everything, wall-clock span from one bound twice, missing ms conversion, `tokens_used` substituted, `verified` hardcoded false, `ReplayRejection` propagation removed). Existing `tests/unit/state/`+`tests/unit/recording/` suites unchanged: 508 passed. All guard tests repo-wide: 568 passed (was 549). Full default suite: 3,235 passed, 2 deselected (was 3,201; +34). No source outside `src/eidos/telemetry/`/`tests/unit/telemetry/` touched. No new `decisions.md` entry. Committed as one focused commit; not pushed. Step 3 not started. |
 | 2026-09-23 | **D-196 accepted: "V0.9" milestone-number collision resolved** | Before starting any further Strategy-to-Plan work, resolved D-196 exactly as proposed and approved: **V0.9 stays Telemetry**, unchanged (14+ pre-existing references across `progress.md`/`decisions.md`/`docs/03_architecture.md`, dating to the project's earliest days, none of them touched); **the future controlled benchmark stays unassigned a milestone number**, deferred exactly like MCP/RAG already are under D-184, until a concrete requirement fixes its actual slot; **the Strategy-to-Plan expansion design and implementation, first logged this session as "V0.9 Step 1/2," are renamed to `V0.8 Step 7` and `V0.8 Step 8`** — folded into V0.8 Strategy Selection's own step sequence, matching D-183's own pre-existing, twice-repeated "Strategy-to-Plan expansion (V0.8+, not built)" phrasing exactly. This also closes the *other* half of the gap D-184 itself found and left open at V0.7 Step 1 (whether V0.9 stops meaning Telemetry) — D-184's own text and ruling are untouched, only extended. Documentation-only: **D-194/D-195's architectural content is unchanged**, only their own "Source"/"Affects" cross-references were corrected from "V0.9 Step 1/2" to "V0.8 Step 7/8"; D-129 stays Open, not closed. Edits: `decisions.md` (D-196 rewritten Open→Accepted; D-194/D-195 cross-references corrected; a table-splitting formatting defect from the prior turn's D-196 insertion was also fixed — one deferral-table row had been accidentally stranded outside its own table, now restored), `progress.md` (top milestone line, current-state paragraph, milestone ladder — the standalone "V0.9 Strategy-to-Plan Expansion" row removed, V0.8's row extended, the ladder note rewritten to state the resolution, the "V0.9 Telemetry" row's stale "number collision" annotation removed; the "## V0.9 Strategy-to-Plan Expansion" section folded into "## V0.8 Strategy Selection" as Steps 7–8, internal "Step 1"/"Step 2" self-references corrected to "Step 7"/"Step 8"; this session-log table), `README.md` (status line, the V0.9 paragraph folded into V0.8's, the collision note rewritten as a resolution note), `docs/03_architecture.md` (the D-194/D-195 blockquote and the `eidos.expansion` package-table row's milestone column corrected). No source code, test, or git commit history touched — commit hashes and messages for `df35e1f`/`9c2d8b9`/`6f191c8` are unchanged and unrenamed. No new implementation started. |
 | 2026-09-23 | **V0.8 Step 8 implemented: `expand_strategy` (`eidos.expansion`)** *(first logged as "V0.9 Step 2"; renamed by D-196 — see the row above)* | Step 7 (design only, 2026-09-23) found D-179 already answers the dependency mapping verbatim ("stage i+1 depends on the whole of stage i") and that `eidos.planning`'s own existing guard forbids `StepId`, so the expander cannot live there; proposed, and this step formally recorded, **D-194** (a new sibling core layer, `eidos.expansion`, depending only on `eidos.contracts` and `eidos.planning`) and **D-195** (`FINAL` verification depends on exactly the final stage's own step ids, never every agent step — matching the real V0.4 baseline precedent and how `eidos.agents.verification` actually reads a `VerifyNode`'s predecessors). Implemented `expand.py` (`PlanIdSource` Protocol; `expand_strategy(strategy, *, ids) -> Plan`): one capability occurrence → one `AgentStep`, never deduplicated; a stage's steps fan out from the complete set of the preceding stage; `NONE` emits no `VERIFY`, `FINAL` emits exactly one depending on the final stage; empty stages produce an empty Plan regardless of posture. `step_id` is a pure, deterministic derivation from `(stage_index, position, capability)` (string-backed, D-092-exempt); `plan_id` is drawn only from the injected `PlanIdSource` (UUID-backed, no exemption) — mirrors `StrategyIdSource` exactly. Two docstring/guard false positives (the established class: `check_feasibility` named literally in explanatory prose; the transitive-load subprocess check wrongly forbidding the already-approved `eidos.validation` load) fixed the same two ways this project always fixes them — reworded, and the check corrected to exclude the approved transitive load, mirroring `test_planning_guards.py`'s own identical exclusion. 43 new tests in `tests/unit/expansion/` (23 behavior — both worked examples from Step 7 verbatim, empty/duplicate/multi-stage cases, a representative Plan passing full V0.2 validation and V0.3 compilation; 3 hash-seed determinism; 17 guards, including a sanity-checked no-feasibility-call guard and a sanity-checked transitive-load check). Mutation check: 7 of 7 caught (step-id collision, self-referencing stage, VERIFY over-scoped to every agent step, FINAL/NONE branch inverted, `plan_id`/`tenant_id` swapped for the wrong source field, the empty-stage guard removed). Full planning suite unchanged **224 passed**; all guard tests repo-wide **549 passed**; full default suite **3,201 passed, 2 deselected**. `eidos.planning`/`eidos.selectors` source confirmed untouched by diff. D-129 stays Open, not closed. **D-196 recorded (Open at the time)**: "V0.9" then had three meanings on record (Telemetry, the benchmark, Strategy-to-Plan Expansion) — found and reported, nothing renamed or reordered to resolve it yet. Committed as one focused commit; not pushed. *(D-196 has since been Accepted and this step relabeled V0.8 Step 8 — see the row above.)* |
 | 2026-09-23 | **V0.8 Step 6 implemented: selection integration + deterministic end-to-end evaluation** | Inspected first: `CandidateGenerationResult.candidates` was already exactly the `tuple[Strategy, ...]` `select_strategy` takes, so no new wiring or abstraction was built — confirmed by zero diff under `src/eidos/planning/` or `src/eidos/selectors/` for the entire step. New `tests/integration/planning/` (33 tests): the full deterministic pipeline (`TaskGenome` → `RuleBasedCandidateGenerator` → feasibility → `DeterministicSelector`) across zero/one/two/three-capability genomes and limits that reject one or every candidate; the same pipeline through `ModelAssistedSelector` with a `ScriptedModel`, including prompt-injection-like candidate text that only ever resolves through the closed label set; a factual (never ranked) comparison of both selectors over the identical candidate set; combined import-graph boundary checks. One genuine, harmless finding, checked not assumed: `eidos.agents` itself already, legitimately, transitively loads `eidos.compiler`/`.runtime`/`.capabilities` for its own pre-existing `WorkAgent` concerns — the guard was corrected to assert what actually matters, not weakened, then sanity-checked against a manufactured `eidos.recording` import caught by both the new integration guard and the existing Step 5 unit guard simultaneously. No new `decisions.md` entry — everything needed was already a consequence of D-186–D-193. Full planning suite unchanged **224 passed**; all guard tests unchanged **532 passed**; full default suite **3,158 passed, 2 deselected** (was 3,125; +33). Committed as one focused commit; not pushed. *(Step 5 was implemented in the prior commit; Step 6 is this row's own work.)* |

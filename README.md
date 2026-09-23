@@ -7,7 +7,7 @@
 
 ## Status
 
-**V0.8 — Strategy Selection: architecture accepted, Steps 2, 3, 5, 6, 7 and 8 implemented (the Selector contracts and orchestration boundary; a boundary-hardening audit; the model-assisted Selector adapter, `eidos.selectors`; a deterministic selection-integration suite; the Strategy-to-Plan expansion design and its implementation, `eidos.expansion`), none pushed. V0.7 — Strategy & Candidate Generation: closed as scoped, none pushed. V0.6 — A2A: Steps 1–6 of 9 implemented and pushed. V0.5 — the event log and the state reducer: complete as scoped. V0.4 — real local agents: complete as scoped. *(V0.9 remains Telemetry, unbuilt — decisions.md D-196.)*
+**V0.9 — Telemetry: Step 2 implemented (`eidos.telemetry`, a pure multi-execution projection over already-recorded facts), none pushed. V0.8 — Strategy Selection: architecture accepted, Steps 2, 3, 5, 6, 7 and 8 implemented (the Selector contracts and orchestration boundary; a boundary-hardening audit; the model-assisted Selector adapter, `eidos.selectors`; a deterministic selection-integration suite; the Strategy-to-Plan expansion design and its implementation, `eidos.expansion`), none pushed. V0.7 — Strategy & Candidate Generation: closed as scoped, none pushed. V0.6 — A2A: Steps 1–6 of 9 implemented and pushed. V0.5 — the event log and the state reducer: complete as scoped. V0.4 — real local agents: complete as scoped.
 
 This repository contains the project rules, the architecture knowledge base, the decision record,
 the V0.1 typed contracts (`eidos.contracts`), the V0.2 plan validator (`eidos.validation`), the V0.3
@@ -99,6 +99,13 @@ validation or V0.3 compiler pipeline exists (D-178). **Note (D-196):** this work
 controlled benchmark stays unassigned a number, exactly like MCP/RAG under D-184 — this work is filed as V0.8
 Steps 7–8 instead, matching D-183's own pre-existing "Strategy-to-Plan expansion (V0.8+, not built)" phrasing.
 See [progress.md](progress.md), "V0.8 Strategy Selection".
+
+**V0.9 is Telemetry** — the correct, D-196-resolved meaning of the number. `eidos.telemetry.project(records)` is
+a pure, deterministic projection over already-recorded facts, generalized across many executions: it composes
+the existing `execution_record` (D-159) rather than re-folding events, and adds only what's already derivable —
+per-status node counts, a remote-task count, and a mission wall-clock span. No model identifier, no
+`strategy_id`, no quality/confidence/ranking field, no durable store, no benchmark logic — each is a separate,
+flagged, unbuilt extension point. See [progress.md](progress.md), "V0.9 Telemetry".
 
 Current status and the milestone ladder: [progress.md](progress.md).
 Decisions and unresolved questions: [decisions.md](decisions.md).
