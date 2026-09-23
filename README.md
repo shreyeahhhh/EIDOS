@@ -7,7 +7,7 @@
 
 ## Status
 
-**V0.9 — Telemetry: Step 2 implemented (`eidos.telemetry`, a pure multi-execution projection over already-recorded facts), none pushed. V0.8 — Strategy Selection: architecture accepted, Steps 2, 3, 5, 6, 7 and 8 implemented (the Selector contracts and orchestration boundary; a boundary-hardening audit; the model-assisted Selector adapter, `eidos.selectors`; a deterministic selection-integration suite; the Strategy-to-Plan expansion design and its implementation, `eidos.expansion`), none pushed. V0.7 — Strategy & Candidate Generation: closed as scoped, none pushed. V0.6 — A2A: Steps 1–6 of 9 implemented and pushed. V0.5 — the event log and the state reducer: complete as scoped. V0.4 — real local agents: complete as scoped.
+**V0.9 — Telemetry: Steps 2 and 3 implemented (`eidos.telemetry`, a pure multi-execution projection over already-recorded facts; Step 3 connects the full live chain from a `TaskGenome` through candidate generation, selection, Strategy-to-Plan expansion, validation, execution/recording and telemetry projection, for one real mission), none pushed. V0.8 — Strategy Selection: architecture accepted, Steps 2, 3, 5, 6, 7 and 8 implemented (the Selector contracts and orchestration boundary; a boundary-hardening audit; the model-assisted Selector adapter, `eidos.selectors`; a deterministic selection-integration suite; the Strategy-to-Plan expansion design and its implementation, `eidos.expansion`), none pushed. V0.7 — Strategy & Candidate Generation: closed as scoped, none pushed. V0.6 — A2A: Steps 1–6 of 9 implemented and pushed. V0.5 — the event log and the state reducer: complete as scoped. V0.4 — real local agents: complete as scoped.
 
 This repository contains the project rules, the architecture knowledge base, the decision record,
 the V0.1 typed contracts (`eidos.contracts`), the V0.2 plan validator (`eidos.validation`), the V0.3
@@ -105,7 +105,15 @@ a pure, deterministic projection over already-recorded facts, generalized across
 the existing `execution_record` (D-159) rather than re-folding events, and adds only what's already derivable —
 per-status node counts, a remote-task count, and a mission wall-clock span. No model identifier, no
 `strategy_id`, no quality/confidence/ranking field, no durable store, no benchmark logic — each is a separate,
-flagged, unbuilt extension point. See [progress.md](progress.md), "V0.9 Telemetry".
+flagged, unbuilt extension point.
+
+**Step 3 connects the full chain, for one real mission.** The only missing piece was a real id source: neither
+`StrategyIdSource` nor `PlanIdSource` had one, only fixed test doubles. `eidos.recording.ports.UuidStrategyIds`/
+`UuidPlanIds` (mirroring `UuidEventIds` exactly) close that gap; everything downstream already composed. One
+integration test now exercises the complete, real path — `TaskGenome` → candidate generation → deterministic
+selection → `expand_strategy` → `validate_plan` → `record_baseline` → `project` — for one mission, with real
+UUIDs throughout and no mission driver, no automatic loop (D-170 unchanged). See [progress.md](progress.md),
+"V0.9 Telemetry".
 
 Current status and the milestone ladder: [progress.md](progress.md).
 Decisions and unresolved questions: [decisions.md](decisions.md).

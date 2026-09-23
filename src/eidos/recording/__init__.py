@@ -9,7 +9,7 @@ The one entry point is ``record_baseline``.
 """
 
 from .adapters import ModelCallTracker, RecordingAgent, RecordingModel, RecordingVerifier, facts_of
-from .ports import Clock, IdSource, SystemClock, UuidEventIds
+from .ports import Clock, IdSource, SystemClock, UuidEventIds, UuidPlanIds, UuidStrategyIds
 from .recorder import Recorder
 from .run import RecordedRun, record_baseline
 
@@ -24,6 +24,8 @@ __all__ = [
     "RecordingVerifier",
     "SystemClock",
     "UuidEventIds",
+    "UuidPlanIds",
+    "UuidStrategyIds",
     "facts_of",
     "record_baseline",
 ]

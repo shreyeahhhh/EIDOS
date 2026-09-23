@@ -2,9 +2,15 @@
 
 Complements, and does not replace, the existing per-package guards (``tests/unit/planning/test_planning_guards.py``,
 ``tests/unit/selectors/test_selectors_guards.py``): those check each package's own source in isolation; this file
-checks what actually happens when a real caller uses **both together** to run a real selection, and that this
-integration suite itself never reaches for the Plan/execution layer, proving "no Plan is generated or executed by
-this step" structurally rather than only by claim.
+checks what actually happens when a real caller uses **both together** to run a real selection, and that the
+V0.8 Step 6 files in this directory never reach for the Plan/execution layer, proving "no Plan is generated or
+executed by this step" structurally rather than only by claim.
+
+**V0.9 Step 3 deliberately, legitimately widens what this directory as a whole covers**: its own file,
+``test_strategy_to_telemetry_integration.py``, exists specifically to compile and execute a real, expanded Plan —
+the opposite claim from this file's own. The check below is scoped to the four V0.8 Step 6 files it was written
+for, not to every ``test_*.py`` this directory will ever hold; each later step's own integration proof states its
+own boundary in its own file, the way ``test_strategy_to_telemetry_integration.py`` does in its own docstring.
 """
 
 import ast
@@ -15,8 +21,15 @@ from pathlib import Path
 TESTS_PLANNING = Path(__file__).resolve().parent
 SRC = Path(__file__).resolve().parents[3] / "src" / "eidos"
 
-# This integration suite is explicitly about the selection boundary only (Part 6/7 of the V0.8 Step 6 brief):
-# no Plan is built or compiled, and nothing here executes anything.
+# The four files V0.8 Step 6 itself added — explicitly about the selection boundary only, never the Plan/execution
+# layer. NOT every test_*.py this directory will ever hold: V0.9 Step 3's own file exists specifically to compile
+# and execute a real Plan, the opposite claim, and states its own boundary separately (its own module docstring).
+_V0_8_STEP_6_FILES = {
+    "test_selection_pipeline.py",
+    "test_model_assisted_selection.py",
+    "test_selector_comparison.py",
+    "test_selection_integration_boundaries.py",
+}
 FORBIDDEN_LAYERS_IN_THIS_SUITE = {"compiler", "runtime", "backends", "baseline"}
 
 
@@ -32,6 +45,8 @@ def imports_of(path: Path) -> list[str]:
 
 def test_this_integration_suite_never_imports_the_plan_or_execution_layer():
     for path in sorted(TESTS_PLANNING.glob("test_*.py")):
+        if path.name not in _V0_8_STEP_6_FILES:
+            continue
         for name in imports_of(path):
             parts = name.split(".")
             assert not (len(parts) > 1 and parts[0] == "eidos" and parts[1] in FORBIDDEN_LAYERS_IN_THIS_SUITE), \
