@@ -7,7 +7,7 @@
 
 ## Status
 
-**V1.0 — Execution Experience / Strategy Memory: architecture accepted (D-198), Step 1 of 7 implemented (`eidos.memory.experience` — `ExecutionExperience`, `evaluate_experience`), not pushed. Benchmark 1 — Execution-Control Comparison: implemented (13 tests, conditions A/B/C/D1/D2, five task classes; deliberately unassigned a milestone number, D-196/D-197), not pushed. V0.9 — Telemetry: Steps 2, 3 and 4 implemented (`eidos.telemetry`, a pure multi-execution projection over already-recorded facts; Step 3 connects the full live chain from a `TaskGenome` through candidate generation, selection, Strategy-to-Plan expansion, validation, execution/recording and telemetry projection, for one real mission; Step 4 closes two evidence gaps an inspection found), none pushed. V0.8 — Strategy Selection: architecture accepted, Steps 2, 3, 5, 6, 7 and 8 implemented (the Selector contracts and orchestration boundary; a boundary-hardening audit; the model-assisted Selector adapter, `eidos.selectors`; a deterministic selection-integration suite; the Strategy-to-Plan expansion design and its implementation, `eidos.expansion`), none pushed. V0.7 — Strategy & Candidate Generation: closed as scoped, none pushed. V0.6 — A2A: Steps 1–6 of 9 implemented and pushed. V0.5 — the event log and the state reducer: complete as scoped. V0.4 — real local agents: complete as scoped.
+**V1.0 — Execution Experience / Strategy Memory: architecture accepted (D-198), Steps 1 and 2 of 7 implemented (`eidos.memory.experience` — `ExecutionExperience`, `evaluate_experience`; `eidos.memory.relevance` — task/strategy relevance filtering), not pushed. Benchmark 1 — Execution-Control Comparison: implemented (13 tests, conditions A/B/C/D1/D2, five task classes; deliberately unassigned a milestone number, D-196/D-197), not pushed. V0.9 — Telemetry: Steps 2, 3 and 4 implemented (`eidos.telemetry`, a pure multi-execution projection over already-recorded facts; Step 3 connects the full live chain from a `TaskGenome` through candidate generation, selection, Strategy-to-Plan expansion, validation, execution/recording and telemetry projection, for one real mission; Step 4 closes two evidence gaps an inspection found), none pushed. V0.8 — Strategy Selection: architecture accepted, Steps 2, 3, 5, 6, 7 and 8 implemented (the Selector contracts and orchestration boundary; a boundary-hardening audit; the model-assisted Selector adapter, `eidos.selectors`; a deterministic selection-integration suite; the Strategy-to-Plan expansion design and its implementation, `eidos.expansion`), none pushed. V0.7 — Strategy & Candidate Generation: closed as scoped, none pushed. V0.6 — A2A: Steps 1–6 of 9 implemented and pushed. V0.5 — the event log and the state reducer: complete as scoped. V0.4 — real local agents: complete as scoped.
 
 This repository contains the project rules, the architecture knowledge base, the decision record,
 the V0.1 typed contracts (`eidos.contracts`), the V0.2 plan validator (`eidos.validation`), the V0.3
@@ -140,16 +140,21 @@ Comparison".
 
 **V1.0 — Execution Experience / Strategy Memory** (architecture accepted, D-198): the research question is
 whether measured execution experience from previous missions can improve future strategy selection — never
-whether EIDOS can be made to *appear* adaptive. **Step 1** (this commit): `eidos.memory.experience` —
+whether EIDOS can be made to *appear* adaptive. **Step 1**: `eidos.memory.experience` —
 `ExecutionExperience`, an immutable, purely factual record of one completed mission (strategy shape, task
 characteristics, and every cost/outcome fact `TelemetryRecord` already carries, copied verbatim — no quality or
 confidence score, no strategy signature, no embeddings), and the pure function that builds one,
 `evaluate_experience`. The Strategy↔execution linkage lives only inside this new type; no `strategy_id` was
-added to `Plan`, `MissionState`, `TelemetryRecord`, `ExecutionRecord`, or any `MissionEvent`. Six steps remain,
-each separately approved before it starts: relevance, storage, `ExperienceInformedSelector` (a fourth `Selector`
-implementation, no change to the `Selector` Protocol or `select_strategy`), guard revisions, an end-to-end
-integration test, and Benchmark 2. See [progress.md](progress.md), "V1.0 Execution Experience / Strategy
-Memory".
+added to `Plan`, `MissionState`, `TelemetryRecord`, `ExecutionRecord`, or any `MissionEvent`. **Step 2** (this
+commit): `eidos.memory.relevance` — two separate, pure relevance questions. Task relevance (`task_relevance`,
+`relevant_experience`) is a closed, three-tier structural comparison (`SAME`/`SIMILAR`/`IRRELEVANT`) over
+required capabilities, risk level and autonomy level only — any risk/autonomy mismatch is irrelevant regardless
+of capability overlap, no embeddings, no scalar similarity score, no staleness. Strategy relevance
+(`experience_for`) matches a candidate to historical records by exact structural shape, never by `StrategyId`
+(fresh every generation round, D-182). Five steps remain, each separately approved before it starts: storage,
+`ExperienceInformedSelector` (a fourth `Selector` implementation, no change to the `Selector` Protocol or
+`select_strategy`), guard revisions, an end-to-end integration test, and Benchmark 2. See
+[progress.md](progress.md), "V1.0 Execution Experience / Strategy Memory".
 
 Current status and the milestone ladder: [progress.md](progress.md).
 Decisions and unresolved questions: [decisions.md](decisions.md).

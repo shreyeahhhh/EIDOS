@@ -5,9 +5,9 @@ package source, so they fail the moment someone adds a forbidden dependency, a v
 non-determinism, or one of the concepts the V1.0 decision revision explicitly excluded (a quality/confidence
 score, a strategy signature/genome encoding, embeddings) — not merely when behaviour visibly changes.
 
-Scoped to what V1.0 Step 1 actually built (``__init__.py``, ``experience.py``). ``relevance.py`` (Step 2) and
+Scoped to what V1.0 Steps 1 and 2 actually built (``__init__.py``, ``experience.py``, ``relevance.py``).
 ``store.py`` (Step 3, the one file in this package ever permitted file I/O) will extend
-``test_the_package_has_the_expected_modules`` and the forbidden-imports check when they land — not weakened
+``test_the_package_has_the_expected_modules`` and the forbidden-imports check when it lands — not weakened
 early, extended on schedule, exactly like ``eidos.planning``'s own guards grew across V0.7 Steps 2 to 5.
 """
 
@@ -39,9 +39,13 @@ VENDOR_NAMES = (
 
 # The V1.0 decision revision's own explicit exclusions (item 7: "keep ExecutionExperience immutable and
 # factual... do not add quality score, confidence score, strategy signature, embeddings, artifact text,
-# subjective judgments"). Checked as literal text, mirroring test_selectors_guards's own
-# test_no_forbidden_concept_is_mentioned discipline.
-FORBIDDEN_CONCEPT_WORDS = ("quality_score", "confidence_score", "strategy_signature", "embedding", "trust_score")
+# subjective judgments"; ruling 3/4: relevance is a closed, structural tier, never a scalar similarity/relevance
+# score). Checked as literal text, mirroring test_selectors_guards's own test_no_forbidden_concept_is_mentioned
+# discipline.
+FORBIDDEN_CONCEPT_WORDS = (
+    "quality_score", "confidence_score", "strategy_signature", "embedding", "trust_score",
+    "similarity_score", "relevance_score",
+)
 FORBIDDEN_FIELD_NAMES = {"quality", "confidence", "score", "rank", "trust"}
 
 
@@ -58,8 +62,8 @@ def imports_of(path: Path) -> list[tuple[str, tuple[str, ...], int]]:
 
 
 def test_the_package_has_the_expected_modules():
-    # Extended at Step 2 (relevance.py) and Step 3 (store.py) — not built yet, per D-198's own step order.
-    assert [m.name for m in MODULES] == ["__init__.py", "experience.py"]
+    # Extended at Step 3 (store.py, not built yet) — per D-198's own step order.
+    assert [m.name for m in MODULES] == ["__init__.py", "experience.py", "relevance.py"]
 
 
 @pytest.mark.parametrize("module", MODULES, ids=lambda m: m.name)
@@ -115,6 +119,24 @@ def test_no_ranking_or_scoring_vocabulary_in_execution_experience():
 
     forbidden = {"best", "preferred", "winner", "rank", "score", "weight", "weighted"}
     assert forbidden & set(ExecutionExperience.model_fields) == set()
+
+
+def test_task_relevance_has_exactly_the_three_approved_members():
+    # D-198 ruling 3: a closed, structural, three-tier classification — pins the exact vocabulary so a future
+    # addition (e.g. a fourth, finer-grained tier) is a reviewed decision, not a silent expansion.
+    from eidos.memory import TaskRelevance
+
+    assert {member.value for member in TaskRelevance} == {"same", "similar", "irrelevant"}
+
+
+def test_relevant_experience_and_experience_for_never_mention_the_selection_algorithm():
+    # relevant_experience()/experience_for() must ONLY filter — never rank, choose, or compute anything
+    # resembling the V1.0 selection algorithm (eidos.selectors.experience_informed, a later, separate step).
+    # Proven by absence, mirroring test_planning_guards.py's own
+    # test_feasibility_does_not_reimplement_or_call_the_plan_validator discipline.
+    text = (MEMORY / "relevance.py").read_text(encoding="utf-8")
+    for symbol in ("structural_cost", "DeterministicSelector", "ExperienceInformedSelector", "SelectorChoice", "tier"):
+        assert symbol not in text, f"relevance.py mentions {symbol}"
 
 
 @pytest.mark.parametrize("module", MODULES, ids=lambda m: m.name)
