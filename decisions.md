@@ -3385,6 +3385,42 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
 - **Consequences:** exactly mirrors D-185's own reasoning: the contract is shaped to be recordable later (a future event, not built) without needing to exist as one now. A completed mission still replays deterministically once a selection is eventually recorded as a fact — the *selection mechanism* need not be deterministic itself (a future model-assisted one likely won't be), the same way a model call inside an agent already isn't, without breaking mission replay.
 - **Affects:** nothing in `eidos.state` is touched. Does not reopen D-185.
 
+### D-190 — Minimum model context for selection: goal plus each candidate's stages, verification and rationale — nothing else
+
+- **Status:** Accepted · **Date:** 2026-09-22 · **Decided by:** human owner
+- **Source:** V0.8 Step 4 exploration; `ModelPort`'s text-in/text-out shape (D-135); D-179's own capability-allocation/verification-posture/topology dimensions
+- **Decision:** a model-assisted `Selector` (not built by this decision) may see exactly: `TaskGenome.goal`, and each candidate's `stages`, `verification` and `rationale`. It must **not** see `required_capabilities` (redundant — already fully visible as the union of what the candidates' own stages show), `risk_level`/`autonomy_level` (no bounded, deterministic instruction exists yet for how these should influence a choice — handing them over would only invite free-form judgment), `structural_cost` (would let the model simply recompute what `DeterministicSelector` already does for free, giving model-assistance no differentiated value and anchoring toward "smaller number is better," which is not necessarily goal-fit), or the raw `StrategyId` (D-191).
+- **Consequences:** context is not added merely because it is available; each exclusion has a stated, specific reason, not a blanket minimalism gesture. A future decision may add a field once a bounded, deterministic instruction for using it exists — this decision does not pre-approve any specific future addition.
+- **Affects:** the not-yet-built model-assisted `Selector`'s own request-construction logic. Does not reopen D-186 or D-187.
+
+### D-191 — Compact position-derived labels, never raw StrategyId, shown to the model; deterministic JSON candidate serialization
+
+- **Status:** Accepted · **Date:** 2026-09-22 · **Decided by:** human owner
+- **Source:** V0.8 Step 4 exploration; `base.render_artifacts`'s own `[[ref]]` labelling precedent; D-053 (StrategyId is UUID-backed, none of D-053's four exemption reasons apply to a model-facing label)
+- **Decision:** candidates are presented to the model under compact labels — `CANDIDATE_1`, `CANDIDATE_2`, ... — derived **strictly from candidate-tuple position**, never drawn from randomness or an injected id source (there is nothing to inject: the label *is* the index). The label↔`StrategyId` map is built fresh per call, from the `candidates` tuple itself, and is never exposed to the model. Candidate *data* (`stages`, `verification`, `rationale`) is serialized as JSON with fixed field order and fixed candidate order — safe and unambiguous regardless of arbitrary content in a `rationale` string, unlike a bespoke delimited-text format would be.
+- **Consequences:** the authoritative identity remains `StrategyId` throughout; the label is a presentation-layer detail resolved back to it immediately after parsing (D-192), never trusted or propagated past that point. A 36-character UUID is never something the model has to reproduce exactly — the closed, short label vocabulary is both safer against transcription error and structurally impossible to satisfy with an out-of-set answer.
+- **Affects:** the not-yet-built model-assisted `Selector`'s own serialization logic only. `Strategy`/`StrategyId` themselves are unchanged.
+
+### D-192 — Model output contract: exactly one bracketed candidate label, reusing the existing citation-token convention; no new failure vocabulary
+
+- **Status:** Accepted · **Date:** 2026-09-22 · **Decided by:** human owner
+- **Source:** V0.8 Step 4 exploration; `eidos.agents.base`'s existing `_CITATION`/`cited_refs` regex-extraction precedent; D-187 (`Selector`'s existing contract), D-135 (`ModelFailureKind`)
+- **Decision:**
+  1. The model is instructed to respond with exactly one candidate label wrapped in double brackets (e.g. `[[CANDIDATE_2]]``) and nothing else — no rationale, no score, no confidence, no "best strategy" narrative.
+  2. Parsing extracts every **distinct** bracketed token from the response, mirroring the existing citation-extraction pattern exactly (tolerant of surrounding prose, de-duplicating repeated identical tokens to one). Only a bracketed token is ever authoritative; nothing outside brackets is read for meaning under any circumstance.
+  3. Exactly one distinct, resolvable label → a candidate is proposed. Zero labels, two or more *distinct* labels, or a label outside the given `CANDIDATE_1..N` set are **all** `SelectorFailureKind.MALFORMED_CHOICE` — never a guessed tie-break, never a best-effort substitution.
+  4. Underlying `ModelFailure` kinds map onto the **existing**, unchanged three-member `SelectorFailureKind` (D-187): `TIMEOUT`→`TIMEOUT`, `UNAVAILABLE`→`UNAVAILABLE`, `MALFORMED_RESPONSE`→`MALFORMED_CHOICE`, `EMPTY_RESPONSE`→`MALFORMED_CHOICE`. **No new failure kind is introduced** — checked, not assumed: every real `ModelFailure`/parsing-failure case maps cleanly onto the three members Step 2 already approved.
+- **Consequences:** this is the actual prompt-injection boundary, and it is structural, not linguistic — even a fully successful attempt to influence the model's wording can, at worst, bias *which* already-feasible candidate gets named; it cannot escape the closed label vocabulary, because the parser structurally extracts nothing else. Prompt wording that frames goal/candidate text as data, not instructions, is a best-effort, non-load-bearing addition on top of this, never the boundary itself.
+- **Affects:** the not-yet-built model-assisted `Selector`'s own output handling. Does not add a member to `SelectorFailureKind` or change `select_strategy`'s own membership check, which remains the unconditional backstop regardless of how a choice was produced.
+
+### D-193 — ModelAssistedSelector is an independent Selector implementation; no automatic fallback to DeterministicSelector
+
+- **Status:** Accepted · **Date:** 2026-09-22 · **Decided by:** human owner
+- **Source:** V0.8 Step 4 exploration; D-170 (no automatic mission driver, A2A resume); D-187 (the shared `select_strategy` orchestration boundary)
+- **Decision:** a model-assisted `Selector` is an independent, alternative implementation of the same `Selector` Protocol (D-187) — not a fallback, not a wrapper, not a verification pass over `DeterministicSelector`. Both implementations are validated by the identical, unchanged `select_strategy` boundary. **No automatic fallback exists or is planned**: a `SelectorFailure` from a model-assisted selector is returned to the caller as `SELECTOR_FAILED`, exactly as any other selector failure already is — never silently retried, never silently resolved by switching to `DeterministicSelector`.
+- **Consequences:** the caller — never the selection boundary itself — decides what happens after `SELECTOR_FAILED` (retry, switch selectors, halt for review). A future *opt-in* composition (e.g. a wrapper `Selector` that tries one implementation then another) would itself be an ordinary `Selector` implementation the existing Protocol already supports — not proposed or built now.
+- **Affects:** the not-yet-built model-assisted `Selector`'s own failure handling. Does not change `select_strategy`, `SelectionResult`, or `SelectionOutcome`.
+
 ## Open — require the human owner
 
 These are ambiguities, contradictions and gaps found in the handoff during the bootstrap read. None

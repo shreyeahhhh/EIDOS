@@ -7,7 +7,7 @@
 
 ## Status
 
-**V0.8 — Strategy Selection: architecture accepted, Step 2 (the Selector contracts and orchestration boundary) implemented, none pushed. V0.7 — Strategy & Candidate Generation: closed as scoped, none pushed. V0.6 — A2A: Steps 1–6 of 9 implemented and pushed. V0.5 — the event log and the state reducer: complete as scoped. V0.4 — real local agents: complete as scoped.**
+**V0.8 — Strategy Selection: architecture accepted, Steps 2, 3 and 5 implemented (the Selector contracts and orchestration boundary; a boundary-hardening audit; the model-assisted Selector adapter, `eidos.selectors`), none pushed. V0.7 — Strategy & Candidate Generation: closed as scoped, none pushed. V0.6 — A2A: Steps 1–6 of 9 implemented and pushed. V0.5 — the event log and the state reducer: complete as scoped. V0.4 — real local agents: complete as scoped.**
 
 This repository contains the project rules, the architecture knowledge base, the decision record,
 the V0.1 typed contracts (`eidos.contracts`), the V0.2 plan validator (`eidos.validation`), the V0.3
@@ -71,8 +71,15 @@ zero/one-candidate short-circuit and the actual membership check no untrusted se
 (the reference `DeterministicSelector`'s tie-break is a structural tuple, never a scalar quality score), and
 **D-189** (`SelectionResult` is a typed, replay-ready value only — no `SelectionId`, no `MissionEvent`, no
 Strategy Memory yet). Step 2 implemented exactly that: `eidos.planning.selector` and `.selection`, still a core
-layer, still no `eidos.agents`/`ModelPort` dependency — a model-assisted `Selector` is a future adapter outside
-this layer, not built now. See [progress.md](progress.md), "V0.8 Strategy Selection".
+layer, still no `eidos.agents`/`ModelPort` dependency. Step 3 audited the boundary against eleven stated
+semantics and found it already sufficient (no contract change). Step 4 (design only) proposed, and Step 5
+implemented, a model-assisted `Selector`: **D-190** (the model sees only the goal and each candidate's
+stages/verification/rationale), **D-191** (candidates are labelled `CANDIDATE_1..N` by tuple position, never the
+raw `StrategyId`), **D-192** (the model's answer is exactly one bracketed label, parsed by the same closed-token
+convention agents already use to cite sources), **D-193** (no automatic fallback to `DeterministicSelector`).
+`ModelAssistedSelector` lives in a new sibling adapter package, `eidos.selectors`, outside the core `eidos.planning`
+layer — the same shape `eidos.providers` and `eidos.backends` already use for a dependency the core cannot have.
+See [progress.md](progress.md), "V0.8 Strategy Selection".
 
 Current status and the milestone ladder: [progress.md](progress.md).
 Decisions and unresolved questions: [decisions.md](decisions.md).

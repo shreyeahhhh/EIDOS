@@ -123,7 +123,9 @@ def test_planning_depends_only_on_eidos_contracts_and_validation_limits(module):
 
 @pytest.mark.parametrize("module", MODULES, ids=lambda m: m.name)
 def test_planning_never_imports_the_plan_validator_compiler_or_other_higher_layers(module):
-    forbidden_roots = {"agents", "providers", "backends", "a2a", "recording", "capabilities", "runtime", "compiler"}
+    forbidden_roots = {
+        "agents", "providers", "backends", "a2a", "recording", "capabilities", "runtime", "compiler", "selectors",
+    }
     for name, _, _ in imports_of(module):
         parts = name.split(".")
         assert not (parts and parts[0] == "eidos" and len(parts) > 1 and parts[1] in forbidden_roots), \
@@ -254,7 +256,7 @@ def test_importing_the_planning_package_loads_no_backend_agent_or_protocol_layer
         "sys.path.insert(0, 'src')\n"
         "import eidos.planning\n"
         "loaded = sorted(m for m in sys.modules if m.startswith((\n"
-        "    'eidos.agents', 'eidos.providers', 'eidos.backends', 'eidos.a2a', 'eidos.recording',\n"
+        "    'eidos.agents', 'eidos.providers', 'eidos.backends', 'eidos.a2a', 'eidos.recording', 'eidos.selectors',\n"
         "    'eidos.capabilities', 'eidos.runtime', 'eidos.compiler',\n"
         ")) or m.split('.')[0] in ('langgraph', 'langchain', 'httpx'))\n"
         "print(loaded)\n"

@@ -7,7 +7,7 @@ Status only. Rules live in [CLAUDE.md](CLAUDE.md). Decisions and open questions 
 
 ## Current state
 
-**Milestone: V0.8 Strategy Selection — architecture accepted (D-186 to D-189), Steps 2 and 3 of its sequence implemented (Step 3 a boundary-hardening audit, no contract change), on top of V0.7 Strategy & Candidate Generation (closed as scoped, D-178 to D-185, none pushed), V0.6 One A2A Boundary (protocol/contract design accepted, Steps 1–6 of 9 implemented, D-177; none pushed), V0.5 Mission State + Event Reducer (complete as scoped, D-152 to D-164, pushed), V0.4 Real Local Agents (complete as scoped, D-131 to D-151), V0.1 Core Contracts, V0.2 Plan Validation and V0.3 LangGraph Runtime (complete as scoped, D-112 to D-130).**
+**Milestone: V0.8 Strategy Selection — architecture accepted (D-186 to D-189), Steps 2, 3 and 5 of its sequence implemented (Step 3 a boundary-hardening audit, no contract change; Step 4 a design-only step accepted as D-190 to D-193; Step 5 the model-assisted `Selector` adapter, `eidos.selectors`), on top of V0.7 Strategy & Candidate Generation (closed as scoped, D-178 to D-185, none pushed), V0.6 One A2A Boundary (protocol/contract design accepted, Steps 1–6 of 9 implemented, D-177; none pushed), V0.5 Mission State + Event Reducer (complete as scoped, D-152 to D-164, pushed), V0.4 Real Local Agents (complete as scoped, D-131 to D-151), V0.1 Core Contracts, V0.2 Plan Validation and V0.3 LangGraph Runtime (complete as scoped, D-112 to D-130).**
 
 All seven V0.1 contracts (`ReliabilityContract`, `TaskGenome`, `Plan`, `PlanStep`, `MissionEvent`,
 `MissionState`, `AgentTask`) are implemented in `src/eidos/contracts/`, immutable, in-memory only
@@ -53,7 +53,7 @@ Reducer" and "V0.5 close-out review" below.
 
 **V0.7 (Strategy & Candidate Generation): architecture accepted (2026-09-22; D-178 to D-185, resolving D-020); Steps 2 to 5 implemented, not pushed, prepared for close-out.** V0.6 is complete and pushed at `ab980c7`; V0.7 redefines what this milestone number means (originally MCP — now resolved, D-184: MCP/RAG are deferred and unassigned, not renumbered into this sequence). Step 1 was architecture/design only: `Strategy` is a distinct object from `Plan` (**D-178**, resolving the long-Open **D-020**) — an execution shape, never a `StepId`, a dependency edge or an agent binding; the approved structural dimensions are topology/parallelism (a sequential tuple of capability stages), verification posture (two members — only one deterministic Verifier exists, D-133) and capability allocation, with agent/model/tool/retry-replan posture explicitly excluded (**D-179**); feasibility filtering (not yet built) will reuse the existing `SystemLimits`/`ReliabilityContract`, no new numeric ceiling (**D-180**); `max_candidates` will be an explicit generation-time parameter, not a `SystemLimits` field — CLAUDE.md's own "two or three" is the ceiling, not reopened (**D-181**); `StrategyId` is plain, UUID-backed identity, no version, no signature — **D-021** (the "Strategy Genome") stays Open and untouched (**D-182**). **Step 2 built the data contracts alone**: `eidos.planning` (`Strategy`, `StrategyStage`, `VerificationPosture`), a new core layer depending only on `eidos.contracts` at this step. **Step 3 built the bounded candidate-generation boundary**: `CandidateGenerator` (a `Protocol`), the deterministic reference `RuleBasedCandidateGenerator` (exactly three rule-based shapes — linear, parallel, staged — gated so a guaranteed duplicate is never constructed), and the orchestration function `generate_candidate_strategies` (structural dedup, a capability-membership re-check distinct from D-180's own future feasibility filtering, identity injection via a new `StrategyIdSource` Protocol mirroring `eidos.recording.ports.IdSource`, and capping at an explicit, required `max_candidates`). `StrategyShape` — Step 2's dropped, then explicitly anticipated, identity-free intermediate type — was reintroduced now that `CandidateGenerator` is its first real consumer; `Strategy` itself is unchanged. No new decision was required: the approved Strategy contract expressed everything needed. **Step 4 built the feasibility gate** D-180 already approved the reuse for: `check_feasibility(strategy, task_genome, reliability_contract, limits) -> FeasibilityReport`, three narrower, strategy-level analogues of V0.2's CAPABILITY/COMPLEXITY/RESOURCE stages — no new numeric limit anywhere, and `eidos.validation.stages`/`.pipeline` (the actual Plan validator) are never imported or called. `generate_candidate_strategies` now stamps identity on every distinct shape before checking feasibility, splits feasible from infeasible, and caps only the feasible pool at `max_candidates`; Step 3's own narrow, ad hoc capability-only re-check — always a placeholder for this — is retired in its favour. **Step 5 resolved the three questions Step 1 left explicitly Open**, by owner ruling, no code change: **D-183** (candidates are feasibility-filtered before selection; full Plan validation runs once, only on the selected strategy's expanded Plan — never on every candidate), **D-184** (MCP/RAG are deferred, unassigned extensions outside the V0.7–V1.0 sequence, not renumbered into it), **D-185** (candidate generation and feasibility are not `MissionEvent`s in V0.7). No Strategy selection, no LLM-assisted generation, no Strategy-to-Plan expansion — those remain later steps, each requiring its own go-ahead. See "V0.7 Strategy & Candidate Generation" below.
 
-There is still no MCP, no RAG, no persistence, no telemetry, no API and no frontend. A2A itself is built (`eidos.a2a`, V0.6 Steps 1–6, none pushed). A full planner does not yet exist either — V0.7 Steps 2 to 4 add the `Strategy` data contracts, a bounded, deterministic `CandidateGenerator`, and the feasibility gate (`eidos.planning`); there is still no strategy-to-plan expansion and no selection.
+There is still no MCP, no RAG, no persistence, no telemetry, no API and no frontend. A2A itself is built (`eidos.a2a`, V0.6 Steps 1–6, none pushed). A full planner does not yet exist either — V0.7 Steps 2 to 4 add the `Strategy` data contracts, a bounded, deterministic `CandidateGenerator`, and the feasibility gate (`eidos.planning`); V0.8 Steps 2, 3 and 5 add the selection boundary itself (`Selector`, `DeterministicSelector`, `select_strategy`) and a model-assisted `Selector` (`eidos.selectors.ModelAssistedSelector`); there is still no strategy-to-plan expansion.
 
 Real-model runs have been recorded (V0.4; see "The first real baseline run" and the sections after it). They record what happened in those runs and are not a benchmark: no quality
 metric exists anywhere in this repository, and the only latencies recorded are the first run's one trivial completion and the runtime-reported durations of the later runs' calls.
@@ -62,7 +62,7 @@ metric exists anywhere in this repository, and the only latencies recorded are t
 
 - [x] `CLAUDE.md` — permanent rules, 18 architecture invariants
 - [x] `progress.md` — this file
-- [x] `decisions.md` — 146 Accepted, 39 Open, 5 Deferred (counts current as of the latest decision below)
+- [x] `decisions.md` — 150 Accepted, 39 Open, 5 Deferred (counts current as of the latest decision below)
 - [x] `README.md`, `pyproject.toml`, `.gitignore`
 - [x] `docs/01`–`docs/12` — the twelve documents required by handoff §81
 - [x] `src/eidos/` and `src/eidos/contracts/` — docstring only, no code
@@ -1659,7 +1659,7 @@ followed. V0.8 (Strategy Selection) has since started — see "V0.8 Strategy Sel
 
 ---
 
-## V0.8 Strategy Selection — Step 2 implemented, none pushed (2026-09-22)
+## V0.8 Strategy Selection — Steps 2, 3 and 5 implemented, none pushed (2026-09-22 to 2026-09-23)
 
 V0.7 closed as scoped at `6fb8cb3`. V0.8 is the next link the fundamental loop names (handoff §2, §83):
 *feasible Strategy candidates → [V0.8 Strategy Selection] → selected Strategy → Strategy-to-Plan expansion
@@ -1806,13 +1806,108 @@ verified by direct, deliberate-violation sanity checks instead (above), the same
 applies to guard tests rather than running them through the scratch mutation tool. Full planning suite **224
 passed** (was 222). Full default suite **3,054 passed, 2 deselected**. `strategy.py`, `generator.py`,
 `pipeline.py`, `feasibility.py`, `results.py`, `__init__.py` (V0.7 and the rest of V0.8 Step 2) confirmed
-untouched by diff. **No new `decisions.md` entry.** Committed as one focused commit; not pushed. **Step 4 has not
-started.**
+untouched by diff. **No new `decisions.md` entry.** Committed as one focused commit; not pushed.
+
+### Step 4 — model-assisted Selector architecture, design only (accepted 2026-09-22; no code)
+
+Answered, in writing, before any implementation: the exact model context (`TaskGenome.goal` plus each candidate's
+`stages`/`verification`/`rationale` only — never `required_capabilities`, `risk_level`, `autonomy_level`, the raw
+`StrategyId`, or `structural_cost`); the label scheme (position-derived `CANDIDATE_1..N`, never the real id); the
+output contract (exactly one bracketed label, reusing `eidos.agents.base`'s own existing `[[ref]]` citation
+convention rather than inventing a new syntax); the full parsing-edge-case table; the `ModelFailure` ->
+`SelectorFailureKind` mapping (confirmed the existing three-member vocabulary already suffices — no new member);
+that this is an independent `Selector` implementation with **no** automatic fallback to `DeterministicSelector`
+(mirrors D-170's "no automatic driver"); and that package placement is *outside* `eidos.planning` (needs
+`eidos.agents.ModelPort`, which the core layer's own guards already forbid), exact location deferred to Step 5's
+own inspection. Recorded as **D-190 to D-193** (below). No source code, no new package, no model call — approval
+for implementation was requested and given separately, for Step 5.
+
+### Step 5 — implement the model-assisted Selector (2026-09-23)
+
+**Package placement, decided by inspection before any file was created.** `eidos.planning`'s own package
+docstring already states a model-assisted `Selector` "is a future adapter *outside* this core layer" — confirmed,
+not assumed. The chosen location is a new sibling package, **`eidos.selectors`**, one file
+(`model_assisted.py`) plus `__init__.py`. This mirrors two existing precedents exactly: `eidos.providers` adapts
+a vendor to `ModelPort` outside the core layer that cannot name a vendor; `eidos.backends` adapts a workflow
+library to the runtime's executor port outside the core layer that cannot import it. `eidos.selectors` is the
+same shape one layer up — it adapts `ModelPort` to the existing `Selector` Protocol outside the core layer that
+cannot import `eidos.agents`. No generic "AI selector framework" was created: `ModelAssistedSelector` simply
+implements the Protocol V0.8 Step 2 already defined, holding no state beyond `model`/`settings`.
+
+**Request construction (D-190, D-191).** `_label_candidates` builds `CANDIDATE_1..N` strictly from the supplied
+tuple's own position (`enumerate(candidates, start=1)`) — never from `strategy_id`, never from randomness. The
+label -> `StrategyId` map lives only for one `select` call. Candidate data is serialized with `json.dumps` into a
+fixed-field-order object (`id`, `stages`, `verification`, `rationale` — insertion order, no `sort_keys` needed)
+nested under `{"goal": ..., "candidates": [...]}`; JSON was chosen for the *data* specifically because it is safe
+against arbitrary adversarial content in a `rationale` string, unlike a bespoke delimited format would be. The
+system prompt states the bounded task and the closed output contract; the user prompt explicitly frames the JSON
+block as data, not instructions — stated plainly as best-effort only, never the actual security boundary.
+
+**Output parsing (D-192).** `_CANDIDATE_LABEL = re.compile(r"\[\[([^\[\]\n]+)\]\]")`, the exact same pattern as
+`eidos.agents.base._CITATION`, reused for a different closed vocabulary. Distinct bracketed tokens are collected
+in order of first appearance (`cited_refs`'s own de-duplication idiom); exactly one distinct, resolvable token ->
+`SelectedCandidate`; zero, two-or-more-distinct, or an unresolvable token are all `MALFORMED_CHOICE`. No natural
+language is ever parsed — "I choose Candidate 2." resolves to zero brackets, hence `MALFORMED_CHOICE`, exactly as
+specified.
+
+**Model failures (D-193).** `_FAILURE_KIND_OF` maps `TIMEOUT`->`TIMEOUT`, `UNAVAILABLE`->`UNAVAILABLE`,
+`MALFORMED_RESPONSE`->`MALFORMED_CHOICE`, `EMPTY_RESPONSE`->`MALFORMED_CHOICE` — no new `SelectorFailureKind`
+member; every `ModelFailure` case already maps onto the three Step 2 approved. `ModelAssistedSelector.select`
+never retries and never falls back to `DeterministicSelector` on any failure path — proven by a dedicated guard
+(absence of the literal name anywhere in the package, sanity-checked by a manufactured violation before being
+trusted) as well as by construction.
+
+**Prompt-injection tests.** Five dedicated cases: an injected instruction in the goal ("ignore previous
+instructions..."), a rationale instructing the model to answer with an out-of-set label (`CANDIDATE_999`), a
+rationale asking for a different response format entirely, a rationale containing JSON-like text (proves
+serialization stays well-formed and the embedded text is carried as an inert string value, never merged into the
+structure), and a rationale containing bracket-like text (`[[refs]]`) that could be confused with the model's own
+answer token. In every case the test demonstrates the **parser/membership boundary**, not the model, is what
+prevents an out-of-set answer — even a `ScriptedModel` explicitly scripted to answer with the injected
+`[[CANDIDATE_999]]` token still cannot produce anything but `MALFORMED_CHOICE`, because the label is not in the
+per-call map built from the real candidate tuple.
+
+**Tests: 71 new, in `tests/unit/selectors/`** — `test_selectors_model_assisted.py` (request construction, output
+parsing, model-failure mapping, `ModelAssistedSelector` itself, integration with `select_strategy`, the five
+prompt-injection cases) and `test_selectors_guards.py` (module list; standard-library/`eidos` import allowlist;
+no vendor/protocol/Laya name; no `MissionEvent`/Strategy-Memory/Plan-DSL/Laya concept mentioned; no
+`DeterministicSelector` fallback, sanity-checked; no module-level mutable list/set state; no raw prompt/response
+persistence concept; no `SelectorFailureKind` member beyond the approved three; `eidos.planning` never imports
+`eidos.selectors`, checked from both directions; a plain `import eidos.planning` still loads nothing from
+`eidos.selectors`). `test_planning_guards.py` was extended, not weakened, by two one-line additions: `selectors`
+added to the forbidden-roots set `eidos.planning` may never import, and to the transitive-load subprocess check —
+strengthening the exact boundary this step introduces a way to violate.
+
+**Two docstring false positives, same class as V0.7 Step 4 and V0.8 Step 3's own:** the new guard tests initially
+tripped on their own explanatory prose — `__init__.py`'s docstring named `DeterministicSelector`/`Laya`/
+"telemetry" literally while explaining what this package deliberately does *not* do. Fixed by rewording to
+descriptive prose only (e.g. "the deterministic reference selector," "a possible future scoring-based selector
+implementation") — zero logic changed, confirmed by re-running the guard immediately after each edit.
+
+**Mutation check: 7 of 7 caught on the first pass** — label mapping (start index), deterministic ordering
+(reversed candidate order), parser cardinality (accepting 2+ distinct labels), unknown-label handling (silently
+falling back to the first candidate instead of failing), the `ModelFailure` mapping table (one entry pointed at
+the wrong `SelectorFailureKind`), `StrategyId` exposure (leaking the raw id into the JSON payload), and fallback
+behavior (a malformed answer silently resolved to the first candidate instead of `SELECTOR_FAILED`). The
+membership-boundary target was not separately mutated: `selection.py`/`select_strategy` are untouched by this
+step (confirmed by diff) and remain covered by the existing, unchanged 224 planning tests. Each mutation was
+applied to a pristine copy, confirmed to fail the suite, then reverted and confirmed restored, mirroring the
+project's established mutation-testing discipline exactly.
+
+Full planning suite: **224 passed** (unchanged from Step 3 — this step added no code to `eidos.planning`). All
+guard tests repo-wide: **532 passed**. Full default suite: **3,125 passed, 2 deselected**. `strategy.py`,
+`generator.py`, `pipeline.py`, `feasibility.py`, `results.py`, `selector.py`, `selection.py`, `__init__.py` (all
+of V0.7 and V0.8 Steps 2–3) confirmed untouched by diff. **No new `decisions.md` entry beyond D-190–D-193**
+(formally recorded as part of this step, mirroring Step 2's own "approved in chat, written up when implemented"
+pattern) — nothing implementation revealed needed a further decision. Committed as one focused commit; not
+pushed. **Step 6 has not started.**
 
 ### Carried forward, not decided
 
-Everything Step 1 left unresolved stays exactly as recorded — none of it was touched by Step 2's or Step 3's own,
-narrower scope.
+Everything Step 1 left unresolved stays exactly as recorded, except where Steps 4–5 explicitly resolved it
+(package placement, D-190 to D-193): none of the rest was touched by Steps 2, 3, 4 or 5's own, narrower scope.
+Laya's real semantics remain unknown; Strategy-to-Plan expansion's mechanism (not just its ordering, D-183) is
+still untouched.
 
 ---
 
@@ -1882,7 +1977,8 @@ Full detail for each is in [decisions.md](decisions.md).
 
 | Date | Milestone | Outcome |
 |---|---|---|
-| 2026-09-23 | **V0.8 Step 3: boundary-hardening audit (no contract change)** | Checked all eleven stated selection-boundary semantics against what Step 2 already enforces (by type, by implementation, or by `SelectionResult`'s own cross-field validator). **Conclusion: the Step 2 boundary was already sufficient for all eleven** — nothing needed a contract change, so no new decision was proposed. Two narrow gaps found and closed with new static guard tests (nothing pinned, though true by inspection, that `selector.py`/`selection.py` never call or re-run feasibility; nothing pinned that `eidos.planning.__all__` exports exactly what the package's own submodule imports intend). **Both guards immediately caught real, harmless issues**, verified before being trusted: the feasibility-independence guard flagged its own module docstrings quoting the feasibility symbol names in explanatory prose (the same false-positive class Step 4's `feasibility.py` guard hit; fixed the same way — reworded to descriptive prose, zero logic changed, confirmed by diff); the exports guard was sanity-checked by deliberately breaking `__all__` and confirming the failure, then restoring it; the feasibility-independence guard was separately sanity-checked by inserting a fake call to the feasibility gate and confirming it was caught, then reverting. No gap found in `SelectionResult`'s own validator — its non-`SELECTED` branch has no per-member logic, so Step 2's one representative negative test already covers all three non-`SELECTED` outcomes; no redundant tests were added. 2 new guard tests, 2 docstring-only rewordings (no logic change). No new non-trivial branch existed to mutation-test; both new guards were instead verified by direct, deliberate-violation checks. Full planning suite **224 passed**. Full default suite **3,054 passed, 2 deselected**. `strategy.py`/`generator.py`/`pipeline.py`/`feasibility.py`/`results.py`/`__init__.py` confirmed untouched by diff. No new `decisions.md` entry. Committed as one focused commit; not pushed. Step 4 not started. |
+| 2026-09-23 | **V0.8 Step 5 implemented: the model-assisted `Selector` (`eidos.selectors.ModelAssistedSelector`)** | Step 4 (design only, 2026-09-22) proposed D-190 to D-193; this step formally recorded them in `decisions.md` (150 Accepted, 39 Open, 5 Deferred) and implemented exactly what they specify. New sibling adapter package **`eidos.selectors`** (not inside `eidos.planning`, which cannot import `eidos.agents`/`ModelPort` — confirmed by the package's own existing docstring, not assumed), one module `model_assisted.py`, chosen by explicit analogy to `eidos.providers`/`eidos.backends`: each adapts an external dependency to a Protocol the core layer defines, from outside the core layer. `ModelAssistedSelector` implements the existing `Selector` Protocol unchanged. Candidates are labelled `CANDIDATE_1..N` strictly by tuple position (D-191) — never the raw `StrategyId`; the model sees only `TaskGenome.goal` plus each candidate's `stages`/`verification`/`rationale` (D-190), serialized as fixed-field-order JSON. The model's answer is parsed by a regex identical to `eidos.agents.base`'s own `_CITATION` convention, reused for this closed vocabulary (D-192): exactly one distinct, resolvable bracketed label succeeds; zero, 2+, or an out-of-set label are all `MALFORMED_CHOICE`; natural-language answers are never parsed. `ModelFailure` maps onto the existing three-member `SelectorFailureKind` with no new member (D-193); no automatic fallback to `DeterministicSelector` exists anywhere, proven by a dedicated, sanity-checked guard. Five prompt-injection tests demonstrate the parser/membership boundary — not the model — is what rejects an out-of-set or malformed answer, including a `ScriptedModel` explicitly scripted to answer with an injected out-of-set label. Two docstring false positives (the new guards flagged their own explanatory prose naming `DeterministicSelector`/`Laya`/"telemetry" literally) fixed by rewording only, the same class already seen in V0.7 Step 4 and V0.8 Step 3. 71 new tests in `tests/unit/selectors/`; `test_planning_guards.py` strengthened (not weakened) with two one-line additions guarding the new package name. Mutation check: 7 of 7 caught on the first pass (label-index, ordering, parser cardinality, unknown-label fallback, failure-mapping, `StrategyId` exposure, silent-fallback). Full planning suite unchanged at **224 passed**; all guard tests repo-wide **532 passed**; full default suite **3,125 passed, 2 deselected**. All of V0.7 and V0.8 Steps 2–3 confirmed untouched by diff. Committed as one focused commit; not pushed. Step 6 not started. |
+| 2026-09-23 | **V0.8 Step 3: boundary-hardening audit (no contract change)** | Checked all eleven stated selection-boundary semantics against what Step 2 already enforces (by type, by implementation, or by `SelectionResult`'s own cross-field validator). **Conclusion: the Step 2 boundary was already sufficient for all eleven** — nothing needed a contract change, so no new decision was proposed. Two narrow gaps found and closed with new static guard tests (nothing pinned, though true by inspection, that `selector.py`/`selection.py` never call or re-run feasibility; nothing pinned that `eidos.planning.__all__` exports exactly what the package's own submodule imports intend). **Both guards immediately caught real, harmless issues**, verified before being trusted: the feasibility-independence guard flagged its own module docstrings quoting the feasibility symbol names in explanatory prose (the same false-positive class Step 4's `feasibility.py` guard hit; fixed the same way — reworded to descriptive prose, zero logic changed, confirmed by diff); the exports guard was sanity-checked by deliberately breaking `__all__` and confirming the failure, then restoring it; the feasibility-independence guard was separately sanity-checked by inserting a fake call to the feasibility gate and confirming it was caught, then reverting. No gap found in `SelectionResult`'s own validator — its non-`SELECTED` branch has no per-member logic, so Step 2's one representative negative test already covers all three non-`SELECTED` outcomes; no redundant tests were added. 2 new guard tests, 2 docstring-only rewordings (no logic change). No new non-trivial branch existed to mutation-test; both new guards were instead verified by direct, deliberate-violation checks. Full planning suite **224 passed**. Full default suite **3,054 passed, 2 deselected**. `strategy.py`/`generator.py`/`pipeline.py`/`feasibility.py`/`results.py`/`__init__.py` confirmed untouched by diff. No new `decisions.md` entry. Committed as one focused commit; not pushed. *(Step 4 has since run as a design-only step, and Step 5 has since implemented the model-assisted Selector it proposed — see the row above.)* |
 | 2026-09-23 | **V0.8 Step 2 implemented: the Selector contracts and orchestration boundary (`Selector`, `DeterministicSelector`, `select_strategy`)** | V0.8 Step 1 (design only, 2026-09-22) proposed D-186 to D-189; this step formally recorded them in `decisions.md` (146 Accepted, 39 Open, 5 Deferred) and implemented exactly what they specify, no more. New `eidos.planning.selector` (`structural_cost` — a tuple, never a scalar; `SelectedCandidate`; `SelectorFailureKind`, three members, deliberately narrower than `ModelFailureKind` since `eidos.planning` cannot import `eidos.agents`; `SelectorFailure`; the `Selector` protocol; `DeterministicSelector`, choosing minimum `structural_cost` via `min()`'s own tie-stability) and `eidos.planning.selection` (`select_strategy`: zero candidates → `NO_FEASIBLE_CANDIDATES` with no selector call; exactly one → selected directly, no selector call; otherwise the selector is invoked and its claim is checked against the real candidate tuple by `strategy_id` — a match returns the exact existing object, never a copy; no match is `INVALID_CANDIDATE_RETURNED`; a failure is `SELECTOR_FAILED`, message preserved, never retried). `SelectionOutcome`/`SelectionResult` added to the existing `results.py`, with a cross-field validator mirroring `eidos.state.reducer.ReduceResult`'s own "unconstructible if mislabelled" rule. `check_feasibility` is deliberately not re-run at this boundary — every candidate is already admissible by construction. Two things were checked during implementation, not assumed, both confirming the approved design needed no change: `SelectorFailureKind` cannot reuse `ModelFailureKind` (architecturally impossible, not just undesirable — the existing core-layer guard already forbids importing `eidos.agents`); duplicate `StrategyId`s within one candidate tuple resolve deterministically via Python's own `next()`-first-match, so no new rejection rule was invented, only pinned by two dedicated tests. `SelectorFailure.message` gained `Field(min_length=1)`, matching `ModelFailure`'s own established convention. 66 new tests (26 in `test_planning_selector.py`, 25 in `test_planning_selection.py`, 15 guard tests updated/added — including `litellm`/`rag` added to the vendor-name list). Mutation check: 10 of 10 caught on the first pass. Full default suite **3,052 passed, 2 deselected**. Committed as one focused commit; not pushed. *(Step 3 has since run a boundary-hardening audit — see the row above.)* |
 | 2026-09-22 | **V0.7 closed as scoped** | The owner confirmed: *"V0.7 is closed as scoped."* No additional gate was set beyond the close-out review Step 5 already prepared (all deliverables built, all exclusions confirmed absent, D-183/D-184/D-185 ruled on) — verified once more before recording: `strategy.py`/`feasibility.py` unchanged since `b1e6702`; focused planning suite **156 passed**; the 48 static guard tests **all green** (no forbidden dependency, no Plan-validator call, no vendor/model name, no `AgentId`, no wall-clock/randomness); full default suite **2,986 passed, 2 deselected**, identical to Step 4 and Step 5's own counts. V0.7's four commits (`ff0ad1e`, `3abaa7c`, `b1e6702`, `12122ad`) stay entirely local; this closure entry is its own commit, also not pushed — pushing follows only a separate, explicit instruction. D-021 stays Open, intentionally outside V0.7. *(V0.8 Strategy Selection has since started — see the row above.)* |
 | 2026-09-22 | **V0.7 Step 5: the three remaining architectural questions resolved (D-183, D-184, D-185); close-out prepared** | A documentation/decision step, not an implementation one — inspection found nothing left inside V0.7's own scope needing new source code; `strategy.py`/`feasibility.py` confirmed byte-for-byte unchanged since Step 4 (`b1e6702`) by diff, not assumed. **D-183:** candidates are feasibility-filtered before selection; full V0.2 Plan validation runs once, only on the selected strategy's expanded `Plan`, never on every candidate — confirms the reading Steps 2–4 were already built against, fixes only V0.8's future ordering. **D-184:** MCP and RAG are deferred, unassigned extensions outside the V0.7–V1.0 strategy-intelligence sequence; neither gets a milestone number until a concrete requirement or benchmark needs it; D-027/D-028 annotated, not reopened. **D-185:** candidate generation and feasibility are not `MissionEvent`s in V0.7; `MissionEventType` gains no member; a `Strategy` is not a `MissionState` field. A "V0.7 close-out review" was prepared (definition of done checked against V0.7's own scope, what is/is not delivered, invariants exercised — 9, 11, 14 — and not, findings, what stays Open for V0.8) but **not declared closed**, matching the V0.4/V0.5 precedent of a prepared review the owner then confirms separately. Focused planning suite unchanged at 156 passed; full default suite unchanged at **2,986 passed, 2 deselected** (identical counts to Step 4, confirming nothing regressed and nothing was silently added). No new non-trivial logic, so no new mutation run. Decision counts: 142 Accepted, 39 Open, 5 Deferred. Committed as one focused commit; not pushed. V0.7 is ready for the owner's close-out decision; V0.8 not started. |
