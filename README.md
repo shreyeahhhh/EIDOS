@@ -7,7 +7,7 @@
 
 ## Status
 
-**V0.9 — Strategy-to-Plan Expansion: Step 2 implemented (`eidos.expansion`, D-194/D-195), none pushed. V0.8 — Strategy Selection: architecture accepted, Steps 2, 3, 5 and 6 implemented (the Selector contracts and orchestration boundary; a boundary-hardening audit; the model-assisted Selector adapter, `eidos.selectors`; a deterministic selection-integration suite), none pushed. V0.7 — Strategy & Candidate Generation: closed as scoped, none pushed. V0.6 — A2A: Steps 1–6 of 9 implemented and pushed. V0.5 — the event log and the state reducer: complete as scoped. V0.4 — real local agents: complete as scoped.**
+**V0.8 — Strategy Selection: architecture accepted, Steps 2, 3, 5, 6, 7 and 8 implemented (the Selector contracts and orchestration boundary; a boundary-hardening audit; the model-assisted Selector adapter, `eidos.selectors`; a deterministic selection-integration suite; the Strategy-to-Plan expansion design and its implementation, `eidos.expansion`), none pushed. V0.7 — Strategy & Candidate Generation: closed as scoped, none pushed. V0.6 — A2A: Steps 1–6 of 9 implemented and pushed. V0.5 — the event log and the state reducer: complete as scoped. V0.4 — real local agents: complete as scoped. *(V0.9 remains Telemetry, unbuilt — decisions.md D-196.)*
 
 This repository contains the project rules, the architecture knowledge base, the decision record,
 the V0.1 typed contracts (`eidos.contracts`), the V0.2 plan validator (`eidos.validation`), the V0.3
@@ -86,17 +86,19 @@ Step 6 proved the boundary end to end: `CandidateGenerationResult.candidates` wa
 between the two selectors, and JSON round-trip/replay safety with no model call). See
 [progress.md](progress.md), "V0.8 Strategy Selection".
 
-Selected Strategy → **[V0.9 Strategy-to-Plan Expansion]** → concrete `Plan` → the existing, unmodified V0.2/V0.3
-pipeline. `eidos.expansion.expand_strategy` — a new sibling core layer to `eidos.planning` (whose own existing
-guard forbids it from ever importing `StepId`, D-179) — maps one capability occurrence to one `AgentStep`, never
-deduplicated; a stage's steps depend on the whole of the preceding stage, D-179's own definition applied
-literally; `FINAL` verification appends exactly one `VERIFY` step depending on the final stage's own step ids
-alone, matching the real V0.4 baseline precedent (D-194, D-195). `step_id` is a pure, deterministic derivation;
-`plan_id` is drawn only from an injected `PlanIdSource`, mirroring `StrategyIdSource` one layer down. The
-produced `Plan` is an ordinary value — no shortcut around the existing, unmodified V0.2 validation or V0.3
-compiler pipeline exists (D-178). **Note:** "V0.9" is now on record with three different meanings (Telemetry,
-a future benchmark, and this Strategy-to-Plan work) — found, not silently resolved; see decisions.md D-196. See
-[progress.md](progress.md), "V0.9 Strategy-to-Plan Expansion".
+Steps 7 and 8 continue the same milestone: selected Strategy → **[Strategy-to-Plan expansion]** → concrete `Plan`
+→ the existing, unmodified V0.2/V0.3 pipeline. `eidos.expansion.expand_strategy` — a new sibling core layer to
+`eidos.planning` (whose own existing guard forbids it from ever importing `StepId`, D-179) — maps one capability
+occurrence to one `AgentStep`, never deduplicated; a stage's steps depend on the whole of the preceding stage,
+D-179's own definition applied literally; `FINAL` verification appends exactly one `VERIFY` step depending on the
+final stage's own step ids alone, matching the real V0.4 baseline precedent (D-194, D-195). `step_id` is a pure,
+deterministic derivation; `plan_id` is drawn only from an injected `PlanIdSource`, mirroring `StrategyIdSource`
+one layer down. The produced `Plan` is an ordinary value — no shortcut around the existing, unmodified V0.2
+validation or V0.3 compiler pipeline exists (D-178). **Note (D-196):** this work was first logged as "V0.9 Step
+1/2"; V0.9 itself remains **Telemetry**, unchanged (the older, far more established meaning), and a future
+controlled benchmark stays unassigned a number, exactly like MCP/RAG under D-184 — this work is filed as V0.8
+Steps 7–8 instead, matching D-183's own pre-existing "Strategy-to-Plan expansion (V0.8+, not built)" phrasing.
+See [progress.md](progress.md), "V0.8 Strategy Selection".
 
 Current status and the milestone ladder: [progress.md](progress.md).
 Decisions and unresolved questions: [decisions.md](decisions.md).

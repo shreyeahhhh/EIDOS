@@ -3424,18 +3424,18 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
 ### D-194 — Strategy-to-Plan expansion lives in a new sibling core layer, `eidos.expansion`
 
 - **Status:** Accepted · **Date:** 2026-09-23 · **Decided by:** human owner
-- **Source:** D-178 ("whatever later expands a selected Strategy into a Plan must still pass that Plan through the unmodified V0.2 validation and V0.3 compiler pipeline"); D-180's own precedent (`eidos.planning` becomes a core layer with a named, narrow set of approved dependencies); `tests/unit/planning/test_planning_guards.py`'s existing `FORBIDDEN_CONCEPT_IMPORTS` guard, which already forbids `eidos.planning` from ever importing `StepId` (enforcing D-179's own exclusion of step ids and edges from `Strategy`); V0.9 Step 1 exploration.
+- **Source:** D-178 ("whatever later expands a selected Strategy into a Plan must still pass that Plan through the unmodified V0.2 validation and V0.3 compiler pipeline"); D-180's own precedent (`eidos.planning` becomes a core layer with a named, narrow set of approved dependencies); `tests/unit/planning/test_planning_guards.py`'s existing `FORBIDDEN_CONCEPT_IMPORTS` guard, which already forbids `eidos.planning` from ever importing `StepId` (enforcing D-179's own exclusion of step ids and edges from `Strategy`); V0.8 Step 7 exploration.
 - **Decision:** the mechanism that expands a selected `Strategy` into a concrete `Plan` lives in a **new sibling core layer, `eidos.expansion`** — not inside `eidos.planning` (structurally impossible without violating the existing guard above, which is not weakened by this decision) and not inside `eidos.contracts`, `eidos.validation` or `eidos.compiler`. It joins the existing core-layer set (`eidos.contracts`, `eidos.validation`, `eidos.compiler`, `eidos.runtime`, `eidos.state`, `eidos.planning`) with the same discipline: deterministic, no I/O, no clock, no randomness, no model/vendor/tool name. It may depend only on `eidos.contracts` (`Plan`, `PlanStep`/`AgentStep`/`ControlStep`, `PlanId`, `StepId`) and `eidos.planning` (`Strategy`, `StrategyStage`, `VerificationPosture`) — never `eidos.validation`, `eidos.compiler`, `eidos.runtime`, `eidos.agents`, `eidos.providers`, `eidos.backends`, `eidos.a2a`, `eidos.recording` or `eidos.selectors`.
 - **Consequences:** its output is an ordinary `Plan` — no new entry point into V0.2 validation or V0.3 compilation is created; both remain exactly as they are, per D-178's own promise that a `Strategy` grants no shortcut. `eidos.expansion` does not call `eidos.planning.feasibility.check_feasibility` (already decided admissibility, D-180/D-183) and does not duplicate any V0.2 validation rule.
-- **Affects:** establishes the package boundary and its approved dependency edges ahead of V0.9 Step 2, which implements it. Does not reopen D-178, D-179, D-180 or D-183.
+- **Affects:** establishes the package boundary and its approved dependency edges ahead of V0.8 Step 8, which implements it. Does not reopen D-178, D-179, D-180 or D-183. *(D-196: this work is filed under V0.8 Steps 7–8, not "V0.9" — see D-196.)*
 
 ### D-195 — `VerificationPosture.FINAL` expands to exactly one VERIFY step depending exactly on the final stage's own step ids
 
 - **Status:** Accepted · **Date:** 2026-09-23 · **Decided by:** human owner
-- **Source:** the real, already-shipped V0.4 baseline plan precedent (`{"gather": "", "analyse": "gather", "check": "analyse"}` — the `VERIFY` step depends only on the immediately preceding step, never transitively on an earlier one); `eidos.agents.verification`'s own documented behavior ("over the artifacts the VERIFY node's predecessors produced" — a `VerifyNode`'s `predecessors`, i.e. its `depends_on` edges, are the actual boundary of what gets verified, not a redundant ordering hint); D-146 (`minimum_distinct_sources` follows citations transitively through the artifact graph, not through Plan dependency edges, so evidence from an earlier stage remains reachable without a direct edge); V0.9 Step 1 exploration.
+- **Source:** the real, already-shipped V0.4 baseline plan precedent (`{"gather": "", "analyse": "gather", "check": "analyse"}` — the `VERIFY` step depends only on the immediately preceding step, never transitively on an earlier one); `eidos.agents.verification`'s own documented behavior ("over the artifacts the VERIFY node's predecessors produced" — a `VerifyNode`'s `predecessors`, i.e. its `depends_on` edges, are the actual boundary of what gets verified, not a redundant ordering hint); D-146 (`minimum_distinct_sources` follows citations transitively through the artifact graph, not through Plan dependency edges, so evidence from an earlier stage remains reachable without a direct edge); V0.8 Step 7 exploration.
 - **Decision:** when a `Strategy.verification` is `FINAL`, expansion appends **exactly one** `VERIFY` `ControlStep` to the produced `Plan`, whose `depends_on` is **exactly** the complete set of `PlanStep` ids generated from the strategy's **final** stage — never every agent step in the Plan, and never a subset of the final stage. `VerificationPosture.NONE` produces no `VERIFY` step at all (unchanged from D-179's own definition of the field).
 - **Consequences:** verification's own direct scope is the final stage's output only; an earlier stage's evidence remains reachable only through citation-following (D-146), exactly mirroring the existing V0.4 precedent. This does not resolve D-129 (how a work node receives its predecessors' outputs stays Open) — the edges this decision fixes are for the `VERIFY` control step only, which already has a settled, documented data-flow (`eidos.agents.verification`), not for `AgentStep`-to-`AgentStep` edges.
-- **Affects:** `eidos.expansion`'s own expansion rule for the `VERIFY` step. Does not change `PlanStepKind`, `VerifyNode`, `VerificationAgent`, or any V0.2/V0.3 contract. Does not close D-129.
+- **Affects:** `eidos.expansion`'s own expansion rule for the `VERIFY` step. Does not change `PlanStepKind`, `VerifyNode`, `VerificationAgent`, or any V0.2/V0.3 contract. Does not close D-129. *(D-196: this work is filed under V0.8 Steps 7–8, not "V0.9" — see D-196.)*
 
 ## Open — require the human owner
 
@@ -4246,32 +4246,45 @@ one is not.
   | Artifact persistence and the general question of how a node receives its predecessors' outputs | **D-129, D-017 (stay Open)** | not assigned |
   | LangGraph checkpointing and interrupts | D-113, D-120, D-127 | not assigned |
   | Enforcement of any budget or limit against the counters | D-043, D-044, D-046 | V1.2 |
-
-### D-196 — The milestone number "V0.9" now has three different meanings on record
-
-- **Status:** Open · **Date:** 2026-09-23 · **Source:** D-161's own deferral table (2026-09-21: "the telemetry
-  platform... | V0.9"); `progress.md`'s milestone ladder (pre-existing row: "**V0.9** Telemetry... Not started");
-  D-184's own V0.7 Step 1 sequence note ("V0.8 Selector, V0.9 benchmark, V1.0 Strategy Memory"); this session's
-  own V0.8 Step 6 brief ("Do NOT build the full V0.9 controlled benchmark yet... Step 6 is an integration proof,
-  not the research result"); this session's own most recent instruction, naming the work just implemented "V0.9
-  Step 1 — Strategy → Plan Expansion Architecture" and "V0.9 Step 2."
-- **Finding:** "V0.9" has now been used, on the record, for three different things: (1) the original handoff
-  ladder's **Telemetry** milestone (D-161, `progress.md`'s own pre-existing row — never renumbered by D-184,
-  unlike V0.7/V0.8), (2) a **controlled benchmark** (V0.7 Step 1's own sequence note, and V0.8 Step 6's explicit
-  "not yet the V0.9 benchmark" framing — consistent with each other, but distinct from (1)), and (3) **Strategy-
-  to-Plan Expansion** (this session's own most recent, explicit instruction and the work actually built by it,
-  `eidos.expansion`, D-194/D-195). This mirrors exactly the D-027/D-028/D-184 situation for V0.7/V0.8 before it
-  was resolved — except here it was found, not asked about, and is reported rather than silently picked.
-- **What was done meanwhile:** nothing was renamed. `progress.md`'s pre-existing milestone-ladder row ("**V0.9**
-  Telemetry... Not started") was left exactly as it was; the Strategy-to-Plan expansion work actually
-  implemented is documented under its own "V0.9 Strategy-to-Plan Expansion" heading in `progress.md`, using the
-  literal label the owner's own instruction used, without erasing or contradicting the older ladder row. Which
-  reading of "V0.9" governs going forward — and where Telemetry and the benchmark then land instead — is left
-  entirely to the owner, mirroring D-184's own resolution of the identical class of question for V0.7/V0.8.
-- **Needs:** the owner's own ruling on what "V0.9" means from here, and a renumbering (or explicit confirmation
-  of the current one) for whichever of Telemetry and the benchmark it displaces — exactly as D-184 did for MCP
-  and RAG.
-- **Effect while Open:** none on work already done — `eidos.expansion` (V0.9 Step 2, this session) is complete
-  and correct under any reading of the number; only the milestone *label* is ambiguous, not the work or its
-  decisions (D-194, D-195).
   | Reinforcement learning, DSPy optimisation, a vector database and an AI planner | handoff §22, §24 | outside V0.5 |
+
+### D-196 — "V0.9" stays Telemetry; the benchmark stays unassigned; Strategy-to-Plan expansion is filed as V0.8 Steps 7–8
+
+- **Status:** Accepted · **Date:** 2026-09-23 · **Decided by:** human owner
+- **Source:** D-161's own deferral table (2026-09-21: "the telemetry platform... | V0.9"); `progress.md`'s
+  milestone ladder (pre-existing row: "**V0.9** Telemetry... Not started"); `docs/03_architecture.md`'s own
+  package table (`eidos.telemetry | ... | V0.9`); D-184's own V0.7 Step 1 "gap found (and reported, not
+  resolved, at Step 1)" — the owner named "V0.8 (Selector), V0.9 (benchmark) and V1.0 (Strategy Memory)
+  explicitly" but D-184's own ruling addressed only where MCP/RAG land, never whether V0.9 stops meaning
+  Telemetry; D-183's own pre-existing phrasing, twice, "Strategy-to-Plan expansion (V0.8+, not built)"; this
+  session's own most recent instruction, which named the work just implemented "V0.9 Step 1"/"V0.9 Step 2."
+- **The finding this rests on:** "V0.9" was on record with three meanings — (1) **Telemetry**, the original,
+  by far the most numerous and longest-standing (14+ references across `progress.md`, `decisions.md` and
+  `docs/03_architecture.md`, dating to the project's earliest days); (2) **a controlled benchmark**, named once
+  by the owner at V0.7 Step 1 (quoted in D-184's own "gap found" text) and never formally reconciled against
+  (1) — an old, still-Open half of a question D-184 itself raised and left dangling; (3) **Strategy-to-Plan
+  Expansion**, introduced this session by promoting an instruction header ("V0.9 Step 1/2") to a milestone
+  label without checking it against (1) or (2) first. D-183's own pre-existing text already described this
+  same work as "V0.8+, not built" — never "V0.9" — which is the strongest existing evidence for where it
+  actually belongs.
+- **Decision:**
+  1. **V0.9 remains Telemetry**, unchanged. Nothing has ever formally superseded it; D-184's own ruling was
+     explicitly scoped to MCP/RAG placement only.
+  2. **The future controlled benchmark is not assigned a milestone number.** It is deferred, exactly as D-184
+     already treats MCP and RAG — described by name only, numbered later, only when a concrete requirement
+     fixes its actual slot.
+  3. **Strategy-to-Plan expansion — the design step and the implementation step already completed this
+     session — is renamed from "V0.9 Step 1/2" to `V0.8 Step 7` (design) and `V0.8 Step 8` (implementation)**,
+     folded into V0.8 Strategy Selection's own step sequence rather than given a new top-level number. This
+     matches D-183's own literal, pre-existing "V0.8+" phrasing exactly and requires reinterpreting nothing
+     else.
+- **Consequences:** no historical decision becomes false. The 14+ pre-existing "V0.9 = Telemetry" references
+  (`progress.md`, `decisions.md`, `docs/03_architecture.md`) are accurate and untouched. D-184's own text is
+  untouched — this decision closes the other half of the exact gap D-184 itself found and reported, without
+  reopening D-184's own MCP/RAG ruling. D-194 and D-195's architectural content is **unchanged** — only their
+  own "Source"/"Affects" cross-references were corrected from "V0.9 Step 1/2" to "V0.8 Step 7/8." D-129 stays
+  Open, not closed, exactly as D-195 already states. No source code, test, or git commit history is touched —
+  this is a documentation-and-decision-record correction only.
+- **Affects:** `progress.md`'s milestone ladder and session log, `README.md`, `docs/03_architecture.md`.
+  Resolves the V0.9-numbering half of the gap D-184 found and left open at V0.7 Step 1 (mirrors D-178's
+  "resolves D-020" precedent). Does not reopen D-178 through D-195.
