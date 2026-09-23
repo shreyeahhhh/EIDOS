@@ -11,6 +11,13 @@ executed by this step" structurally rather than only by claim.
 the opposite claim from this file's own. The check below is scoped to the four V0.8 Step 6 files it was written
 for, not to every ``test_*.py`` this directory will ever hold; each later step's own integration proof states its
 own boundary in its own file, the way ``test_strategy_to_telemetry_integration.py`` does in its own docstring.
+
+**V1.0 Step 4 (D-198) deliberately revises, not weakens, this file's own two ``eidos.selectors``-dependency
+checks**: written before ``eidos.memory`` existed, they correctly forbade it; ``ExperienceInformedSelector`` now
+legitimately depends on it (and, transitively, on ``eidos.state``/``eidos.telemetry``, mirroring the
+``compiler``/``runtime``/``capabilities`` exception already established below for ``eidos.agents``) — the exact
+same class of correction this project has made every time a guard's own original assumption became genuinely
+false on purpose.
 """
 
 import ast
@@ -68,6 +75,14 @@ def test_using_planning_and_selectors_together_loads_no_forbidden_dependency():
     # concerns (pre-existing V0.4 architecture, untouched by V0.8) — checked directly (this subprocess reproduced
     # the failure with them included, confirming they load only via eidos.agents, never via eidos.planning or
     # eidos.selectors themselves, both of which the per-package guards already prove never import compiler/
+    #
+    # eidos.state/eidos.telemetry/eidos.memory are deliberately, additionally, NOT in the forbidden list either
+    # (V1.0 Step 4, D-198): eidos.selectors.experience_informed legitimately imports eidos.memory, which itself
+    # legitimately depends on eidos.state and eidos.telemetry (mirrors eidos.telemetry's own dependency shape,
+    # confirmed by eidos.memory's own guard tests) — the same "an approved adapter dependency transitively pulls
+    # in what it needs" reasoning already established for compiler/runtime/capabilities above, one dependency
+    # further. The per-package guards (test_selectors_guards.py, test_memory_guards.py) already prove neither
+    # eidos.planning nor the rest of eidos.selectors imports any of these directly.
     # runtime/capabilities directly). What this check is actually for — a real protocol/vendor/storage boundary
     # this step could plausibly violate — is the list that remains.
     code = (
@@ -106,7 +121,7 @@ def test_using_planning_and_selectors_together_loads_no_forbidden_dependency():
         "assert det_result.outcome.value == 'selected'\n"
         "assert model_result.outcome.value == 'selected'\n"
         "\n"
-        "forbidden_prefixes = ('eidos.a2a', 'eidos.recording', 'eidos.backends', 'eidos.providers', 'eidos.state', 'eidos.baseline')\n"
+        "forbidden_prefixes = ('eidos.a2a', 'eidos.recording', 'eidos.backends', 'eidos.providers', 'eidos.baseline')\n"
         "forbidden_vendors = ('langgraph', 'langchain', 'langsmith', 'httpx', 'requests', 'mcp')\n"
         "loaded = sorted(\n"
         "    m for m in sys.modules\n"
@@ -126,9 +141,11 @@ def test_eidos_planning_still_never_imports_eidos_selectors_from_this_integratio
             assert "selectors" not in name.split("."), f"{path.name} imports {name}"
 
 
-def test_eidos_selectors_depends_only_on_agents_contracts_and_planning():
+def test_eidos_selectors_depends_only_on_agents_contracts_planning_and_memory():
+    # V1.0 Step 4 (D-198) adds eidos.memory: ExperienceInformedSelector legitimately consumes ExperienceStore,
+    # mirroring test_selectors_guards.py's own identical, deliberate ALLOWED_EIDOS revision.
     for path in sorted((SRC / "selectors").glob("*.py")):
         for name in imports_of(path):
             if name.startswith("eidos"):
-                assert ".".join(name.split(".")[:2]) in {"eidos.agents", "eidos.contracts", "eidos.planning"}, \
+                assert ".".join(name.split(".")[:2]) in {"eidos.agents", "eidos.contracts", "eidos.memory", "eidos.planning"}, \
                     f"{path.name} imports {name}"

@@ -1,11 +1,22 @@
-"""Static guards on ``eidos.selectors`` (decisions.md D-190 to D-193; CLAUDE.md §2 invariants 1, 2, 9, 11; V0.8
-Step 5).
+"""Static guards on ``eidos.selectors`` (decisions.md D-190 to D-193, D-198; CLAUDE.md §2 invariants 1, 2, 9, 11;
+V0.8 Step 5, V1.0 Step 4).
 
 Mirrors ``test_providers_guards.py``/``test_recording_guards.py``'s own discipline for a sibling adapter package:
 these read the package source, so they fail the moment someone adds a forbidden dependency, a vendor name, a
-hidden source of non-determinism, an automatic fallback to ``DeterministicSelector`` (D-193), or a dependency on
-a concept this package has no business touching (Strategy Memory, ``MissionEvent``, Strategy-to-Plan expansion,
-Laya) — not merely when behaviour visibly changes.
+hidden source of non-determinism, an automatic (silent, unconfigured) fallback to ``DeterministicSelector``
+inside ``model_assisted.py`` specifically (D-193), or a dependency on a concept this package has no business
+touching (``MissionEvent``, Strategy-to-Plan expansion, Laya) — not merely when behaviour visibly changes.
+
+**V1.0 Step 4 deliberately revises this file, not weakens it.** Written at V0.8 Step 5, before Strategy Memory
+existed, this guard correctly forbade ``eidos.selectors`` from depending on it at all, and forbade the literal
+string ``"StrategyMemory"`` from appearing anywhere in the package. D-198 makes that original assumption
+genuinely false on purpose: ``ExperienceInformedSelector`` is an adapter that legitimately consumes historical
+execution experience, exactly as ``ModelAssistedSelector`` legitimately consumes ``eidos.agents.ModelPort`` — the
+same "a dependency the core ``eidos.planning`` layer cannot have" reasoning the package's own docstring already
+gives, applied to a second dependency. ``eidos.memory`` is now an approved import (below); the
+``"StrategyMemory"`` literal-string prohibition is removed, not the underlying discipline — every other
+forbidden concept, and the "no automatic fallback" rule for ``model_assisted.py`` specifically, stays exactly as
+strict as it was.
 """
 
 import ast
@@ -30,7 +41,9 @@ FORBIDDEN_IMPORTS = {
     "httpx", "aiohttp", "numpy", "networkx", "langgraph", "langchain", "langsmith",
 }
 ALLOWED_ROOTS = {"json", "re", "dataclasses", "typing", "eidos"}
-ALLOWED_EIDOS = {"eidos.agents", "eidos.contracts", "eidos.planning"}
+# V1.0 Step 4 (D-198) adds eidos.memory: ExperienceInformedSelector legitimately consumes ExperienceStore, the
+# same "a dependency the core eidos.planning layer cannot have" reasoning eidos.agents was already approved for.
+ALLOWED_EIDOS = {"eidos.agents", "eidos.contracts", "eidos.memory", "eidos.planning"}
 
 # Every vendor name the sibling adapter guards already forbid, applied here too — this package speaks to a
 # model only through ModelPort, never to a vendor or protocol library by name.
@@ -39,10 +52,12 @@ VENDOR_NAMES = {
     "langgraph", "langchain", "langsmith", "qdrant", "a2a", "mcp", "rag", "laya",
 }
 
-# Concepts this package has no business depending on: Strategy Memory / adaptive learning, MissionEvent
-# (D-189's own deferral still applies one layer up), and Strategy-to-Plan expansion (not built anywhere yet).
+# Concepts this package has no business depending on: MissionEvent (D-189's own deferral still applies one layer
+# up), Strategy-to-Plan expansion (not built anywhere in this package) and Laya. "StrategyMemory" was forbidden
+# here until V1.0 Step 4 (D-198) — ExperienceInformedSelector now legitimately depends on it; see the module
+# docstring's own explanation.
 FORBIDDEN_CONCEPT_NAMES = {
-    "MissionEvent", "StrategyMemory", "PlanDSL", "Laya",
+    "MissionEvent", "PlanDSL", "Laya",
 }
 
 
@@ -57,7 +72,7 @@ def imports_of(path: Path) -> list[str]:
 
 
 def test_the_package_has_the_expected_modules():
-    assert [m.name for m in MODULES] == ["__init__.py", "model_assisted.py"]
+    assert [m.name for m in MODULES] == ["__init__.py", "experience_informed.py", "model_assisted.py"]
 
 
 @pytest.mark.parametrize("module", MODULES, ids=lambda m: m.name)
@@ -68,7 +83,7 @@ def test_only_the_expected_standard_library_and_no_io_network_or_model_library_i
 
 
 @pytest.mark.parametrize("module", MODULES, ids=lambda m: m.name)
-def test_only_eidos_agents_contracts_and_planning_are_imported(module):
+def test_only_the_approved_eidos_dependencies_are_imported(module):
     for name in imports_of(module):
         if name.startswith("eidos") and not name.startswith("."):
             assert ".".join(name.split(".")[:2]) in ALLOWED_EIDOS, f"{module.name} imports {name}"
@@ -89,14 +104,17 @@ def test_no_forbidden_concept_is_mentioned(module):
         assert name not in text, f"{module.name} mentions {name}"
 
 
-def test_deterministic_selector_is_never_imported_or_called_as_a_fallback():
-    # D-193: no automatic fallback. Proven by absence, mirroring test_planning_guards.py's own
-    # test_selection_does_not_rerun_or_reimplement_feasibility discipline.
-    text = " ".join(m.read_text(encoding="utf-8") for m in MODULES)
+def test_model_assisted_never_imports_or_calls_deterministic_selector_as_a_silent_fallback():
+    # D-193: model_assisted.py never automatically substitutes DeterministicSelector when the model fails.
+    # Scoped to model_assisted.py specifically (V1.0 Step 4, D-198) — not weakened: ExperienceInformedSelector's
+    # own injected `fallback` is a genuinely different mechanism (explicit, caller-configured, always tested),
+    # the one the architecture actually calls for at cold start; D-193's own concern was an automatic, silent
+    # substitution inside a single selector's own logic, which model_assisted.py still never does.
+    text = (SELECTORS / "model_assisted.py").read_text(encoding="utf-8")
     assert "DeterministicSelector" not in text
 
 
-def test_only_model_assisted_py_defines_the_public_selector_class():
+def test_no_selector_class_is_defined_in_init_py():
     init_text = (SELECTORS / "__init__.py").read_text(encoding="utf-8")
     assert "class " not in init_text
 
@@ -135,6 +153,15 @@ def test_no_selector_failure_kind_beyond_the_three_approved_members_is_reference
         assert forbidden not in text
 
 
+def test_experience_informed_selector_never_imports_a_model_dependency():
+    # V1.0 Step 4 (D-198): the experience-informed path is deterministic over stored, already-recorded facts —
+    # it must introduce no LLM/model dependency, unlike its sibling model_assisted.py. eidos.agents is an
+    # approved package-level dependency (ModelAssistedSelector needs it) but experience_informed.py itself has
+    # no reason to import anything from it.
+    for name in imports_of(SELECTORS / "experience_informed.py"):
+        assert not name.startswith("eidos.agents"), f"experience_informed.py imports {name}"
+
+
 def test_nothing_in_eidos_planning_imports_eidos_selectors():
     planning = SRC / "planning"
     for path in sorted(planning.glob("*.py")):
@@ -142,7 +169,7 @@ def test_nothing_in_eidos_planning_imports_eidos_selectors():
             assert "selectors" not in name.split("."), f"{path.name} imports {name}"
 
 
-@pytest.mark.parametrize("target", ["contracts", "validation", "compiler", "runtime", "state", "capabilities"])
+@pytest.mark.parametrize("target", ["contracts", "validation", "compiler", "runtime", "state", "capabilities", "memory"])
 def test_no_core_layer_imports_eidos_selectors(target):
     layer = SRC / target
     paths = [layer] if layer.is_file() else sorted(layer.rglob("*.py"))

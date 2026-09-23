@@ -7,7 +7,7 @@
 
 ## Status
 
-**V1.0 — Execution Experience / Strategy Memory: architecture accepted (D-198), Steps 1 to 3 of 7 implemented (`eidos.memory.experience` — `ExecutionExperience`, `evaluate_experience`; `eidos.memory.relevance` — task/strategy relevance filtering; `eidos.memory.store` — local JSONL persistence), not pushed. Benchmark 1 — Execution-Control Comparison: implemented (13 tests, conditions A/B/C/D1/D2, five task classes; deliberately unassigned a milestone number, D-196/D-197), not pushed. V0.9 — Telemetry: Steps 2, 3 and 4 implemented (`eidos.telemetry`, a pure multi-execution projection over already-recorded facts; Step 3 connects the full live chain from a `TaskGenome` through candidate generation, selection, Strategy-to-Plan expansion, validation, execution/recording and telemetry projection, for one real mission; Step 4 closes two evidence gaps an inspection found), none pushed. V0.8 — Strategy Selection: architecture accepted, Steps 2, 3, 5, 6, 7 and 8 implemented (the Selector contracts and orchestration boundary; a boundary-hardening audit; the model-assisted Selector adapter, `eidos.selectors`; a deterministic selection-integration suite; the Strategy-to-Plan expansion design and its implementation, `eidos.expansion`), none pushed. V0.7 — Strategy & Candidate Generation: closed as scoped, none pushed. V0.6 — A2A: Steps 1–6 of 9 implemented and pushed. V0.5 — the event log and the state reducer: complete as scoped. V0.4 — real local agents: complete as scoped.
+**V1.0 — Execution Experience / Strategy Memory: architecture accepted (D-198), Steps 1 to 4 of 7 implemented (`eidos.memory.experience` — `ExecutionExperience`, `evaluate_experience`; `eidos.memory.relevance` — task/strategy relevance filtering; `eidos.memory.store` — local JSONL persistence; `eidos.selectors.experience_informed` — `ExperienceInformedSelector`), not pushed. Benchmark 1 — Execution-Control Comparison: implemented (13 tests, conditions A/B/C/D1/D2, five task classes; deliberately unassigned a milestone number, D-196/D-197), not pushed. V0.9 — Telemetry: Steps 2, 3 and 4 implemented (`eidos.telemetry`, a pure multi-execution projection over already-recorded facts; Step 3 connects the full live chain from a `TaskGenome` through candidate generation, selection, Strategy-to-Plan expansion, validation, execution/recording and telemetry projection, for one real mission; Step 4 closes two evidence gaps an inspection found), none pushed. V0.8 — Strategy Selection: architecture accepted, Steps 2, 3, 5, 6, 7 and 8 implemented (the Selector contracts and orchestration boundary; a boundary-hardening audit; the model-assisted Selector adapter, `eidos.selectors`; a deterministic selection-integration suite; the Strategy-to-Plan expansion design and its implementation, `eidos.expansion`), none pushed. V0.7 — Strategy & Candidate Generation: closed as scoped, none pushed. V0.6 — A2A: Steps 1–6 of 9 implemented and pushed. V0.5 — the event log and the state reducer: complete as scoped. V0.4 — real local agents: complete as scoped.
 
 This repository contains the project rules, the architecture knowledge base, the decision record,
 the V0.1 typed contracts (`eidos.contracts`), the V0.2 plan validator (`eidos.validation`), the V0.3
@@ -151,14 +151,17 @@ added to `Plan`, `MissionState`, `TelemetryRecord`, `ExecutionRecord`, or any `M
 required capabilities, risk level and autonomy level only — any risk/autonomy mismatch is irrelevant regardless
 of capability overlap, no embeddings, no scalar similarity score, no staleness. Strategy relevance
 (`experience_for`) matches a candidate to historical records by exact structural shape, never by `StrategyId`
-(fresh every generation round, D-182). **Step 3** (this commit): `eidos.memory.store` — `ExperienceStore` (an
+(fresh every generation round, D-182). **Step 3**: `eidos.memory.store` — `ExperienceStore` (an
 injected Protocol) and `JsonlExperienceStore`, the one module in `eidos.memory` ever permitted filesystem I/O:
 local, append-only JSONL, loaded once and cached as an immutable tuple, never re-reading the file on `append`. A
 malformed persisted line is a typed rejection naming its exact line number — the whole load fails explicitly,
-never a silently filtered history, mirroring the event log's own established JSONL convention (D-157). Four
-steps remain, each separately approved before it starts: `ExperienceInformedSelector` (a fourth `Selector`
-implementation, no change to the `Selector` Protocol or `select_strategy`), guard revisions, an end-to-end
-integration test, and Benchmark 2. See
+never a silently filtered history, mirroring the event log's own established JSONL convention (D-157). **Step 4**
+(this commit): `eidos.selectors.experience_informed` — `ExperienceInformedSelector`, a fourth `Selector`
+implementation, no change to the `Selector` Protocol or `select_strategy`. Prefers candidates with directly
+observed, verified-successful historical experience over untested or historically non-successful ones — a
+lexicographic tiered comparison (never a scalar score), deferring entirely to an injected `fallback` selector
+whenever no candidate has any relevant experience at all. Two steps remain, each separately approved before it
+starts: an end-to-end integration test, and Benchmark 2. See
 [progress.md](progress.md), "V1.0 Execution Experience / Strategy Memory".
 
 Current status and the milestone ladder: [progress.md](progress.md).
