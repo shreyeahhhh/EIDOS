@@ -19,6 +19,7 @@ from eidos.contracts import (
     MissionEventType,
     MissionState,
     Plan,
+    PlanId,
     PlanStepKind,
     StepId,
 )
@@ -41,6 +42,7 @@ from eidos.state import (
     PlanRejectedPayload,
     PlanRejectionStage,
     RejectionReason,
+    ReplanTriggeredPayload,
     VerificationFacts,
 )
 
@@ -179,6 +181,13 @@ class LogBuilder:
 
     def failed(self, cause=MissionFailureCause.VERIFICATION_FAILED, reason: str = "a rule was violated"):
         return self.add(MissionFailedPayload(plan_id=self.plan.plan_id, cause=cause, reason=reason))
+
+    def replan_triggered(self, next_plan_id: PlanId, *, cause=MissionFailureCause.EXECUTION_FAILED, reason: str = "the agent call failed"):
+        """D-199, V1.1 Step 3: an accepted within-mission replan away from ``self.plan`` (the first plan) toward
+        ``next_plan_id``. Like every other convenience method here, this is scoped to the first plan only — a
+        replan triggered *from* a second or later plan needs ``log.add(ReplanTriggeredPayload(...))`` directly,
+        exactly as a second plan's own node events already do."""
+        return self.add(ReplanTriggeredPayload(failed_plan_id=self.plan.plan_id, cause=cause, reason=reason, next_plan_id=next_plan_id))
 
 
 def verified_baseline(seed: int = 1) -> LogBuilder:

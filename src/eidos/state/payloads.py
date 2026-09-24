@@ -1,13 +1,16 @@
-"""Typed event payloads — one class per event type V0.5 and V0.6 Step 4 emit (decisions.md D-153, D-154, D-160, D-166, D-169, D-174).
+"""Typed event payloads — one class per event type V0.5, V0.6 Step 4 and V1.1 Step 3 emit (decisions.md D-153, D-154, D-160, D-166, D-169,
+D-174, D-199).
 
 The V0.1 ``MissionEvent`` is an envelope with no payload field (D-067) and stays one. A payload travels beside it in an
-``EventRecord`` (``records.py``) and is chosen by the envelope's ``type``. There are payload classes **only** for the eleven types this
+``EventRecord`` (``records.py``) and is chosen by the envelope's ``type``. There are payload classes **only** for the twelve types this
 package emits; a type with no class here cannot form an ``EventRecord``, and nothing is invented for it (D-153). ``VERIFICATION_FAILED`` is
 deliberately absent: ``NODE_SETTLED`` carries the verdict, so emitting it would record one fact twice (D-160 item 2). No other reserved-but-unbuilt
 event type gains a payload here: ``A2A_TASK_STARTED``/``A2A_TASK_COMPLETED`` are the only two of the vocabulary's remote-subsystem types this
 package builds (D-090), and D-174 uses exactly those two — no ``A2A_TASK_FAILED`` or the like, and no producer-assigned sequence field on either
 (D-172). The tool-call and evidence-search types stay exactly as V0.5 left them: named in the vocabulary, no payload class, because those
-subsystems do not exist yet.
+subsystems do not exist yet. ``REPLAN_TRIGGERED`` (D-199, V1.1 Step 3) finally gives that long-declared V0.1 vocabulary slot its own real
+shape: recorded only when an accepted within-mission replan is about to try a different plan, it deliberately never touches
+``MissionState.status`` — see its own class docstring and ``reducer.py`` for why no new terminal-state escape hatch is needed.
 
 What a payload holds is what the reducer and the ``ExecutionRecord`` need and nothing else (D-153): an ``ArtifactRef`` and never artifact
 content; what the provider reported and what the recorder observed, and ``None`` where neither exists (D-158) — **no stop reason**, because
@@ -271,6 +274,31 @@ class MissionFailedPayload(EidosModel):
     reason: str = Field(min_length=1)
 
 
+class ReplanTriggeredPayload(EidosModel):
+    """An accepted within-mission replan (decisions.md D-199, V1.1 Step 3): the mission is trying a different
+    plan instead of concluding on this one's own failure. Recorded **only** once an orchestrator has actually
+    decided to attempt another plan — never speculatively, never for a failure that stays terminal.
+
+    Deliberately shaped like ``MissionFailedPayload`` (``cause``/``reason``) plus the two plan identities either
+    side of the decision — the reducer's own case for this payload never touches ``MissionState.status``
+    (D-199 ruling 4): ``MissionStatus`` has only four values by design (D-052; no ``EXECUTING`` state), so a
+    mission already sits in ``CREATED`` throughout its whole run, and recording this event never changes that.
+    This is why no new ``accept_replanned``/``reduce_replanned`` escape hatch is needed, unlike D-177's own A2A
+    resume: the mission is never actually terminal until it genuinely is, so there is nothing to escape."""
+
+    event_type: Literal[MissionEventType.REPLAN_TRIGGERED] = MissionEventType.REPLAN_TRIGGERED
+    failed_plan_id: PlanId
+    cause: MissionFailureCause
+    reason: str = Field(min_length=1)
+    next_plan_id: PlanId
+
+    @model_validator(mode="after")
+    def _check_the_next_plan_is_not_the_one_that_just_failed(self) -> "ReplanTriggeredPayload":
+        if self.next_plan_id == self.failed_plan_id:
+            raise ValueError("a replan must try a different plan than the one that just failed")
+        return self
+
+
 EmittedPayload = (
     MissionCreatedPayload
     | PlanGeneratedPayload
@@ -283,6 +311,7 @@ EmittedPayload = (
     | MissionPausedPayload
     | MissionCompletedPayload
     | MissionFailedPayload
+    | ReplanTriggeredPayload
 )
 
 # Every event type this package emits, and the class that is its payload. Anything else in ``MissionEventType`` has no payload class here.
@@ -298,4 +327,5 @@ PAYLOAD_TYPES = MappingProxyType({
     MissionEventType.MISSION_PAUSED: MissionPausedPayload,
     MissionEventType.MISSION_COMPLETED: MissionCompletedPayload,
     MissionEventType.MISSION_FAILED: MissionFailedPayload,
+    MissionEventType.REPLAN_TRIGGERED: ReplanTriggeredPayload,
 })

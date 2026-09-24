@@ -35,6 +35,7 @@ from eidos.state import (
     PlanRejectionStage,
     ReduceOutcome,
     ReduceResult,
+    ReplanTriggeredPayload,
     checkpoint_at,
     records_after,
     reduce,
@@ -42,6 +43,7 @@ from eidos.state import (
     resume,
 )
 
+from eidos_expansion_factories import make_plan_id
 from eidos_mission_factories import make_mission, make_mission_plan
 from eidos_state_factories import (
     RESEARCH_AGENT,
@@ -401,6 +403,156 @@ def test_a_rejection_of_an_unknown_plan_is_invalid_for_the_state():
     log.created()
     state = state_after(log)
     invalid(state, log, PlanRejectedPayload(plan_id=log.plan.plan_id, stage=PlanRejectionStage.VALIDATION))
+
+
+# --- REPLAN_TRIGGERED: an accepted within-mission replan never makes the mission terminal (D-199, V1.1 Step 3) --------------------
+
+
+def test_a_replan_triggered_increments_replans_used_exactly_once_and_touches_nothing_else():
+    log = prefix()
+    before = state_after(log)
+    log.replan_triggered(make_plan_id(2), cause=MissionFailureCause.EXECUTION_FAILED, reason="the agent call failed")
+    after = state_after(log)
+    assert after.replans_used == before.replans_used + 1 == 1
+    assert after.status is MissionStatus.CREATED  # never terminal, never paused: check 4 never engages for it
+    assert after.plans == before.plans  # no plan added or removed by this event alone
+    assert after.active_plan_id == before.active_plan_id  # unchanged: the next plan is not active until its own PLAN_COMPILED
+    assert after.agent_calls_used == before.agent_calls_used == 0  # only replans_used moves
+
+
+def test_replay_of_a_replan_triggered_log_produces_the_same_state_as_a_live_fold():
+    log = prefix()
+    log.replan_triggered(make_plan_id(2), reason="verification_failed: insufficient evidence", cause=MissionFailureCause.VERIFICATION_FAILED)
+    live = state_after(log)
+    replayed = replay(log.records)
+    assert replayed.rejection is None
+    assert same_bytes(replayed.state, live)
+
+
+def test_a_replan_triggered_naming_an_unknown_failed_plan_id_is_invalid_for_the_state():
+    log = prefix()
+    state = state_after(log)
+    result = invalid(state, log, ReplanTriggeredPayload(
+        failed_plan_id=make_plan_id(999), cause=MissionFailureCause.EXECUTION_FAILED, reason="x", next_plan_id=make_plan_id(2),
+    ))
+    assert "is not in the mission" in result.reason
+
+
+def test_a_duplicate_replan_triggered_event_id_is_refused_and_replans_used_increments_once():
+    log = prefix()
+    log.replan_triggered(make_plan_id(2))
+    state = state_after(log)
+    assert state.replans_used == 1
+    applied = frozenset(r.event.event_id for r in log.records)
+    replay_of_the_last = log.records[-1]  # the exact same record, its own event_id already in applied
+    result = reduce(state, replay_of_the_last, applied)
+    assert result.outcome is ReduceOutcome.DUPLICATE and same_bytes(result.state, state)
+    assert result.state.replans_used == 1  # the established event-identity rule alone stops a second increment; no new one was invented
+
+
+@pytest.mark.parametrize("terminal", ["completed", "failed", "paused"])
+def test_a_terminal_mission_refuses_a_replan_triggered_through_ordinary_reduce(terminal):
+    log = prefix()
+    log.started("gather")
+    log.settled(work_result("gather"))
+    {"completed": lambda: log.completed(), "failed": lambda: log.failed(), "paused": lambda: log.paused()}[terminal]()
+    state = state_after(log)
+    later = make_record(
+        ReplanTriggeredPayload(failed_plan_id=log.plan.plan_id, cause=MissionFailureCause.EXECUTION_FAILED, reason="x", next_plan_id=make_plan_id(2)),
+        state=log.state, sequence=state.state_version + 1, number=900,
+    )
+    result = reduce(state, later)
+    assert result.outcome is ReduceOutcome.POST_TERMINAL and same_bytes(result.state, state)
+
+
+def test_a2a_resumed_pause_is_unaffected_reduce_resumed_still_the_only_path_past_it():
+    # Guards against a regression where REPLAN_TRIGGERED's own new reducer case might accidentally bypass the
+    # existing D-177 terminal-state protection for a genuinely paused mission — it does not, because check 4
+    # (terminal) runs before check 5 (the event's own rule) for every payload type, this one included.
+    log = prefix()
+    log.paused_awaiting("gather")
+    state = state_after(log)
+    later = make_record(
+        ReplanTriggeredPayload(failed_plan_id=log.plan.plan_id, cause=MissionFailureCause.EXECUTION_FAILED, reason="x", next_plan_id=make_plan_id(2)),
+        state=log.state, sequence=state.state_version + 1, number=901,
+    )
+    assert reduce(state, later).outcome is ReduceOutcome.POST_TERMINAL
+
+
+def test_ordinary_events_continue_normally_after_a_replan_triggered_event_the_mission_can_still_conclude():
+    log = prefix()
+    log.started("gather"), log.settled(work_result("gather", status=NodeStatus.FAILED, reason="model failure"))
+    log.replan_triggered(make_plan_id(2), cause=MissionFailureCause.EXECUTION_FAILED, reason="the agent call failed")
+
+    second = make_mission_plan(
+        log.state, {"gather": ""}, capability_of={"gather": "research"}, version=2, parent=log.plan, reason="the agent call failed", plan_number=2,
+    )
+    log.add(PlanGeneratedPayload(plan=second))
+    log.add(PlanCompiledPayload(plan_id=second.plan_id, plan_version=2))
+    log.add(NodeStartedPayload(plan_id=second.plan_id, step_id=StepId("gather"), kind=PlanStepKind.AGENT, capability=log.plan.steps[0].capability, agent_id=RESEARCH_AGENT))
+    log.add(NodeSettledPayload(plan_id=second.plan_id, result=work_result("gather"), dispatched=True, duration_ms=500, model_calls=()))
+    log.add(MissionCompletedPayload(plan_id=second.plan_id, verified=False))
+
+    state = state_after(log)
+    assert state.status is MissionStatus.COMPLETED
+    assert state.replans_used == 1
+    assert state.active_plan_id == second.plan_id
+    assert set(p.plan_id for p in state.plans) == {log.plan.plan_id, second.plan_id}  # immutable plan history: nothing removed
+
+
+def test_the_next_plan_id_must_differ_from_the_failed_plan_id():
+    with pytest.raises(ValidationError, match="a different plan"):
+        ReplanTriggeredPayload(
+            failed_plan_id=make_plan_id(1), cause=MissionFailureCause.EXECUTION_FAILED, reason="x", next_plan_id=make_plan_id(1),
+        )
+
+
+def test_a_replan_triggered_payload_requires_every_field():
+    complete = dict(failed_plan_id=make_plan_id(1), cause=MissionFailureCause.EXECUTION_FAILED, reason="x", next_plan_id=make_plan_id(2))
+    ReplanTriggeredPayload(**complete)
+    for missing in ("failed_plan_id", "cause", "reason", "next_plan_id"):
+        fields = {k: v for k, v in complete.items() if k != missing}
+        with pytest.raises(ValidationError):
+            ReplanTriggeredPayload(**fields)
+    with pytest.raises(ValidationError):
+        ReplanTriggeredPayload(**{**complete, "reason": ""})  # min_length=1
+    with pytest.raises(ValidationError):
+        ReplanTriggeredPayload(**{**complete, "cause": "not_a_real_cause"})
+
+
+def test_a_replan_triggered_sequence_folds_identically_across_hash_seeds():
+    script = (
+        "import sys, hashlib; sys.path[:0] = ['src', 'tests/support', 'tests/unit/state']\n"
+        "from eidos_state_factories import RESEARCH_AGENT, LogBuilder, baseline_state_and_plan, work_result\n"
+        "from eidos_mission_factories import make_mission_plan\n"
+        "from eidos_expansion_factories import make_plan_id\n"
+        "from eidos.contracts import PlanStepKind, StepId\n"
+        "from eidos.runtime import NodeStatus\n"
+        "from eidos.state import MissionCompletedPayload, MissionFailureCause, NodeSettledPayload, NodeStartedPayload, PlanCompiledPayload, PlanGeneratedPayload, reduce\n"
+        "state, plan = baseline_state_and_plan()\n"
+        "log = LogBuilder(state, plan)\n"
+        "log.created(), log.generated(), log.compiled()\n"
+        "log.started('gather'), log.settled(work_result('gather', status=NodeStatus.FAILED, reason='x'))\n"
+        "log.replan_triggered(make_plan_id(2), cause=MissionFailureCause.EXECUTION_FAILED, reason='the agent call failed')\n"
+        "second = make_mission_plan(state, {'gather': ''}, capability_of={'gather': 'research'}, version=2, parent=plan, reason='r', plan_number=2)\n"
+        "log.add(PlanGeneratedPayload(plan=second))\n"
+        "log.add(PlanCompiledPayload(plan_id=second.plan_id, plan_version=2))\n"
+        "log.add(NodeStartedPayload(plan_id=second.plan_id, step_id=StepId('gather'), kind=PlanStepKind.AGENT, capability=plan.steps[0].capability, agent_id=RESEARCH_AGENT))\n"
+        "log.add(NodeSettledPayload(plan_id=second.plan_id, result=work_result('gather'), dispatched=True, duration_ms=500, model_calls=()))\n"
+        "log.add(MissionCompletedPayload(plan_id=second.plan_id, verified=False))\n"
+        "s = None; applied = frozenset()\n"
+        "for r in log.records:\n"
+        "    res = reduce(s, r, applied)\n"
+        "    assert res.applied, res.reason\n"
+        "    s, applied = res.state, applied | {r.event.event_id}\n"
+        "print(hashlib.sha256(s.model_dump_json().encode()).hexdigest())\n"
+    )
+    digests = set()
+    for seed in ("0", "1", "2", "12345"):
+        result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, cwd=ROOT, env={**os.environ, "PYTHONHASHSEED": seed})
+        assert result.returncode == 0, result.stderr
+        digests.add(result.stdout.strip())
+    assert len(digests) == 1 and len(next(iter(digests))) == 64
 
 
 # --- ordering is the sequence and never a timestamp (D-160 item 7) -----------------------------------------------------------------

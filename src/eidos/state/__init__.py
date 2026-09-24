@@ -35,6 +35,7 @@ from .payloads import (
     PlanRejectedPayload,
     PlanRejectionStage,
     RejectionReason,
+    ReplanTriggeredPayload,
     VerificationFacts,
 )
 from .execution_record import ExecutionRecord, StepRecord, execution_record
@@ -86,6 +87,7 @@ __all__ = [
     "ReduceOutcome",
     "ReduceResult",
     "RejectionReason",
+    "ReplanTriggeredPayload",
     "ReplayRejection",
     "ReplayRejectionCode",
     "ReplayResult",

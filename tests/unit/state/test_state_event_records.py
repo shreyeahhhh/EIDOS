@@ -1,8 +1,9 @@
-"""The typed event payloads and ``EventRecord`` (decisions.md D-153, D-154, D-160; V0.5 Step 2).
+"""The typed event payloads and ``EventRecord`` (decisions.md D-153, D-154, D-160, D-199; V0.5 Step 2, V1.1 Step 3).
 
-A record is an unchanged V0.1 envelope plus one typed payload chosen by its type. These tests pin what that means: every type V0.5 emits forms
-a record and round-trips strictly; a payload for another type is refused; the seven types V0.5 does not emit — ``VERIFICATION_FAILED``
-included — cannot form a record; identity must agree across the two halves; and a payload holds only facts, with no stop reason.
+A record is an unchanged V0.1 envelope plus one typed payload chosen by its type. These tests pin what that means: every type this package
+emits forms a record and round-trips strictly; a payload for another type is refused; the four types this package does not emit —
+``VERIFICATION_FAILED`` included — cannot form a record; identity must agree across the two halves; and a payload holds only facts, with no
+stop reason. ``REPLAN_TRIGGERED`` (V1.1 Step 3, D-199) moved from the not-emitted set to the emitted one — see ``ReplanTriggeredPayload``.
 """
 
 import json
@@ -40,6 +41,7 @@ from eidos.state import (
     PlanGeneratedPayload,
     PlanRejectedPayload,
     PlanRejectionStage,
+    ReplanTriggeredPayload,
     VerificationFacts,
 )
 
@@ -68,6 +70,7 @@ EMITTED = (
     MissionEventType.MISSION_PAUSED,
     MissionEventType.MISSION_COMPLETED,
     MissionEventType.MISSION_FAILED,
+    MissionEventType.REPLAN_TRIGGERED,
 )
 NOT_EMITTED = tuple(t for t in MissionEventType if t not in EMITTED)
 
@@ -97,6 +100,13 @@ def one_record_of_every_emitted_type() -> dict:
         ),
         state=log.state, sequence=8,
     )
+    by_type[MissionEventType.REPLAN_TRIGGERED] = make_record(
+        ReplanTriggeredPayload(
+            failed_plan_id=log.plan.plan_id, cause=MissionFailureCause.VERIFICATION_FAILED,
+            reason="a rule was violated", next_plan_id=PlanId(UUID(int=900_002)),
+        ),
+        state=log.state, sequence=9,
+    )
     return by_type
 
 
@@ -106,15 +116,16 @@ RECORDS = one_record_of_every_emitted_type()
 # --- the vocabulary is exactly what V0.5 emits -----------------------------------------------------------------------------------
 
 
-def test_payload_classes_exist_for_exactly_the_eleven_types_this_package_emits_and_each_names_its_own_type():
+def test_payload_classes_exist_for_exactly_the_twelve_types_this_package_emits_and_each_names_its_own_type():
     assert set(PAYLOAD_TYPES) == set(EMITTED)
     for event_type, payload_class in PAYLOAD_TYPES.items():
         assert payload_class.model_fields["event_type"].default is event_type
 
 
-def test_the_five_types_this_package_does_not_emit_are_exactly_these():
+def test_the_four_types_this_package_does_not_emit_are_exactly_these():
+    # REPLAN_TRIGGERED moved from here to EMITTED at V1.1 Step 3 (D-199) — it is no longer merely declared.
     assert {t.value for t in NOT_EMITTED} == {
-        "MCP_TOOL_CALLED", "RAG_SEARCH", "EVIDENCE_REJECTED", "REPLAN_TRIGGERED", "VERIFICATION_FAILED",
+        "MCP_TOOL_CALLED", "RAG_SEARCH", "EVIDENCE_REJECTED", "VERIFICATION_FAILED",
     }
 
 

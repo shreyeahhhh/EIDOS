@@ -1,4 +1,4 @@
-"""The state reducer (decisions.md D-155, D-156, D-160, D-166, D-172, D-176, D-177; invariants 1, 2 and 8).
+"""The state reducer (decisions.md D-155, D-156, D-160, D-166, D-172, D-176, D-177, D-199; invariants 1, 2 and 8).
 
 ``reduce(state, record, applied)`` is a **pure function**: it does no I/O, reads no clock, holds no hidden state, and never raises for
 expected traffic. It returns the new state **and an outcome** (D-155 item 2), so a duplicate, a late event and a rejection are observable and
@@ -50,7 +50,9 @@ D-113), so ``NODE_STARTED``/``A2A_TASK_STARTED`` change only ``state_version`` a
   a lower bound and never an estimate;
 * ``execution_time_used_ms`` grows by the node's recorded ``duration_ms`` — accumulated accounted node execution time, **not** wall-clock
   duration; a node with no recorded duration adds nothing (D-160 item 6);
-* ``retries_used``, ``replans_used`` and ``tool_calls_used`` are never changed: nothing produces them.
+* ``retries_used`` and ``tool_calls_used`` are never changed: nothing produces them. ``replans_used`` grows by
+  exactly one per accepted ``REPLAN_TRIGGERED`` (D-199, below) — the only counter this module changes outside a
+  ``NODE_SETTLED`` fold.
 
 ``A2A_TASK_STARTED`` and ``A2A_TASK_COMPLETED`` fold **only** ``agent_tasks`` (D-176's find-and-replace-or-append, ``eidos.state.agent_tasks``)
 — **no counter changes here**. The eventual ``agent_calls_used``/``execution_time_used_ms`` contribution of the node an A2A task serves is
@@ -58,6 +60,18 @@ folded later, by that node's own ``NODE_SETTLED``, produced through the existing
 not invented here, and not duplicated.
 
 Nothing is enforced against a limit: the counters are recorded, not checked (D-156 item 5).
+
+**``REPLAN_TRIGGERED``, D-199's own addition, needs no terminal-state exception at all — unlike D-176/D-177
+above.** It is not one of the three terminal payloads (``MISSION_COMPLETED``/``MISSION_FAILED``/
+``MISSION_PAUSED``), so check 4 above never engages for it in the first place: a mission recording this event is
+still ``created`` (D-052 gives ``MissionStatus`` only four values, no ``EXECUTING`` state, so a mission sits in
+``created`` throughout its whole run). Its own rule (check 5) is the same shape every other plan-naming event
+already uses: ``failed_plan_id`` must name a plan the mission already holds (mirrors ``PlanRejectedPayload``'s
+own check exactly). ``next_plan_id`` is not checked against anything here — there is nothing to check it
+against yet; its own ``PLAN_GENERATED`` follows as an ordinary, separately-checked later event, exactly as a
+first plan's own does. This is why no ``accept_replanned``/``reduce_replanned`` sibling exists: D-177 needed one
+because an A2A-awaiting pause is genuinely terminal-shaped and needs an explicit, checked escape; a replan never
+makes the mission terminal in the first place, so there is nothing to escape.
 """
 
 from enum import StrEnum
@@ -90,6 +104,7 @@ from .payloads import (
     PlanCompiledPayload,
     PlanGeneratedPayload,
     PlanRejectedPayload,
+    ReplanTriggeredPayload,
 )
 from .records import EventRecord
 
@@ -361,6 +376,16 @@ def _apply(state: MissionState, record: EventRecord) -> MissionState | _Reject:
             started_at=existing.started_at,
         )
         return _evolved(state, record, agent_tasks=fold_agent_task(state.agent_tasks, completed))
+
+    if isinstance(payload, ReplanTriggeredPayload):
+        # D-199: an accepted within-mission replan. failed_plan_id must be a real, already-recorded plan; nothing
+        # is checked about next_plan_id here (there is nothing to check it against yet — its own PLAN_GENERATED
+        # follows as an ordinary later event). status is deliberately never touched: this is not one of the three
+        # terminal payloads, so _reduce's own _TERMINAL check never engages for it, and no allow_paused-style
+        # exemption is needed the way D-177's reduce_resumed needed one for a genuinely terminal-shaped pause.
+        if _plan(state, payload.failed_plan_id) is None:
+            return _Reject(f"plan {str(payload.failed_plan_id)!r} is not in the mission")
+        return _evolved(state, record, replans_used=state.replans_used + 1)
 
     if isinstance(payload, MissionPausedPayload):
         step_ids = (payload.halt.step_id,) if payload.halt is not None else tuple(info.step_id for info in payload.awaiting)
