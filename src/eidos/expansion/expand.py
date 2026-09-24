@@ -25,9 +25,12 @@ needing no injected source at all; two distinct occurrences can never collide, b
 position_in_stage)`` pair is already unique across the whole Plan. ``plan_id`` is UUID-backed with no exemption
 (D-053 default), so it is drawn from an injected ``PlanIdSource`` — never generated internally — exactly mirroring
 ``eidos.planning.pipeline.StrategyIdSource`` one layer down and ``eidos.recording.ports.IdSource`` before that.
-``tenant_id``/``mission_id`` are copied from the ``Strategy`` unchanged. The produced ``Plan`` is always fresh:
-``version=1``, ``parent_plan_id=None``, ``replan_reason=None`` — replanning lineage through strategy selection is
-not sketched here.
+``tenant_id``/``mission_id`` are copied from the ``Strategy`` unchanged. ``version``/``parent_plan_id``/
+``replan_reason`` default to a fresh Plan's own values (``1``/``None``/``None``, every existing caller
+unaffected) and are otherwise supplied verbatim by the caller (D-199, V1.1 Step 1) — this module stamps them
+onto the ``Plan``, nothing more; it does not decide when a replan is warranted, which candidate comes next, or
+whether the three values are mutually coherent, all of which stay a caller's own job (V1.1's own orchestration
+layer, not built by this step).
 
 **What this module does not do.** It does not re-run the feasibility gate one layer down — admissibility was
 already decided before a ``Strategy`` was selected (D-180, D-183). It does not run, duplicate or approximate
@@ -64,9 +67,24 @@ def _agent_step_id(stage_index: int, position: int, capability: CapabilityId) ->
     return StepId(f"stage{stage_index}_{position}_{capability}")
 
 
-def expand_strategy(strategy: Strategy, *, ids: PlanIdSource) -> Plan:
+def expand_strategy(
+    strategy: Strategy,
+    *,
+    ids: PlanIdSource,
+    version: int = 1,
+    parent_plan_id: PlanId | None = None,
+    replan_reason: str | None = None,
+) -> Plan:
     """Expand ``strategy`` into a fresh, unvalidated ``Plan`` (D-194, D-195). Pure and deterministic given
-    ``ids``: no I/O, no clock, no randomness, no model call, no live agent lookup, no feasibility re-check."""
+    ``ids``: no I/O, no clock, no randomness, no model call, no live agent lookup, no feasibility re-check.
+
+    ``version``/``parent_plan_id``/``replan_reason`` default to a fresh Plan's own values (``1``/``None``/
+    ``None``) — every existing caller is unaffected. A within-mission replan caller (D-199, V1.1; not built by
+    this decision) supplies its own values for all three; this function does not check they agree with each
+    other or with anything already recorded — that coherence is its caller's own responsibility, exactly as
+    ``Plan`` itself imposes no cross-field rule relating them (nothing here duplicates a check that belongs one
+    layer up, mirroring this module's own established "not our job" stance toward V0.2 validation and
+    feasibility)."""
     steps: list[PlanStep] = []
     previous_stage_ids: tuple[StepId, ...] = ()
 
@@ -87,8 +105,8 @@ def expand_strategy(strategy: Strategy, *, ids: PlanIdSource) -> Plan:
         tenant_id=strategy.tenant_id,
         plan_id=ids.next_plan_id(),
         mission_id=strategy.mission_id,
-        version=1,
-        parent_plan_id=None,
-        replan_reason=None,
+        version=version,
+        parent_plan_id=parent_plan_id,
+        replan_reason=replan_reason,
         steps=tuple(steps),
     )

@@ -16,9 +16,12 @@ the preceding stage (D-179's own definition, applied literally); ``FINAL`` verif
 produce no ``VERIFY`` step. The output is an ordinary ``Plan`` — no shortcut around V0.2 validation or V0.3
 compilation exists (D-178), and this module never calls ``check_feasibility`` (already decided, D-180/D-183).
 
-Not built by this decision: Strategy-to-Plan expansion inside a replanning lineage (``version``/``parent_plan_id``
-stay fixed at their fresh-Plan defaults), and D-129 (how a work node receives its predecessors' outputs) stays
-Open.
+``expand_strategy`` also accepts optional ``version``/``parent_plan_id``/``replan_reason`` keyword parameters
+(D-199, V1.1 Step 1), defaulting to a fresh Plan's own values (``1``/``None``/``None``) — every existing caller
+is unaffected. It only ever stamps whatever it is given onto the returned ``Plan``; deciding when a replan is
+warranted, which candidate strategy comes next, and how the three values relate to each other and to prior
+attempts is a caller's own job, not built here (V1.1's own orchestration layer, not yet built). D-129 (how a
+work node receives its predecessors' outputs) stays Open.
 """
 
 from .expand import PlanIdSource, expand_strategy

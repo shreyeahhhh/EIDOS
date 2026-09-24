@@ -7,7 +7,7 @@ Status only. Rules live in [CLAUDE.md](CLAUDE.md). Decisions and open questions 
 
 ## Current state
 
-**Milestone: V1.0 Execution Experience / Strategy Memory — architecture accepted (D-198, 2026-09-23); closed as scoped, all 7 steps implemented (2026-09-24): Step 7, Benchmark 2, is a controlled 45-mission evaluation (3 capability pairs x 3 conditions x 5 missions) proving the research question itself — real, measured historical experience changes a real selector's real choice from mission 2 onward, attributable only to accumulated history, never to a different selector, `StrategyId` continuity, citation quality, or the deterministic selector's own unchanging structural bias — reported as a plain per-mission table, never a score or a ranking; Step 6 proves the complete adaptive loop end to end across two real missions (`tests/integration/planning/test_v1_adaptive_loop_integration.py`) with zero `src/eidos` changes — every stage already existed; `eidos.memory.experience` (`ExecutionExperience`, `evaluate_experience`), a pure, factual, immutable record of one completed mission's measured facts, built directly from `Strategy`/`TaskGenome`/`TelemetryRecord`; `eidos.memory.relevance` (`TaskRelevance`, `task_relevance`, `relevant_experience`, `experience_for`), pure deterministic task/strategy relevance filtering — exact capability/risk/autonomy matching for task relevance, exact structural shape matching for strategy relevance, no embeddings, no scalar similarity score, no staleness; `eidos.memory.store` (`ExperienceStore`, `JsonlExperienceStore`), a local append-only JSONL persistence adapter, load-once and cached, a malformed line a typed rejection never silently dropped; `eidos.selectors.experience_informed` (`ExperienceInformedSelector`), a fourth `Selector` implementation preferring candidates with verified-successful historical experience, deterministic cold-start fallback, no change to the `Selector` Protocol or `select_strategy` — no quality/confidence score, no strategy signature, no persistent `strategy_id` on any existing contract; none pushed. On top of the first controlled EIDOS benchmark ("Benchmark 1" — deliberately unassigned a milestone number, D-196/D-197), implemented (2026-09-23): `tests/support/eidos_benchmark_harness.py` (the reusable harness) and `tests/scenarios/test_benchmark_execution_control.py` (13 tests, five task classes, conditions A/B/C/D1/D2), on top of V0.9 Telemetry — Steps 2, 3 and 4 implemented (`eidos.telemetry`, a pure multi-execution projection over already-recorded facts; Step 3 connects the full live chain from `TaskGenome` through candidate generation, selection, Strategy-to-Plan expansion, validation, execution/recording and telemetry projection, for one real mission; Step 4 closes two evidence gaps an inspection found, `execution_time_used_ms` and `plan_rejected_at`), on top of V0.8 Strategy Selection (architecture accepted, D-186 to D-193, Steps 2, 3, 5, 6, 7 and 8 of its sequence implemented — Step 3 a boundary-hardening audit, no contract change; Step 4 a design-only step accepted as D-190 to D-193; Step 5 the model-assisted `Selector` adapter, `eidos.selectors`; Step 6 a deterministic selection-integration suite proving the boundary end to end; Step 7 the Strategy-to-Plan expansion design, D-194/D-195; Step 8 its implementation, `eidos.expansion`; none pushed), V0.7 Strategy & Candidate Generation (closed as scoped, D-178 to D-185, none pushed), V0.6 One A2A Boundary (protocol/contract design accepted, Steps 1–6 of 9 implemented, D-177; none pushed), V0.5 Mission State + Event Reducer (complete as scoped, D-152 to D-164, pushed), V0.4 Real Local Agents (complete as scoped, D-131 to D-151), V0.1 Core Contracts, V0.2 Plan Validation and V0.3 LangGraph Runtime (complete as scoped, D-112 to D-130). *(This is the correct, D-196-resolved meaning of "V0.9" — Telemetry, not Strategy-to-Plan expansion, which is filed as V0.8 Steps 7–8 above.)*
+**Milestone: V1.1 Within-Mission Replanning — architecture accepted (D-199, 2026-09-24); implementation starting.** V1.1 closes the adaptive loop *inside* one mission's own lifecycle — when a selected strategy fails (or completes unverified), automatically try the next already-generated candidate, bounded by the mission's own configured `max_replans`, with real `Plan` lineage and an `ExecutionExperience` per attempt; zero changes to any existing data contract or the `Selector` Protocol. See "V1.1 Within-Mission Replanning" below. On top of V1.0 Execution Experience / Strategy Memory — architecture accepted (D-198, 2026-09-23); closed as scoped, all 7 steps implemented (2026-09-24): Step 7, Benchmark 2, is a controlled 45-mission evaluation (3 capability pairs x 3 conditions x 5 missions) proving the research question itself — real, measured historical experience changes a real selector's real choice from mission 2 onward, attributable only to accumulated history, never to a different selector, `StrategyId` continuity, citation quality, or the deterministic selector's own unchanging structural bias — reported as a plain per-mission table, never a score or a ranking; Step 6 proves the complete adaptive loop end to end across two real missions (`tests/integration/planning/test_v1_adaptive_loop_integration.py`) with zero `src/eidos` changes — every stage already existed; `eidos.memory.experience` (`ExecutionExperience`, `evaluate_experience`), a pure, factual, immutable record of one completed mission's measured facts, built directly from `Strategy`/`TaskGenome`/`TelemetryRecord`; `eidos.memory.relevance` (`TaskRelevance`, `task_relevance`, `relevant_experience`, `experience_for`), pure deterministic task/strategy relevance filtering — exact capability/risk/autonomy matching for task relevance, exact structural shape matching for strategy relevance, no embeddings, no scalar similarity score, no staleness; `eidos.memory.store` (`ExperienceStore`, `JsonlExperienceStore`), a local append-only JSONL persistence adapter, load-once and cached, a malformed line a typed rejection never silently dropped; `eidos.selectors.experience_informed` (`ExperienceInformedSelector`), a fourth `Selector` implementation preferring candidates with verified-successful historical experience, deterministic cold-start fallback, no change to the `Selector` Protocol or `select_strategy` — no quality/confidence score, no strategy signature, no persistent `strategy_id` on any existing contract; none pushed. On top of the first controlled EIDOS benchmark ("Benchmark 1" — deliberately unassigned a milestone number, D-196/D-197), implemented (2026-09-23): `tests/support/eidos_benchmark_harness.py` (the reusable harness) and `tests/scenarios/test_benchmark_execution_control.py` (13 tests, five task classes, conditions A/B/C/D1/D2), on top of V0.9 Telemetry — Steps 2, 3 and 4 implemented (`eidos.telemetry`, a pure multi-execution projection over already-recorded facts; Step 3 connects the full live chain from `TaskGenome` through candidate generation, selection, Strategy-to-Plan expansion, validation, execution/recording and telemetry projection, for one real mission; Step 4 closes two evidence gaps an inspection found, `execution_time_used_ms` and `plan_rejected_at`), on top of V0.8 Strategy Selection (architecture accepted, D-186 to D-193, Steps 2, 3, 5, 6, 7 and 8 of its sequence implemented — Step 3 a boundary-hardening audit, no contract change; Step 4 a design-only step accepted as D-190 to D-193; Step 5 the model-assisted `Selector` adapter, `eidos.selectors`; Step 6 a deterministic selection-integration suite proving the boundary end to end; Step 7 the Strategy-to-Plan expansion design, D-194/D-195; Step 8 its implementation, `eidos.expansion`; none pushed), V0.7 Strategy & Candidate Generation (closed as scoped, D-178 to D-185, none pushed), V0.6 One A2A Boundary (protocol/contract design accepted, Steps 1–6 of 9 implemented, D-177; none pushed), V0.5 Mission State + Event Reducer (complete as scoped, D-152 to D-164, pushed), V0.4 Real Local Agents (complete as scoped, D-131 to D-151), V0.1 Core Contracts, V0.2 Plan Validation and V0.3 LangGraph Runtime (complete as scoped, D-112 to D-130). *(This is the correct, D-196-resolved meaning of "V0.9" — Telemetry, not Strategy-to-Plan expansion, which is filed as V0.8 Steps 7–8 above.)*
 
 All seven V0.1 contracts (`ReliabilityContract`, `TaskGenome`, `Plan`, `PlanStep`, `MissionEvent`,
 `MissionState`, `AgentTask`) are implemented in `src/eidos/contracts/`, immutable, in-memory only
@@ -104,7 +104,16 @@ hold, failure cases are covered, documentation matches reality, a git checkpoint
 > was renumbered; only this session's own mislabeling moved.
 | **V0.9** Telemetry | Structured event logging. Measure latency, tokens, agent calls, tool calls, A2A interactions, RAG rounds, retries, quality. | **Steps 2, 3 and 4 implemented 2026-09-23, none pushed.** Step 2: `eidos.telemetry.project` — a pure, multi-execution projection over already-recorded facts (`ExecutionRecord`, D-159). Step 3: `eidos.recording.ports.UuidStrategyIds`/`UuidPlanIds` (the real id sources `eidos.planning`/`eidos.expansion` were always missing) plus one integration test proving the complete live chain — `TaskGenome` → candidate generation → deterministic selection → Strategy-to-Plan expansion → validation → execution/recording → telemetry projection — for one real mission. Step 4: an inspection found `execution_time_used_ms` (one of `MissionState`'s own six counters) missing from `TelemetryRecord` entirely, and no plan-rejection information at all — both closed with pure copies from `ExecutionRecord`, nothing newly measured. No quality/confidence/rate (D-015/D-016 stay Open), no model identifier, no `strategy_id` on `Plan`/`MissionState`, no mission driver, no MCP/RAG/cache/policy/human-intervention fields. See "V0.9 Telemetry" below. |
 | **V1.0** Strategy Optimization | Historical strategy memory, strategy ranking, constraint-based selection, pilot execution. | **Closed as scoped — 2026-09-24 (D-198); all 7 steps implemented (`eidos.memory.experience` — `ExecutionExperience`/`evaluate_experience`; `eidos.memory.relevance` — `TaskRelevance`/`task_relevance`/`relevant_experience`/`experience_for`; `eidos.memory.store` — `ExperienceStore`/`JsonlExperienceStore`; `eidos.selectors.experience_informed` — `ExperienceInformedSelector`, a fourth `Selector` implementation; Step 6 — the complete adaptive loop proven end to end, zero `src/eidos` changes; Step 7 — Benchmark 2, a controlled 45-mission evaluation proving the research question itself), none pushed.** See "V1.0 Execution Experience / Strategy Memory" below. |
-| **V1.1** Adaptive Learning | Strategy memory, historical ranking, exploration, empirical estimation, prediction-error tracking. | Not started |
+| **V1.1** Within-Mission Replanning *(redefined 2026-09-24, D-199 — see the note below)* | Close the adaptive loop **inside** one mission's own lifecycle: when a selected strategy fails (or completes unverified), automatically try the next already-generated candidate, bounded by the mission's own configured `max_replans`, with full `Plan` lineage and an `ExecutionExperience` written per attempt. | **Architecture accepted 2026-09-24 (D-199); implementation starting.** See "V1.1 Within-Mission Replanning" below. |
+
+> **Note (2026-09-24, D-199, Accepted):** V1.1's original placeholder description ("Strategy memory, historical
+> ranking, exploration, empirical estimation, prediction-error tracking") predates V1.0's own actual scope
+> settling into exactly that territory (D-198) — the placeholder was never updated once V1.0 absorbed it. A
+> post-V1.0 capability-gap inspection found the more consequential, evidence-grounded gap is a different one:
+> every V1.0 mechanism adapts *across* separate missions; nothing closes the loop *inside* one mission's own
+> lifecycle when a strategy fails. **Resolved by D-199:** V1.1 is redefined as **Within-Mission Replanning**,
+> mirroring D-196's own precedent of correcting a stale label against reality rather than silently building under
+> a mismatched one or inventing a new number. Nothing historical was renumbered.
 | **V1.2** Reliability / Governance | Policy engine, autonomy levels, human approval, failure recovery, replan limits, execution budgets. | Not started |
 | **V1.3** Frontend | Mission Center, Strategy View, Live Execution, Evidence Explorer, Replay, Strategy Lab, Failure Lab. | Not started — blocked (D-022) |
 | **V1.4** Deployment | Docker Compose → single cloud environment → API + workers + DB → optional separate A2A agents. Not Kubernetes. | Not started |
@@ -2785,6 +2794,73 @@ scope. **Nothing new pushed**: commits `3e0cfa5`/`ea9e3c6` (Steps 1–2) are on 
 `89959f5`/`af05ab2` (Steps 3/4/6) and this step's own commit are local only, awaiting explicit push instruction.
 **No V1.1 work was started** — V1.1 (Adaptive Learning, historical ranking, exploration, empirical estimation,
 prediction-error tracking) stays exactly as the milestone ladder already describes it: not started.
+
+---
+
+## V1.1 Within-Mission Replanning — architecture accepted (2026-09-24)
+
+**Research/engineering question**: V1.0 proved that measured execution experience changes strategy selection
+*across* separate missions (D-198, Benchmark 2). What V1.0 never built: a mission that fails does not try
+anything else — it simply stops (`FAILED`/`PAUSED`) and waits for a human to start a new one. This milestone
+closes that loop *inside* one mission's own lifecycle.
+
+**Design turn** (no code): traced both executors' own failure outcomes, `MissionStatus`/`RunOutcome` semantics,
+`AdmissionGuard` behavior, verification/`ModelFailure` behavior, A2A `PAUSED`/resume (D-166 to D-177), `Plan`
+versioning/lineage, D-119/D-125/D-129, the reducer's own event vocabulary, and `ExperienceInformedSelector` —
+then produced a pre-implementation design the owner ruled on in full, recorded as **D-199**.
+
+**The architecture, in full** (D-199): a closed, evidence-derived replan-eligibility set (`EXECUTION_FAILED`,
+`NO_RESULT`, `VERIFICATION_FAILED`, `VERIFICATION_INCONCLUSIVE`, and `FINISHED`+`verified=False` are eligible;
+`PLAN_REJECTED`, `RUN_REJECTED` and an admission-guard `HALTED` attempt are never eligible — D-176's own
+terminality is preserved exactly, never reopened; A2A `AWAITING` is untouched). The bounded candidate set is
+generated exactly once; each replan reuses the mission's own already-configured `Selector` unchanged, over the
+same candidates with every already-attempted `StrategyId` filtered out by identity — no new `Selector` Protocol,
+no scalar score, no candidate regeneration. `Plan.version`/`parent_plan_id`/`replan_reason` (all present since
+V0.1, never previously set to anything but their fresh-Plan defaults) finally carry real lineage;
+`replan_reason` is deterministically derived from the failed attempt's own `MissionFailureCause`, never an
+LLM-generated string. A new `ReplanTriggeredPayload` (giving the already-declared
+`MissionEventType.REPLAN_TRIGGERED` its first real shape) never sets `MissionState.status` — `MissionStatus` has
+only four values by design (D-052), and a mission already sits in `CREATED` throughout its run, which is not
+`_TERMINAL` — so **no new `accept_replanned`/`reduce_replanned` mechanism is needed**, unlike D-177's own A2A
+resume. Only the final attempt (success or genuine exhaustion) reaches the existing, completely unchanged
+`_finish` translation. An `ExecutionExperience` is appended after **every** completed attempt, including failed
+ones, before the next strategy is selected — `ExperienceStore`/`ExperienceInformedSelector` semantics are
+unchanged, this simply exercises the existing tiered algorithm one call earlier than usual, now able to see the
+same mission's own just-recorded failure immediately. `max_replans` uses whatever the mission's own configured
+`SystemLimits`/`ReliabilityContract` bound already is — no numeric default is invented.
+
+**Zero changes to**: `Plan`/`MissionState`/`TaskGenome`/`ReliabilityContract`/`Strategy` as data contracts, the
+`Selector` Protocol or any of its three implementations, `eidos.memory` (any file), the V0.2 validation pipeline,
+the compiler, either runtime executor, `EventLog`/`reduce`/`reduce_resumed`, or A2A's own resume mechanism.
+
+**Implementation order** (D-199): 1 `expand_strategy`'s additive lineage parameters; 2 `ReplanTriggeredPayload` +
+its one reducer case; 3 `execution_record`/`project`'s additive `plan_id` scoping parameter; 4 the replan
+orchestration function; 5 the full test/mutation/documentation pass. Each step its own separately-approved cycle.
+
+**Step 1** (2026-09-24, this commit): `eidos.expansion.expand_strategy` gains three additive, keyword-only
+parameters — `version: int = 1`, `parent_plan_id: PlanId | None = None`, `replan_reason: str | None = None` —
+defaults reproducing a fresh Plan's own existing values exactly, so every existing caller (the whole V0.9–V1.0
+adaptive chain, both benchmarks) is unaffected. The function only stamps whatever it is given onto the returned
+`Plan`; it does not check the three values are mutually coherent or validate anything about a "replan" — that
+stays the future orchestration layer's own job (V1.1 Step 4, not built), exactly matching this module's own
+established "not our job" stance toward V0.2 validation and feasibility. 6 new tests
+(`tests/unit/expansion/test_expansion_expand.py`): each parameter stamped independently, all three together
+mirroring a real replan, defaults unaffected, and step construction proven unaffected by any lineage value (a
+replanned and a fresh expansion of the identical `Strategy` produce byte-identical steps). One existing test
+renamed only (`test_version_and_lineage_fields_are_always_fresh` → `..._default_to_fresh_plan_values`, since
+"always" stopped being literally true) — no assertion changed. Mutation check: **5 of 5 caught** (each of the
+three kwargs ignored/hardcoded back to its default independently; the `version` default silently changed from 1
+to 2; the `replan_reason` default silently changed from `None`). Full expansion suite: 49 passed (was 43; +6, exactly the new tests — the
+renamed test is the same test, not an additional one). Relevant existing suites unchanged: `tests/unit/planning/` +
+`tests/integration/planning/` + `tests/scenarios/`: 510 passed. All guard tests repo-wide: 775 passed
+(unchanged — no new module, no import-surface change). Full default suite: **3,402 passed, 2 deselected** (was
+3,396; +6, exactly this step's own new tests). Re-run clean under two different `PYTHONHASHSEED` values.
+`git status --porcelain` before committing showed only `src/eidos/expansion/expand.py`,
+`src/eidos/expansion/__init__.py` (docstrings only, no logic change) and
+`tests/unit/expansion/test_expansion_expand.py` — nothing in any other package touched. Committed as one
+focused commit; not pushed. Four steps remain (the `ReplanTriggeredPayload`/reducer case, the
+`execution_record`/`project` scoping parameter, the orchestration function, the full test/mutation/documentation
+pass) — Step 2 not started.
 
 ---
 

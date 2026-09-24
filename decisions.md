@@ -4434,3 +4434,95 @@ one is not.
   `ExperienceInformedSelector`; 5 guard revisions + dedicated memory guard tests; 6 an integration test proving the
   complete chain, `TaskGenome` → candidates → experience-aware selection → Strategy→Plan → execution → Telemetry →
   Experience → Memory → future selection; 7 Benchmark 2.
+
+### D-199 — Within-mission replanning architecture (approved, 2026-09-24)
+
+- **Status:** Accepted · **Date:** 2026-09-24 · **Decided by:** human owner, resolving a pre-implementation design
+  turn's own four flagged open questions
+- **Source:** a post-V1.0 capability-gap inspection (traced both executors' own failure outcomes, `MissionStatus`/
+  `RunOutcome` semantics, `AdmissionGuard` behavior, verification/`ModelFailure` behavior, A2A `PAUSED`/resume
+  (D-166 to D-177), `Plan` versioning/lineage, D-119, D-125, D-129, the reducer's own event vocabulary, and
+  `ExperienceInformedSelector`), followed by a design turn resolving exactly the open questions it found
+- **The gap, found by inspection, not assumed:** `Plan.version`/`parent_plan_id`/`replan_reason`,
+  `SystemLimits.max_replans`/`ReliabilityContract.max_replans`, `replans_used` on `MissionState`/
+  `ExecutionRecord`/`TelemetryRecord`/`ExecutionExperience`, `PlanStepKind.REPLAN` and
+  `MissionEventType.REPLAN_TRIGGERED` have all existed since V0.1/V0.5/V0.9 — `replans_used` is permanently `0`
+  everywhere (`reducer.py`'s own comment: "nothing produces them") and `REPLAN_TRIGGERED` is a bare enum member
+  with no payload class and no reducer case. V1.0's own adaptive loop (Step 6/Benchmark 2, D-198) only ever
+  adapts **across** separate, caller-orchestrated missions; nothing closes the loop **inside** one mission's own
+  lifecycle — a mission that fails simply stops (`FAILED`/`PAUSED`), exactly as D-119/D-170 always documented.
+
+**Decision, in full:**
+
+1. **Replan eligibility** — a closed set, derived from the existing `MissionFailureCause`/`RunOutcome` taxonomy,
+   no new failure category invented:
+   - Eligible: `EXECUTION_FAILED`, `NO_RESULT`, `VERIFICATION_FAILED`, `VERIFICATION_INCONCLUSIVE` (all
+     `RunOutcome.FAILED`), **and `RunOutcome.FINISHED` with `verified=False`** — completion is not success
+     (invariant 12, D-156); an unsatisfied reliability outcome may trigger a bounded replan exactly as a genuine
+     failure may.
+   - Never eligible: `PLAN_REJECTED`, `RUN_REJECTED` (mission-level/pipeline defects a different candidate
+     strategy cannot fix), and **`RunOutcome.HALTED`** (an admission-guard halt) — **stays terminal for that
+     attempt, exactly as D-176 already shipped it; it must never automatically trigger a different strategy.**
+     This decision does not reopen or narrow D-176 — it only decides that the *new* replan mechanism (§4 below)
+     never engages for a halted attempt, the identical restriction every other caller already has.
+   - `RunOutcome.AWAITING` (A2A) is untouched: this mechanism applies only to the synchronous, `record_baseline`
+     -driven execution path; `accept_resumed`/`reduce_resumed` (D-177) remain the sole path past an A2A pause.
+   - A successful, verified completion is, as always, terminal with no replan question to ask.
+2. **Fallback strategy selection**: the bounded candidate set (`generate_candidate_strategies`, `max_candidates`
+   -bounded) is generated **exactly once**, at mission start. Each replan re-invokes the **same, already-shipped
+   `Selector`** the mission was configured with, over the same candidate tuple with every already-attempted
+   `StrategyId` filtered out by identity (safe: these are the same in-mission objects, never a fresh id drawn
+   across missions, D-182). No `Selector` Protocol change, no new selector implementation, no scalar score, no
+   candidate regeneration (structurally pointless: `RuleBasedCandidateGenerator` is a pure function of the
+   genome/limits, so a second call could only draw fresh, useless ids for the identical shapes, D-182). Exhaustion
+   is the existing `SelectionOutcome.NO_FEASIBLE_CANDIDATES`, not a new outcome.
+3. **Replan lineage**: `Plan.version` increments per attempt; `parent_plan_id` names the immediately preceding
+   attempt's own `plan_id`; `replan_reason` is **deterministically derived from the failed attempt's own
+   `MissionFailureCause`/reason** — never an LLM-generated or otherwise non-deterministic string.
+   `replans_used` increments once per accepted replan (a decision to try again), never once per bare failure.
+4. **Event/state semantics**: a `ReplanTriggeredPayload` (finally giving the already-declared
+   `MissionEventType.REPLAN_TRIGGERED` a real shape) is recorded for an attempt that will be retried. It
+   **never sets `MissionState.status`** — `MissionStatus` has only four values by design (D-052; no
+   `EXECUTING` state), so a mission already sits in `CREATED` throughout its whole run, and `CREATED` is not in
+   `_TERMINAL`. This is why **no new `accept_replanned`/`reduce_replanned` mechanism is needed**, unlike D-177's
+   own A2A resume — the mission is never actually terminal until it genuinely is. Only the final attempt (success
+   or genuine exhaustion) reaches the existing `_finish` translation and its existing three terminal payloads,
+   completely unchanged. One continuous `EventLog` covers the whole mission, every attempt.
+5. **Mission termination**: a replan success ends the mission `COMPLETED` on the winning plan, as today.
+   Exhaustion (no untried candidate left, or `max_replans` reached first) ends the mission on the **last
+   attempted strategy's own real, honest outcome** — never a synthetic "replans exhausted" cause. `max_replans`
+   uses whatever the mission's own configured `SystemLimits`/`ReliabilityContract` bound already is; **no numeric
+   default is introduced by this decision** (mirrors D-046's own still-Open "no numeric bound values decided"
+   stance) — a mission with no configured bound has no replanning to do, by construction, not by a silently
+   invented fallback.
+6. **Memory interaction**: an `ExecutionExperience` is appended **after every completed attempt** — including a
+   failed or `verified=False` one — **before** the next strategy is selected, so `ExperienceInformedSelector`
+   (unmodified) can already see it on the very next `select_strategy` call within the same mission, exactly as it
+   already sees cross-mission history today. `ExperienceStore`/`ExperienceInformedSelector`/`relevant_experience`/
+   `experience_for` semantics are **unchanged** — this exercises the existing tiered algorithm one call earlier
+   than usual, not a new algorithm.
+- **The one genuinely necessary signature extension found**: `execution_record()`/`project()` currently project
+  only "the active plan, or the last one" — insufficient to build a clean per-attempt `TelemetryRecord` for an
+  already-abandoned plan version once a later one is active. Both gain one additive `plan_id: PlanId | None =
+  None` keyword parameter; the default reproduces today's exact behavior for every existing caller.
+- **Consequences**: no change to `Plan`/`MissionState`/`TaskGenome`/`ReliabilityContract`/`Strategy`/
+  `AgentTask` as *data contracts* (only `expand_strategy`'s own construction of a `Plan` gains new optional
+  parameters, §3); no change to the `Selector` Protocol or any of its three implementations; no change to
+  `eidos.memory` (any file); no change to the V0.2 validation pipeline, the compiler, or either runtime executor;
+  no change to `EventLog`/`reduce`/`reduce_resumed`/A2A's own resume mechanism. `PLAN_REJECTED`/`RUN_REJECTED`/
+  `HALTED`/`AWAITING` handling is read, never altered.
+- **Milestone note** (mirrors D-196's own precedent of correcting a stale label against reality rather than
+  silently ignoring it): the milestone ladder's pre-existing "V1.1 Adaptive Learning" row (`progress.md`)
+  describes "historical ranking, exploration, empirical estimation, prediction-error tracking" — none of which
+  is this work. This decision's own scope is filed as **V1.1 — Within-Mission Replanning**, and the ladder's own
+  V1.1 description is corrected to match, exactly as D-196 corrected a stale V0.9 description rather than
+  inventing a new number or silently building under a mismatched label.
+- **Affects:** `eidos.expansion` (Step 1, additive `expand_strategy` parameters only), `eidos.state` (a new
+  payload + one reducer case; `execution_record`'s new optional parameter), `eidos.telemetry` (`project`'s new
+  optional parameter), a new narrow orchestration function (location proposed at implementation time, sibling to
+  `eidos.baseline`, not a new package). Does not reopen D-119, D-125, D-129, D-176, D-177, or any V0.1–V1.0
+  contract or decision; D-129 stays Open, untouched.
+- **Implementation order** (each step its own inspect → implement → test → guard → mutation → report cycle, no
+  step begun without the prior one's own explicit go-ahead): 1 `expand_strategy`'s additive lineage parameters;
+  2 `ReplanTriggeredPayload` + its one reducer case; 3 `execution_record`/`project`'s additive `plan_id` scoping
+  parameter; 4 the replan orchestration function; 5 the full test/mutation/documentation pass.

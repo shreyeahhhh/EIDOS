@@ -199,12 +199,71 @@ def test_tenant_and_mission_id_are_propagated_from_strategy():
     assert plan.mission_id == strategy.mission_id
 
 
-def test_version_and_lineage_fields_are_always_fresh():
+def test_version_and_lineage_fields_default_to_fresh_plan_values():
     strategy = strategy_with_stages(1, ("research",))
     plan = expand_strategy(strategy, ids=FixedPlanIdSource())
     assert plan.version == 1
     assert plan.parent_plan_id is None
     assert plan.replan_reason is None
+
+
+# --- explicit lineage parameters (D-199, V1.1 Step 1): additive, every default preserved -------------------------
+
+
+def test_explicit_version_is_stamped_onto_the_plan():
+    strategy = strategy_with_stages(1, ("research",))
+    plan = expand_strategy(strategy, ids=FixedPlanIdSource(), version=2)
+    assert plan.version == 2
+    assert plan.parent_plan_id is None
+    assert plan.replan_reason is None
+
+
+def test_explicit_parent_plan_id_is_stamped_onto_the_plan():
+    strategy = strategy_with_stages(1, ("research",))
+    parent = make_plan_id(1)
+    plan = expand_strategy(strategy, ids=FixedPlanIdSource(start=2), parent_plan_id=parent)
+    assert plan.parent_plan_id == parent
+    assert plan.version == 1
+    assert plan.replan_reason is None
+
+
+def test_explicit_replan_reason_is_stamped_onto_the_plan():
+    strategy = strategy_with_stages(1, ("research",))
+    plan = expand_strategy(strategy, ids=FixedPlanIdSource(), replan_reason="execution_failed: the agent call failed")
+    assert plan.replan_reason == "execution_failed: the agent call failed"
+    assert plan.version == 1
+    assert plan.parent_plan_id is None
+
+
+def test_all_three_lineage_parameters_together_mirror_a_real_replan():
+    strategy = strategy_with_stages(1, ("research",))
+    parent = make_plan_id(1)
+    plan = expand_strategy(
+        strategy, ids=FixedPlanIdSource(start=2), version=2, parent_plan_id=parent,
+        replan_reason="verification_failed: insufficient evidence",
+    )
+    assert plan.version == 2
+    assert plan.parent_plan_id == parent
+    assert plan.replan_reason == "verification_failed: insufficient evidence"
+    assert plan.plan_id == make_plan_id(2)  # the id source is still the only source of plan_id itself
+
+
+def test_lineage_parameters_are_independent_of_each_other_and_of_plan_id():
+    # Setting one does not require or imply setting the others — expand_strategy stamps exactly what it is given.
+    strategy = strategy_with_stages(1, ("research",))
+    plan = expand_strategy(strategy, ids=FixedPlanIdSource(), version=3)
+    assert plan.version == 3 and plan.parent_plan_id is None and plan.replan_reason is None
+
+
+def test_lineage_parameters_never_affect_step_construction():
+    # A replanned Plan's own steps depend only on the Strategy's own shape, exactly as a fresh Plan's do.
+    strategy = strategy_with_stages(1, ("research",), ("cost",), verification=VerificationPosture.FINAL)
+    fresh = expand_strategy(strategy, ids=FixedPlanIdSource())
+    replanned = expand_strategy(
+        strategy, ids=FixedPlanIdSource(), version=2, parent_plan_id=make_plan_id(99), replan_reason="execution_failed: x",
+    )
+    assert [s.step_id for s in fresh.steps] == [s.step_id for s in replanned.steps]
+    assert [s.depends_on for s in fresh.steps] == [s.depends_on for s in replanned.steps]
 
 
 # --- VERIFY edges: exactly the final stage, never transitively earlier -----------------------------------------
