@@ -1,6 +1,6 @@
 # 11 — Evaluation, Telemetry and Experiments
 
-**Status:** DERIVED — current · target milestones **V0.9** (telemetry), **V1.0/V1.1** (strategy memory and learning)
+**Status:** DERIVED — current · target milestones **V0.9** (telemetry) and **V1.0** (strategy memory); the handoff's V1.1 learning items (exploration, empirical estimation, prediction-error tracking) are deferred and unassigned (D-202)
 **Derived from:** handoff §17, §18, §19, §20, §21, §22, §23, §33, §34, §37, §38, §39, §65, §66, §67, §68
 **Authority:** This document is derived from `EIDOS_CLAUDE_CODE_HANDOFF.md` and subordinate to it.
 If this document and the handoff conflict, stop and report the conflict to the human owner.

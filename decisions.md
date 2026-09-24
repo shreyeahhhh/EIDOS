@@ -4509,14 +4509,18 @@ one is not.
   `AgentTask` as *data contracts* (only `expand_strategy`'s own construction of a `Plan` gains new optional
   parameters, §3); no change to the `Selector` Protocol or any of its three implementations; no change to
   `eidos.memory` (any file); no change to the V0.2 validation pipeline, the compiler, or either runtime executor;
-  no change to `EventLog`/`reduce`/`reduce_resumed`/A2A's own resume mechanism. `PLAN_REJECTED`/`RUN_REJECTED`/
+  no change to `EventLog`, `reduce_resumed`/`accept_resumed` or A2A's own resume mechanism, and `reduce`'s behaviour for every existing
+  event is unchanged; the reducer gains exactly one new `isinstance` case, for `ReplanTriggeredPayload` (V1.1 Step 3), and nothing else.
+  *(Corrected by D-202: this line first said there was no change to `reduce`, which contradicted the reducer case this same decision
+  specifies under Affects.)* `PLAN_REJECTED`/`RUN_REJECTED`/
   `HALTED`/`AWAITING` handling is read, never altered.
 - **Milestone note** (mirrors D-196's own precedent of correcting a stale label against reality rather than
   silently ignoring it): the milestone ladder's pre-existing "V1.1 Adaptive Learning" row (`progress.md`)
   describes "historical ranking, exploration, empirical estimation, prediction-error tracking" — none of which
   is this work. This decision's own scope is filed as **V1.1 — Within-Mission Replanning**, and the ladder's own
   V1.1 description is corrected to match, exactly as D-196 corrected a stale V0.9 description rather than
-  inventing a new number or silently building under a mismatched label.
+  inventing a new number or silently building under a mismatched label. *(Clarified by D-202: the "V1.1 Adaptive Learning" row restated the
+  handoff's own V1.1 list, so what this decision relabelled is a divergence from the handoff, not only from a `progress.md` placeholder.)*
 - **Affects:** `eidos.expansion` (Step 1, additive `expand_strategy` parameters only), `eidos.state` (a new
   payload + one reducer case; `execution_record`'s new optional parameter), `eidos.telemetry` (`project`'s new
   optional parameter), a new narrow orchestration function (location proposed at implementation time, sibling to
@@ -4524,8 +4528,9 @@ one is not.
   contract or decision; D-129 stays Open, untouched.
 - **Implementation order** (each step its own inspect → implement → test → guard → mutation → report cycle, no
   step begun without the prior one's own explicit go-ahead): 1 `expand_strategy`'s additive lineage parameters;
-  2 `ReplanTriggeredPayload` + its one reducer case; 3 `execution_record`/`project`'s additive `plan_id` scoping
-  parameter; 4 the replan orchestration function; 5 the full test/mutation/documentation pass.
+  2 `execution_record`/`project`'s additive `plan_id` scoping parameter; 3 `ReplanTriggeredPayload` + its one reducer
+  case; 4 the replan orchestration function; 5 the full test/mutation/documentation pass. *(Corrected by D-202: this
+  line first listed steps 2 and 3 in the reverse order; they were built as shown here, commits `ec3993c` and `24ae94d`.)*
 
 
 ### D-200 — Fresh work-step ids across plan versions for a within-mission replan (Option 1 approved, 2026-09-24)
@@ -4573,3 +4578,47 @@ one is not.
   `SELECTED`), and that selection's own reason. **It carries no `MissionFailureCause`, and none is invented for this case:** no mission ever failed, because
   none ever began. A refused selection *after* a first attempt is unchanged: the mission ends on that attempt's own real outcome (D-199).
 - **Effect:** the rest of the accepted Step 4 behaviour is unchanged. `MissionFailureCause` keeps exactly its six members, pinned by a test.
+
+
+### D-202 — V1.1 close-out: exhaustion semantics, cross-attempt budgets and the handoff milestone conflict (Accepted, 2026-09-24)
+
+- **Status:** Accepted · **Date:** 2026-09-24 · **Decided by:** human owner · **Resolved by the owner's rulings** (raised by the V1.1 Step 5 close-out audit)
+- **Source:** the V1.1 Step 5 audit of the five commits `e2e216f`, `ec3993c`, `24ae94d`, `312c25c`, `bf97922`; CLAUDE.md §0, §7 and invariants 6 and 7; the handoff's
+  milestone list; D-043, D-127, D-156 item 5, D-199, D-200, D-201
+- **Ruling 1 — invariant 7 and `max_replans` exhaustion (wording reconciled, no implementation change).** The bounded-replan invariant limits *additional
+  attempts*; it does not prescribe `PAUSED` as the terminal state. Once no further replan is permitted (the effective `max_replans` is reached, or no untried
+  candidate remains), the mission terminates according to the outcome of the final attempted plan: `COMPLETED` (with `verified` false where that is what the
+  attempt produced), `FAILED` with that attempt's own cause, or `PAUSED` only if that attempt was itself halted or is awaiting a remote task (D-176, D-177).
+  Replan exhaustion does not by itself require `MissionStatus.PAUSED`. This is the reading D-199 ruling 5 was already built on; it is stated here so it no longer
+  sits in tension with invariant 7's sentence "Exhaustion pauses the mission for human review". CLAUDE.md and the handoff are not edited; the reading is recorded
+  here and beside the invariant in `docs/12_architecture_invariants.md`.
+- **Ruling 2 — cross-attempt budgets (no cumulative enforcement is added; runtime behaviour is unchanged).** What V1.1 actually guarantees: (a) every attempt is a full
+  pass through the existing pipeline, so per-plan limits are enforced for each individual attempt (plan validation, including the declared-agent-step check against
+  the effective `max_agent_calls`, and the complexity limits); (b) the number of attempts is bounded by the effective `max_replans` (`min(system ceiling, contract value)`,
+  D-065), and by the number of candidates (`max_candidates`). What it does not guarantee: a mission-wide total across attempts. Observed in an audit probe run, not a
+  committed test: with a contract `max_agent_calls` of 2 and a two-capability mission that replanned once, each plan declared 2 agent steps and the mission finished
+  with `agent_calls_used` 4 and no halt. Cumulative mission-wide budget enforcement across replan attempts remains an open, deferred issue that belongs to the
+  pre-existing design: D-043 (declared plan limits against actual counters, Open), D-127 (enforcement deferred) and D-156 item 5 (counters are recorded, not enforced).
+  No new Open decision is created; those three are unchanged.
+- **Ruling 3 — the handoff milestone conflict (recorded, not resolved by editing the handoff).** The handoff, which is not modified, defines V1.1 as *Adaptive Learning*
+  (strategy memory, historical ranking, exploration, empirical estimation, prediction-error tracking) and V1.2 as *Reliability/Governance* (policy engine, autonomy
+  levels, human approval, failure recovery, replan limits, execution budgets). D-199 filed the implemented scope as V1.1 Within-Mission Replanning and described the
+  older label as a `progress.md` placeholder; that row was in fact the handoff's own V1.1 list. Ruling: the implemented V1.1 scope stays exactly as D-199 defines it
+  (within-mission replanning/self-healing). The older handoff V1.1 label and its remaining items, including exploration, empirical estimation and prediction-error
+  tracking, are **not part of the completed V1.1 implementation and remain deferred and unassigned until explicitly decided** (historical strategy memory and selection
+  were delivered under V1.0, D-198, to the extent built there). V1.2 keeps its wider governance items: V1.1 implemented only the narrow, bounded within-mission replan
+  and none of the policy engine, autonomy levels, human approval or execution-budget enforcement. `eidos.evaluation` is unassigned.
+- **Documentation corrections made with this decision (documentation only):**
+  1. Stale "not pushed"/"none pushed" claims in `README.md` and `progress.md` were corrected against git: `git reflog show origin/master` records pushes on 2026-09-22,
+     2026-09-23 and 2026-09-24, and V0.6 to V1.0 are all ancestors of `origin/master` (`a2a53fc`); only V1.1 remains local.
+  2. The `README.md` paragraph that said there is no planner, A2A or persistence was rewritten to match what exists.
+  3. D-199's implementation-order line now has step 2 as `plan_id` scoping and step 3 as the payload and reducer case, as built.
+  4. D-199's consequence text no longer says the reducer was unchanged; it says exactly one case was added.
+  5. "V1.0 proved ..." and the three other Benchmark 2 "proving" claims (the README status paragraph, the `progress.md` status line and the V1.0 ladder row) now read as a
+     controlled, scripted demonstration with no statistical validation.
+  6. `docs/03_architecture.md` lists `record_attempt` and `terminal_payload_for` under `eidos.recording`.
+  7. `docs/06_mission_state.md` documents the `REPLAN_TRIGGERED` payload.
+  8. Milestone references that contradicted the recorded V1.1 scope were corrected where necessary: the `eidos.evaluation` rows in `docs/03_architecture.md` and
+     `progress.md`, and one line each in `docs/09_rag_architecture.md` and `docs/11_evaluation.md`. Dated historical narrative in `progress.md` that names V1.1 as
+     Adaptive Learning or as the evaluation package is left as the record it is.
+- **Effect:** documentation and governance only. No source, test, contract or behaviour changes. D-043, D-127 and D-156 are unchanged, and no new Open decision is created.

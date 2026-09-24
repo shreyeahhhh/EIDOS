@@ -71,7 +71,7 @@ The handoff states explicitly that **the exact schema should be designed later.*
 not specified here, and must not be invented in passing.
 
 Note the overlap with strategy memory (`11_evaluation.md`): the `strategies` and `executions`
-collections serve the V1.0/V1.1 strategy-memory work, not document retrieval.
+collections serve the strategy-memory work (V1.0, and any later learning work), not document retrieval.
 
 ## 4. FAISS
 

@@ -159,6 +159,12 @@ quality-estimate type (**D-016**), `evidence_requirements` (**D-031**), evidence
 > so *an event that is not recorded is not replayable*. Deferring payloads defers the point at which
 > that obligation becomes **testable**. It is not created by D-067 — only postponed.
 
+> **Built at V1.1 Step 3 (D-199): `REPLAN_TRIGGERED`.** The vocabulary slot named in §33 now has a typed payload, `ReplanTriggeredPayload`, in `eidos.state`: `failed_plan_id`, `cause` (an existing
+> `MissionFailureCause`; for a finished-but-unverified attempt it is `VERIFICATION_INCONCLUSIVE`, D-201), `reason`, and `next_plan_id`, which must differ from `failed_plan_id`. It is recorded only when an
+> orchestrator has decided to try another plan. The reducer accepts it only if `failed_plan_id` names a plan the mission already holds, increments `replans_used` by one, and changes nothing else —
+> in particular never `MissionState.status`. `MissionStatus` has no `EXECUTING` value (D-052), so a running mission is `created`, which is not terminal; that is why no `accept_replanned` counterpart to
+> D-177's `accept_resumed` exists. A terminal mission refuses it like any later event. `next_plan_id` is not checked by the reducer: the next plan's own `PLAN_GENERATED` follows as an ordinary event.
+
 ## 5. The state shape
 
 **Resolved — `decisions.md` D-010a, decided by the human owner.**

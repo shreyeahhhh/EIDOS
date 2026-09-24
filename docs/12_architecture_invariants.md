@@ -126,6 +126,10 @@ Reason: Maximum recovery budget exceeded.
 Human review required.
 ```
 
+> **Reading of `max_replans` exhaustion (D-202, V1.1):** the bounded-replan limit bounds *additional attempts*; it does not prescribe `PAUSED` as the terminal state. Once no further replan is permitted, the
+> mission terminates according to the outcome of the final attempted plan (`COMPLETED`, `FAILED` with that attempt's own cause, or `PAUSED` only if that attempt was itself halted or is awaiting a remote task).
+> V1.1 enforces per-plan limits for each attempt and bounds the attempt count by `max_replans`; cumulative mission-wide enforcement across attempts remains deferred (D-043, D-127, D-156).
+
 **Rationale:** No infinite loops. Cost, latency and debuggability all depend on this.
 
 **Verified by:** V0.2 rejection tests for over-budget plans; scenario tests for retry, replan, token
