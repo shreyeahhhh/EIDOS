@@ -5,11 +5,18 @@ Logs are built by hand with ``LogBuilder`` (``eidos_state_factories.py``), mirro
 import, so this package's own unit tests stay independent of everything above ``eidos.state``.
 """
 
-from eidos.contracts import MissionStatus
+from eidos.contracts import AgentTaskStatus, ArtifactRef, MissionStatus, PlanStepKind, StepId
 from eidos.runtime import NodeStatus, RunOutcome, VerificationVerdict
 from eidos.state import (
+    A2ATaskCompletedPayload,
+    A2ATaskStartedPayload,
+    MissionCompletedPayload,
     MissionFailureCause,
     ModelCallOutcome,
+    NodeSettledPayload,
+    NodeStartedPayload,
+    PlanCompiledPayload,
+    PlanGeneratedPayload,
     PlanRejectionStage,
     ReplayRejection,
     VerificationFacts,
@@ -19,11 +26,14 @@ from eidos.state import (
 )
 from eidos.telemetry import TelemetryRecord, project
 
+from eidos_expansion_factories import make_plan_id
 from eidos_mission_factories import make_mission, make_mission_plan
 from eidos_state_factories import (
     ANALYSIS_AGENT,
+    RESEARCH_AGENT,
     LogBuilder,
     ModelCallFacts,
+    a2a_task_id,
     at,
     baseline_state_and_plan,
     verified_baseline,
@@ -182,6 +192,86 @@ def test_remote_task_count_counts_remote_task_started_events():
 def test_remote_task_count_is_zero_when_no_remote_task_was_ever_submitted():
     result = project(verified_baseline().records)
     assert result.remote_task_count == 0
+
+
+# --- plan_id scoping (D-199, V1.1 Step 2): forwarded to execution_record, plus remote_task_count's own filter ---
+
+
+def _two_plans_each_with_their_own_remote_task_and_the_second_concludes():
+    """An earlier plan submits one remote task and is then abandoned (never completed, never reached by any
+    terminal event); a second plan submits its own remote task and genuinely concludes the mission. Built by
+    hand with ``log.add`` for the second plan's own events, exactly as ``tests/unit/state/test_state_execution_
+    record.py``'s own ``with_a_second_plan`` must: ``LogBuilder``'s convenience methods all hardcode the first
+    plan's own ``plan_id``."""
+    state, plan = baseline_state_and_plan()
+    log = LogBuilder(state, plan)
+    log.created(), log.generated(), log.compiled()
+    log.a2a_started("gather", task=1)
+    log.a2a_completed("gather", task=1)
+
+    second = make_mission_plan(
+        state, {"gather": "", "check": "gather"}, verify=("check",), capability_of={"gather": "research"},
+        version=2, parent=plan, reason="the first plan's own attempt was abandoned", plan_number=2,
+    )
+    log.add(PlanGeneratedPayload(plan=second))
+    log.add(PlanCompiledPayload(plan_id=second.plan_id, plan_version=2))
+    log.add(A2ATaskStartedPayload(plan_id=second.plan_id, step_id=StepId("gather"), agent_id=RESEARCH_AGENT, a2a_task_id=a2a_task_id(2)))
+    log.add(A2ATaskCompletedPayload(
+        plan_id=second.plan_id, step_id=StepId("gather"), a2a_task_id=a2a_task_id(2),
+        outcome=AgentTaskStatus.COMPLETED, artifact=ArtifactRef("artifact:gather"), reason="the remote task concluded",
+    ))
+    log.add(NodeStartedPayload(plan_id=second.plan_id, step_id=StepId("check"), kind=PlanStepKind.VERIFY))
+    log.add(NodeSettledPayload(
+        plan_id=second.plan_id, result=verify_result("check"), dispatched=True, duration_ms=5,
+        verification=VerificationFacts(verdict=VerificationVerdict.PASS, reason="the supported rules were satisfied"),
+    ))
+    log.add(MissionCompletedPayload(plan_id=second.plan_id, verified=True))
+    return log, plan, second
+
+
+def test_plan_id_is_forwarded_to_execution_record_and_the_result_matches_it_field_for_field():
+    log, _first, second = _two_plans_each_with_their_own_remote_task_and_the_second_concludes()
+    result = project(log.records, plan_id=second.plan_id)
+    record = execution_record(log.records, plan_id=second.plan_id)
+    assert not isinstance(record, ReplayRejection)
+    assert (result.plan_id, result.plan_version) == (record.plan_id, record.plan_version)
+    assert (result.mission_status, result.run_outcome, result.verified) == (record.mission_status, record.run_outcome, record.verified)
+    assert (result.agent_calls_used, result.tokens_used, result.execution_time_used_ms) == (
+        record.agent_calls_used, record.tokens_used, record.execution_time_used_ms,
+    )
+
+
+def test_remote_task_count_is_scoped_to_the_requested_plan_only():
+    log, first, second = _two_plans_each_with_their_own_remote_task_and_the_second_concludes()
+    default = project(log.records)  # both plans' own remote-task submissions
+    scoped_to_first = project(log.records, plan_id=first.plan_id)
+    scoped_to_second = project(log.records, plan_id=second.plan_id)
+    assert default.remote_task_count == 2
+    assert scoped_to_first.remote_task_count == 1
+    assert scoped_to_second.remote_task_count == 1
+
+
+def test_scoped_projection_of_the_abandoned_first_plan_reports_no_conclusion_of_its_own():
+    log, first, _second = _two_plans_each_with_their_own_remote_task_and_the_second_concludes()
+    scoped = project(log.records, plan_id=first.plan_id)
+    assert (scoped.plan_id, scoped.plan_version) == (first.plan_id, 1)
+    assert (scoped.mission_status, scoped.run_outcome, scoped.verified) == (MissionStatus.CREATED, None, None)
+    assert scoped.remote_task_count == 1  # its own submission is still visible, even though it never concluded
+
+
+def test_an_unknown_plan_id_degrades_to_an_empty_projection_never_a_rejection():
+    log = verified_baseline()
+    bogus = make_plan_id(999_999)
+    result = project(log.records, plan_id=bogus)
+    assert isinstance(result, TelemetryRecord)
+    assert (result.plan_id, result.plan_version) == (None, None)
+    assert result.remote_task_count == 0
+    assert result.mission_status is MissionStatus.CREATED
+
+
+def test_plan_id_none_is_identical_to_omitting_the_parameter():
+    log = _two_plans_each_with_their_own_remote_task_and_the_second_concludes()[0]
+    assert project(log.records, plan_id=None) == project(log.records)
 
 
 # --- missing optional provider facts stay missing, never guessed ------------------------------------------------

@@ -41,6 +41,13 @@ documented as "bounds of the log, never an ordering" — ``occurred_at`` is the 
 (D-086), not the log's own monotonic ``sequence``, so a pathological or externally-produced log could record an
 earlier bound after a later one. Clamping that away would hide a real anomaly (D-158 item 4's "facts only," never
 a guess); the field is left a signed value on purpose, and its own sign is itself a fact worth keeping.
+
+**V1.1 Step 2 (D-199) adds one optional ``plan_id`` parameter**, forwarded straight to ``execution_record`` — see
+its own docstring for exactly what scoping to one specific plan attempt does and does not change. Every existing
+caller (every ``project(records)`` call across V0.9-V1.0) is unaffected: the default reproduces today's exact
+behavior. Not built by this step: anything that decides *when* to ask for a scoped projection, or records the
+per-attempt event vocabulary a within-mission replan will eventually need (``ReplanTriggeredPayload``, V1.1
+Step 3 onward) — this module only ever answers the question it is asked, exactly as before.
 """
 
 from collections.abc import Iterable
@@ -103,10 +110,20 @@ class TelemetryRecord(EidosModel):
     mission_wall_clock_ms: int  # signed — see the module docstring
 
 
-def project(records: Iterable[EventRecord]) -> TelemetryRecord | ReplayRejection:
-    """Project ``records`` into a ``TelemetryRecord``, or the typed rejection if the log does not replay."""
+def project(records: Iterable[EventRecord], *, plan_id: PlanId | None = None) -> TelemetryRecord | ReplayRejection:
+    """Project ``records`` into a ``TelemetryRecord``, or the typed rejection if the log does not replay.
+
+    ``plan_id``, forwarded straight to ``execution_record`` (D-199, V1.1 Step 2), scopes the whole projection to
+    one specific plan attempt — see its own docstring for exactly what scoping does and does not change.
+    Node-status counts already come from ``record.steps``, itself already plan-scoped by `execution_record`, so
+    they need no separate handling here; ``remote_task_count`` is the one fact this module computes directly from
+    ``materialized`` rather than through ``ExecutionRecord``, so it is filtered by ``record.plan_id`` in step with
+    everything else once a specific plan is requested. ``event_count``/``first_occurred_at``/``last_occurred_at``/
+    ``mission_wall_clock_ms`` stay the whole log's own bounds either way, exactly as ``execution_record`` already
+    documents for the fields it copies them from.
+    """
     materialized = tuple(records)
-    record = execution_record(materialized)
+    record = execution_record(materialized, plan_id=plan_id)
     if isinstance(record, ReplayRejection):
         return record
 
@@ -115,7 +132,12 @@ def project(records: Iterable[EventRecord]) -> TelemetryRecord | ReplayRejection
         if step.result is not None:
             counts[step.result.status] += 1
 
-    remote_task_count = sum(1 for r in materialized if isinstance(r.payload, A2ATaskStartedPayload))
+    if plan_id is None:
+        remote_task_count = sum(1 for r in materialized if isinstance(r.payload, A2ATaskStartedPayload))
+    else:
+        remote_task_count = sum(
+            1 for r in materialized if isinstance(r.payload, A2ATaskStartedPayload) and r.payload.plan_id == record.plan_id
+        )
     span = record.last_occurred_at - record.first_occurred_at
     wall_clock_ms = round(span.total_seconds() * 1000)
 

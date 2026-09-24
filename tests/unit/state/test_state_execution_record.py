@@ -19,6 +19,7 @@ from eidos.runtime import HaltInfo, NodeStatus, RunOutcome, VerificationVerdict
 from eidos.state import (
     EventLog,
     ExecutionRecord,
+    MissionCompletedPayload,
     MissionFailureCause,
     ModelCallFacts,
     ModelCallOutcome,
@@ -37,6 +38,7 @@ from eidos.state import (
     load_jsonl,
 )
 
+from eidos_expansion_factories import make_plan_id
 from eidos_mission_factories import make_mission_plan
 from eidos_state_factories import (
     ANALYSIS_AGENT,
@@ -347,6 +349,173 @@ def test_a_plan_generated_but_not_yet_compiled_does_not_displace_the_active_plan
     record = project(log)
     assert (record.plan_id, record.plan_version) == (log.plan.plan_id, 1)
     assert [s.step_id for s in record.steps] == ["gather", "analyse", "check"]
+
+
+# --- plan_id scoping (D-199, V1.1 Step 2): an individual attempt projected independently -----------------------
+
+
+def with_a_second_plan_that_concludes() -> LogBuilder:
+    """Extends ``with_a_second_plan``: the second plan's own ``check`` settles and the mission genuinely
+    concludes on it — so the first plan's own scoped view can be checked against a mission that truly moved on,
+    not merely one that is still open (the distinction ``mission_status`` scoping depends on). Uses ``log.add``
+    directly with ``second.plan_id``, exactly as ``with_a_second_plan`` itself already must: every ``LogBuilder``
+    convenience method (``started``/``settled``/``completed``/...) hardcodes ``self.plan.plan_id``, the first
+    plan, with no notion of a second one."""
+    log = with_a_second_plan(compiled=True)
+    log.add(NodeStartedPayload(plan_id=log.second.plan_id, step_id=StepId("check"), kind=PlanStepKind.VERIFY))
+    log.add(NodeSettledPayload(
+        plan_id=log.second.plan_id, result=verify_result("check", status=NodeStatus.SUCCEEDED, reason="the supported rules were satisfied"),
+        dispatched=True, duration_ms=5, model_calls=(), verification=PASS,
+    ))
+    log.add(MissionCompletedPayload(plan_id=log.second.plan_id, verified=True))
+    return log
+
+
+def test_scoping_to_the_only_plan_a_mission_ever_had_reproduces_the_default_projection_exactly():
+    # With nothing else in the log to conflate, scoping to the one-and-only plan must equal the default exactly.
+    log = verified_baseline()
+    default = project(log)
+    scoped = execution_record(log.records, plan_id=log.plan.plan_id)
+    assert isinstance(scoped, ExecutionRecord)
+    assert scoped == default
+    assert scoped.model_dump_json() == default.model_dump_json()
+
+
+def test_scoping_to_the_winning_plan_still_narrows_execution_facts_to_only_its_own_when_an_earlier_plan_also_ran():
+    # A genuine, useful distinction, not a bug: today's *unscoped* agent_calls_used/tokens_used/
+    # execution_time_used_ms were always whole-MISSION cumulative totals (the reducer folds every settled node
+    # regardless of which plan it belongs to) — so even the plan that actually concluded the mission had never,
+    # before this scoping capability existed, had its own cost distinguished from an earlier, abandoned
+    # attempt's. Scoping now makes that distinction possible for the first time.
+    log = with_a_second_plan_that_concludes()
+    default = project(log)  # the mission's own cumulative totals: both plans' activity folded together
+    scoped = execution_record(log.records, plan_id=log.second.plan_id)  # only the winning plan's own activity
+    assert isinstance(scoped, ExecutionRecord)
+    assert (scoped.plan_id, scoped.mission_status, scoped.verified) == (default.plan_id, default.mission_status, default.verified)
+    assert scoped.steps == default.steps  # node/model facts were already plan-scoped before this step; unaffected
+    # the second plan's own real cost: one agent call (gather; check is VERIFY, uncounted), no tokens (scripted
+    # with empty model_calls), 782ms (777 + 5) — strictly less than the mission's own cumulative total, which
+    # also folds in the first, abandoned plan's own two agent calls, its own tokens and its own 4,605ms
+    assert (scoped.agent_calls_used, scoped.tokens_used, scoped.execution_time_used_ms) == (1, 0, 782)
+    assert scoped.agent_calls_used < default.agent_calls_used
+    assert scoped.execution_time_used_ms < default.execution_time_used_ms
+    assert (default.agent_calls_used, default.tokens_used, default.execution_time_used_ms) == (3, 4041, 5387)
+
+
+def test_scoping_to_an_abandoned_earlier_plan_returns_only_its_own_facts_never_the_winners():
+    log = with_a_second_plan_that_concludes()
+    scoped = execution_record(log.records, plan_id=log.plan.plan_id)
+    assert isinstance(scoped, ExecutionRecord)
+    # identity: the first plan, not the second
+    assert (scoped.plan_id, scoped.plan_version) == (log.plan.plan_id, 1)
+    # its own three steps, with its own facts (verified_baseline's own gather/analyse/check), never the second plan's
+    assert [s.step_id for s in scoped.steps] == ["gather", "analyse", "check"]
+    assert step(scoped, "gather").agent_id == RESEARCH_AGENT and step(scoped, "gather").duration_ms == 1200
+    assert step(scoped, "analyse").agent_id == ANALYSIS_AGENT and step(scoped, "analyse").duration_ms == 3400
+    # honest, not fabricated: this attempt was abandoned mid-flight and never itself concluded
+    assert (scoped.mission_status, scoped.run_outcome, scoped.verified) == (MissionStatus.CREATED, None, None)
+    assert (scoped.failure_cause, scoped.failure_reason, scoped.halt, scoped.awaiting) == (None, None, None, ())
+    # the winning plan's own conclusion never leaks into the abandoned attempt's own view
+    winner = execution_record(log.records, plan_id=log.second.plan_id)
+    assert isinstance(winner, ExecutionRecord)
+    assert winner.mission_status is MissionStatus.COMPLETED and winner.verified is True
+    assert scoped.mission_status is not winner.mission_status
+
+
+def test_scoped_execution_facts_are_recomputed_from_that_plans_own_steps_never_the_whole_missions_totals():
+    log = with_a_second_plan_that_concludes()
+    scoped = execution_record(log.records, plan_id=log.plan.plan_id)
+    assert isinstance(scoped, ExecutionRecord)
+    # the first plan's own two agent calls (gather, analyse) and their own tokens/time — never plan 2's on top
+    assert scoped.agent_calls_used == 2
+    assert scoped.tokens_used == (160 + 977) + (322 + 2582)
+    assert scoped.execution_time_used_ms == 1200 + 3400 + 5
+    assert scoped.model_calls == 2 and scoped.responses_missing_token_counts == 0
+    # mission-level cumulative counters (nothing today produces a per-plan source for them, D-140/D-170) stay
+    # the mission's own totals regardless of which plan is asked about
+    default = project(log)
+    assert (scoped.tool_calls_used, scoped.retries_used, scoped.replans_used) == (
+        default.tool_calls_used, default.retries_used, default.replans_used,
+    )
+
+
+def test_no_cross_contamination_the_second_plans_own_gather_node_is_invisible_to_the_first():
+    log = with_a_second_plan_that_concludes()
+    scoped = execution_record(log.records, plan_id=log.plan.plan_id)
+    assert isinstance(scoped, ExecutionRecord)
+    # the second plan's own "gather" settled at 777ms under ANALYSIS_AGENT (with_a_second_plan's own scripting) —
+    # if the first plan's steps ever showed that, the two attempts would be contaminating each other
+    assert step(scoped, "gather").duration_ms != 777
+    assert step(scoped, "gather").agent_id != ANALYSIS_AGENT or step(scoped, "gather").duration_ms == 1200
+
+
+def test_a_plan_rejected_before_replanning_carries_its_own_rejection_scoped_the_second_plan_carries_none():
+    state, plan = baseline_state_and_plan()
+    log = LogBuilder(state, plan)
+    log.created(), log.generated()
+    log.rejected(PlanRejectionStage.BINDING, ("no_agent", "no agent offers 'analysis'"))
+    second = make_mission_plan(
+        state, {"gather": "", "check": "gather"}, verify=("check",), capability_of={"gather": "research"},
+        version=2, parent=plan, reason="the first plan could not be bound", plan_number=2,
+    )
+    log.add(PlanGeneratedPayload(plan=second))
+    log.add(PlanCompiledPayload(plan_id=second.plan_id, plan_version=2))
+
+    rejected_scope = execution_record(log.records, plan_id=plan.plan_id)
+    assert isinstance(rejected_scope, ExecutionRecord)
+    assert rejected_scope.plan_rejected_at is PlanRejectionStage.BINDING
+    assert [(r.code, r.message) for r in rejected_scope.plan_rejection_reasons] == [("no_agent", "no agent offers 'analysis'")]
+
+    second_scope = execution_record(log.records, plan_id=second.plan_id)
+    assert isinstance(second_scope, ExecutionRecord)
+    assert (second_scope.plan_rejected_at, second_scope.plan_rejection_reasons) == (None, ())
+
+
+def test_an_unknown_plan_id_degrades_exactly_like_a_mission_with_no_plan_never_a_rejection():
+    log = verified_baseline()
+    bogus = make_plan_id(999_999)
+    result = execution_record(log.records, plan_id=bogus)
+    assert isinstance(result, ExecutionRecord)  # never a ReplayRejection: the log itself still replays fine
+    assert (result.plan_id, result.plan_version, result.steps) == (None, None, ())
+    assert (result.mission_status, result.run_outcome) == (MissionStatus.CREATED, None)
+
+
+def test_plan_id_none_is_identical_to_omitting_the_parameter_entirely():
+    log = with_a_second_plan_that_concludes()
+    assert execution_record(log.records, plan_id=None) == execution_record(log.records)
+
+
+def test_scoped_projection_is_pure_and_deterministic_across_repeated_calls():
+    log = with_a_second_plan_that_concludes()
+    before = tuple(log.records)
+    first = execution_record(log.records, plan_id=log.plan.plan_id)
+    second = execution_record(iter(log.records), plan_id=log.plan.plan_id)
+    assert first == second and tuple(log.records) == before
+
+
+def test_scoped_projection_is_identical_across_hash_seeds():
+    script = (
+        "import sys, hashlib; sys.path[:0] = ['src', 'tests/support']\n"
+        "from eidos_state_factories import baseline_state_and_plan, LogBuilder\n"
+        "from eidos_mission_factories import make_mission_plan\n"
+        "from eidos.state import execution_record, PlanGeneratedPayload, PlanCompiledPayload, PlanRejectionStage\n"
+        "state, plan = baseline_state_and_plan()\n"
+        "log = LogBuilder(state, plan)\n"
+        "log.created(), log.generated(), log.compiled()\n"
+        "log.rejected(PlanRejectionStage.BINDING, ('no_agent', 'no agent offers analysis'))\n"
+        "second = make_mission_plan(state, {'gather': '', 'check': 'gather'}, verify=('check',),"
+        " capability_of={'gather': 'research'}, version=2, parent=plan, reason='r', plan_number=2)\n"
+        "log.add(PlanGeneratedPayload(plan=second))\n"
+        "log.add(PlanCompiledPayload(plan_id=second.plan_id, plan_version=2))\n"
+        "record = execution_record(log.records, plan_id=plan.plan_id)\n"
+        "print(hashlib.sha256(record.model_dump_json().encode()).hexdigest())\n"
+    )
+    seen = set()
+    for seed in ("0", "1", "2", "12345"):
+        result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, cwd=ROOT, env={**os.environ, "PYTHONHASHSEED": seed})
+        assert result.returncode == 0, result.stderr
+        seen.add(result.stdout.strip())
+    assert len(seen) == 1 and len(next(iter(seen))) == 64
 
 
 # --- determinism ------------------------------------------------------------------------------------------------------------------

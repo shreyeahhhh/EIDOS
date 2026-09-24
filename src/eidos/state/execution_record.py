@@ -115,8 +115,34 @@ class ExecutionRecord(EidosModel):
     last_occurred_at: UtcDateTime
 
 
-def execution_record(records: Iterable[EventRecord]) -> ExecutionRecord | ReplayRejection:
-    """Project a log into its execution record, or return the typed rejection if the log does not replay."""
+_TERMINAL_PAYLOADS = (MissionCompletedPayload, MissionFailedPayload, MissionPausedPayload)
+
+
+def execution_record(records: Iterable[EventRecord], *, plan_id: PlanId | None = None) -> ExecutionRecord | ReplayRejection:
+    """Project a log into its execution record, or return the typed rejection if the log does not replay.
+
+    ``plan_id``, when given, scopes the projection to one specific plan attempt — e.g. an earlier, since
+    -abandoned plan version in a mission that has since moved on to a later one (D-199, V1.1 Step 2) — instead of
+    the default "the active plan, or the last one" this function has always used. A ``plan_id`` unknown to this
+    log (matching no plan in ``state.plans``) degrades exactly as an ordinary mission with no plan at all already
+    does: ``plan=None``, every plan-derived field absent — never a rejection, mirroring the existing convention.
+
+    Scoping only ever narrows what is already recorded; it invents nothing. ``steps``/``plan_rejected_at``/
+    ``plan_rejection_reasons`` were already filtered by ``plan.plan_id`` before this parameter existed —
+    unchanged. ``mission_status``/``run_outcome``/``verified``/``failure_cause``/``halt``/``awaiting`` now come
+    from the last *plan-tagged* terminal payload, not simply the log's own last payload: under today's reducer, a
+    plan other than the one that actually concluded the mission can never have one of its own (any terminal
+    payload makes the whole mission terminal, D-176/D-177), so a scoped, not-yet-concluded attempt honestly
+    reports ``MissionStatus.CREATED`` — the same value the *unscoped* case would already show for an in-progress
+    mission — rather than borrowing the eventual winner's own outcome. ``agent_calls_used``/``tokens_used``/
+    ``execution_time_used_ms`` are recomputed from the scoped ``steps`` alone when ``plan_id`` is given, mirroring
+    the reducer's own per-``NodeSettledPayload`` folding formula exactly, applied to a subset — ``state``'s own
+    counters are whole-mission cumulative totals, not per-plan. ``tool_calls_used``/``retries_used``/
+    ``replans_used`` stay ``state``'s own mission-level totals regardless of scoping: nothing today produces a
+    per-node source for any of them to scope from (D-140, D-170). ``event_count``/``first_occurred_at``/
+    ``last_occurred_at`` stay the whole log's own bounds either way, exactly as already documented — a scoped
+    view narrows *which plan's facts* are reported, not *which events exist*.
+    """
     materialized = tuple(records)
     replayed = replay(materialized)
     if replayed.rejection is not None:
@@ -124,7 +150,11 @@ def execution_record(records: Iterable[EventRecord]) -> ExecutionRecord | Replay
     state = replayed.state
     payloads = tuple(record.payload for record in materialized)
 
-    plan = next((p for p in state.plans if p.plan_id == state.active_plan_id), state.plans[-1] if state.plans else None)
+    if plan_id is not None:
+        plan = next((p for p in state.plans if p.plan_id == plan_id), None)
+    else:
+        plan = next((p for p in state.plans if p.plan_id == state.active_plan_id), state.plans[-1] if state.plans else None)
+
     started: dict[StepId, NodeStartedPayload] = {}
     settled: dict[StepId, NodeSettledPayload] = {}
     rejected: PlanRejectedPayload | None = None
@@ -139,8 +169,25 @@ def execution_record(records: Iterable[EventRecord]) -> ExecutionRecord | Replay
     steps = tuple(_step_record(step, started.get(step.step_id), settled.get(step.step_id)) for step in (plan.steps if plan else ()))
 
     calls = [call for step in steps for call in step.model_calls]
-    terminal = payloads[-1]
+
+    if plan_id is None:
+        terminal = payloads[-1]  # unchanged from before this parameter existed
+    elif plan is None:
+        terminal = None
+    else:
+        terminal = next(
+            (p for p in reversed(payloads) if isinstance(p, _TERMINAL_PAYLOADS) and p.plan_id == plan.plan_id), None
+        )
     failed = terminal if isinstance(terminal, MissionFailedPayload) else None
+
+    if plan_id is None:
+        agent_calls_used = state.agent_calls_used
+        tokens_used = state.tokens_used
+        execution_time_used_ms = state.execution_time_used_ms
+    else:
+        agent_calls_used = sum(1 for step in steps if step.dispatched and step.kind is PlanStepKind.AGENT)
+        tokens_used = sum((call.prompt_tokens or 0) + (call.output_tokens or 0) for call in calls)
+        execution_time_used_ms = sum(step.duration_ms or 0 for step in steps)
 
     return ExecutionRecord(
         tenant_id=state.tenant_id,
@@ -151,7 +198,7 @@ def execution_record(records: Iterable[EventRecord]) -> ExecutionRecord | Replay
         steps=steps,
         plan_rejected_at=rejected.stage if rejected else None,
         plan_rejection_reasons=rejected.reasons if rejected else (),
-        mission_status=state.status,
+        mission_status=state.status if (plan_id is None or terminal is not None) else MissionStatus.CREATED,
         status_reason=state.status_reason,
         run_outcome=_run_outcome(terminal),
         verified=terminal.verified if isinstance(terminal, MissionCompletedPayload) else None,
@@ -159,12 +206,12 @@ def execution_record(records: Iterable[EventRecord]) -> ExecutionRecord | Replay
         failure_reason=failed.reason if failed else None,
         halt=terminal.halt if isinstance(terminal, MissionPausedPayload) else None,
         awaiting=terminal.awaiting if isinstance(terminal, MissionPausedPayload) else (),
-        agent_calls_used=state.agent_calls_used,
+        agent_calls_used=agent_calls_used,
         tool_calls_used=state.tool_calls_used,
         retries_used=state.retries_used,
         replans_used=state.replans_used,
-        tokens_used=state.tokens_used,
-        execution_time_used_ms=state.execution_time_used_ms,
+        tokens_used=tokens_used,
+        execution_time_used_ms=execution_time_used_ms,
         model_calls=len(calls),
         responses_missing_token_counts=sum(
             1 for call in calls if call.outcome is ModelCallOutcome.RESPONSE and (call.prompt_tokens is None or call.output_tokens is None)
