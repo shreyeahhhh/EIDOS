@@ -28,6 +28,7 @@ from eidos.memory import JsonlExperienceStore
 from eidos.planning import (
     DeterministicSelector,
     SelectedCandidate,
+    SelectionOutcome,
     Selector,
     SelectorChoice,
     SelectorFailure,
@@ -37,6 +38,7 @@ from eidos.planning import (
     VerificationPosture,
 )
 from eidos.recording import UuidEventIds, record_baseline
+from eidos.replanning import ReplanRejection, ReplanRejectionCode, ReplanRun
 from eidos.runtime import NodeStatus, RunOutcome, SequentialExecutor
 from eidos.state import (
     EventLog,
@@ -61,6 +63,7 @@ from eidos_replanning_factories import (
     empty_response,
     fail_first_n_calls,
     replan,
+    replan_outcome,
     under_cited_first_n_calls,
     uniformly_sufficient,
 )
@@ -547,10 +550,67 @@ class _NoCandidates:
         return ()
 
 
-def test_a_mission_with_no_candidate_strategy_at_all_is_refused_up_front_and_records_nothing(tmp_path):
+def _assert_refused_before_anything_ran(outcome, store, log, *, expected):
+    assert isinstance(outcome, ReplanRejection) and not isinstance(outcome, ReplanRun), outcome
+    assert outcome.code is ReplanRejectionCode.NO_SELECTABLE_STRATEGY
+    assert outcome.outcome is expected
+    assert outcome.reason
+    assert log.records == ()  # no event at all, not even MISSION_CREATED: nothing was selected, no plan exists
+    assert store.all() == ()  # no ExecutionExperience: no attempt ran
+    assert not hasattr(outcome, "cause")  # and no MissionFailureCause: no mission ever failed
+
+
+def test_a_mission_with_no_candidate_strategy_at_all_returns_a_typed_rejection_and_records_nothing(tmp_path):
     state = make_mission(capabilities=_TWO, seed=25)
     store, log = _store(tmp_path), EventLog()
-    with pytest.raises(ValueError, match="no feasible candidate strategy"):
-        replan(state, selector=DeterministicSelector(), store=store, candidate_generator=_NoCandidates(), log=log)
-    assert store.all() == ()  # no experience: nothing ran
-    assert log.records == ()  # and no event at all, not even MISSION_CREATED: the mission has no plan to run
+    outcome = replan_outcome(state, selector=DeterministicSelector(), store=store, candidate_generator=_NoCandidates(), log=log)
+    _assert_refused_before_anything_ran(outcome, store, log, expected=SelectionOutcome.NO_FEASIBLE_CANDIDATES)
+    assert outcome.reason == "no feasible candidates"
+
+
+@dataclass
+class _AlwaysBad:
+    """A selector whose every answer is ``bad`` — used where the very first selection must reach it."""
+
+    bad: SelectorChoice
+    calls: int = 0
+
+    def select(self, candidates, task_genome) -> SelectorChoice:
+        self.calls += 1
+        return self.bad
+
+
+@pytest.mark.parametrize(("bad", "expected", "reason_contains"), [
+    (SelectorFailure(kind=SelectorFailureKind.UNAVAILABLE, message="test: the selector is down"),
+     SelectionOutcome.SELECTOR_FAILED, "test: the selector is down"),
+    (SelectedCandidate(strategy_id=StrategyId(uuid4())), SelectionOutcome.INVALID_CANDIDATE_RETURNED, "not in the candidate set"),
+], ids=["selector_failed", "invalid_candidate_returned"])
+def test_a_first_selection_that_fails_or_names_a_stranger_returns_a_typed_rejection_and_records_nothing(
+    tmp_path, bad, expected, reason_contains,
+):
+    state = make_mission(capabilities=_TWO, seed=26)  # two candidates, so the selector really is consulted
+    store, log, selector = _store(tmp_path), EventLog(), _AlwaysBad(bad=bad)
+    outcome = replan_outcome(state, selector=selector, store=store, log=log)
+    assert selector.calls == 1  # asked once, never asked again: there is no replan without a first attempt
+    _assert_refused_before_anything_ran(outcome, store, log, expected=expected)
+    assert reason_contains in outcome.reason
+
+
+def test_a_single_candidate_mission_bypasses_the_selector_and_is_never_refused(tmp_path):
+    # select_strategy makes no selector call for one candidate (D-187), so a selector that could only ever fail
+    # cannot cause a rejection here: the rejection is about *selection*, not about the mission.
+    state = make_mission(capabilities=("research",), seed=27)
+    selector = _AlwaysBad(bad=SelectorFailure(kind=SelectorFailureKind.UNAVAILABLE, message="test: down"))
+    outcome = replan_outcome(state, selector=selector, store=_store(tmp_path))
+    assert isinstance(outcome, ReplanRun) and selector.calls == 0
+    assert (outcome.telemetry.mission_status, outcome.telemetry.verified) == (MissionStatus.COMPLETED, True)
+
+
+def test_a_rejected_mission_can_be_retried_on_the_same_log_and_store(tmp_path):
+    # Because nothing was recorded, the very same log and store are still perfectly usable: the rejection left no residue.
+    state = make_mission(capabilities=_TWO, seed=28)
+    store, log = _store(tmp_path), EventLog()
+    assert isinstance(replan_outcome(state, selector=DeterministicSelector(), store=store, candidate_generator=_NoCandidates(), log=log), ReplanRejection)
+    outcome = replan_outcome(state, selector=DeterministicSelector(), store=store, log=log)
+    assert isinstance(outcome, ReplanRun) and outcome.log is log
+    assert log.records[0].event.type is MissionEventType.MISSION_CREATED and len(store.all()) == 1

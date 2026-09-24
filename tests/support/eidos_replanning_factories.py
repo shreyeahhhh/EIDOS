@@ -18,7 +18,7 @@ from eidos.agents import (
 )
 from eidos.planning import RuleBasedCandidateGenerator
 from eidos.recording import UuidEventIds, UuidPlanIds, UuidStrategyIds
-from eidos.replanning import run_with_replanning
+from eidos.replanning import ReplanRun, run_with_replanning
 from eidos.runtime import SequentialExecutor, VerificationResult
 
 from eidos_agents_factories import doc, make_settings
@@ -126,14 +126,15 @@ def build_agents(state, respond):
     return agents, VerificationAgent(store=store)
 
 
-def replan(
+def replan_outcome(
     state, *, selector, store, respond=uniformly_sufficient, admission_guard_factory=admit_all,
     max_candidates=3, candidate_generator=None, limits=None, verifier_wrapper=None, log=None,
 ):
-    """One full ``run_with_replanning`` call, with every piece of boilerplate a test does not care about
-    supplied by default — real registry, real V0.4 agents over a scripted model, real fresh id sources, a
-    deterministic clock. Only ``selector``/``store`` are required: everything else is the thing under test.
-    ``verifier_wrapper``, if given, wraps the real ``VerificationAgent`` (never replaces it)."""
+    """One full ``run_with_replanning`` call, returning exactly what it returned (a ``ReplanRun`` or a
+    ``ReplanRejection``), with every piece of boilerplate a test does not care about supplied by default — real
+    registry, real V0.4 agents over a scripted model, real fresh id sources, a deterministic clock. Only
+    ``selector``/``store`` are required: everything else is the thing under test. ``verifier_wrapper``, if
+    given, wraps the real ``VerificationAgent`` (never replaces it)."""
     agents, verifier = build_agents(state, respond)
     if verifier_wrapper is not None:
         verifier = verifier_wrapper(verifier)
@@ -144,3 +145,10 @@ def replan(
         candidate_generator=candidate_generator or RuleBasedCandidateGenerator(), max_candidates=max_candidates,
         selector=selector, store=store, log=log,
     )
+
+
+def replan(state, **kwargs):
+    """``replan_outcome`` for a mission that is expected to run: fails loudly if it was refused instead."""
+    outcome = replan_outcome(state, **kwargs)
+    assert isinstance(outcome, ReplanRun), outcome
+    return outcome

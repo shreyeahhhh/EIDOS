@@ -22,7 +22,7 @@ FORBIDDEN_IMPORTS = {
     "tempfile", "threading", "time", "urllib", "uuid", "httpx", "aiohttp", "numpy", "networkx", "langgraph",
     "langchain", "langsmith", "ollama", "openai", "anthropic",
 }
-ALLOWED_ROOTS = {"collections", "dataclasses", "typing", "eidos"}
+ALLOWED_ROOTS = {"collections", "dataclasses", "enum", "typing", "pydantic", "eidos"}
 ALLOWED_EIDOS = {
     "eidos.agents", "eidos.baseline", "eidos.capabilities", "eidos.contracts", "eidos.expansion", "eidos.memory",
     "eidos.planning", "eidos.recording", "eidos.runtime", "eidos.state", "eidos.telemetry", "eidos.validation",
@@ -81,6 +81,15 @@ def test_the_orchestrator_has_no_command_line_no_api_and_executes_no_generated_c
             assert node.func.id not in {"open", "print", "eval", "exec", "compile", "input", "__import__"}, node.func.id
         if isinstance(node, ast.If) and isinstance(node.test, ast.Compare):
             assert "__main__" not in ast.dump(node.test)
+
+
+def test_run_with_replanning_raises_nothing_for_a_domain_outcome():
+    # D-201 item 2: a mission that cannot start is a typed ReplanRejection, never an exception — the same "typed
+    # result, not a raise" convention as ReplayRejection, ExperienceLoadRejection and RunRejection. (The rejection
+    # model's own construction-time validator may raise, as every pydantic contract does; that is not a domain outcome.)
+    tree = ast.parse(REPLANNING.read_text(encoding="utf-8"))
+    (function,) = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "run_with_replanning"]
+    assert [n for n in ast.walk(function) if isinstance(n, ast.Raise)] == []
 
 
 def test_no_module_level_mutable_state():

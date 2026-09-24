@@ -51,11 +51,14 @@ remote-execution boundary, or the reducer beyond Step 3's own ``ReplanTriggeredP
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from enum import StrEnum
+
+from pydantic import Field, model_validator
 
 from eidos.agents import WorkAgent
 from eidos.baseline import ExecutorFactory
 from eidos.capabilities import CapabilityRegistry
-from eidos.contracts import AgentId, MissionState, MissionStatus, Plan
+from eidos.contracts import AgentId, EidosModel, MissionState, MissionStatus, Plan
 from eidos.expansion import PlanIdSource, expand_strategy
 from eidos.memory import ExecutionExperience, ExperienceStore, evaluate_experience
 from eidos.planning import (
@@ -127,8 +130,8 @@ def _replan_cause_and_reason(payload) -> tuple[MissionFailureCause, str]:
     ``NONE`` (never produced by ``RuleBasedCandidateGenerator`` for a non-empty genome, but not structurally
     forbidden by the ``CandidateGenerator`` Protocol either). Per the owner's own "do not invent a new failure
     taxonomy" instruction, this reuses ``VERIFICATION_INCONCLUSIVE`` — the closest existing member in meaning
-    ("we cannot establish that this succeeded") — rather than adding a seventh cause. A provisional choice,
-    recorded as Open (D-201 item 1) for the owner's ruling."""
+    ("we cannot establish that this succeeded") — rather than adding a seventh cause. The
+    owner accepted this mapping (D-201 item 1): no seventh cause, no optional cause."""
     if isinstance(payload, MissionFailedPayload):
         return payload.cause, payload.reason
     assert isinstance(payload, MissionCompletedPayload) and not payload.verified, payload
@@ -144,6 +147,32 @@ def _effective_max_replans(state: MissionState, limits: SystemLimits) -> int:
     if contract_value is None:
         return limits.max_replans
     return min(limits.max_replans, contract_value)
+
+
+class ReplanRejectionCode(StrEnum):
+    """Why a mission was refused before anything ran (D-201 item 2)."""
+
+    NO_SELECTABLE_STRATEGY = "no_selectable_strategy"  # no first strategy could be selected, so there is nothing to run
+
+
+class ReplanRejection(EidosModel):
+    """A mission refused before execution, returned instead of a ``ReplanRun`` (the same union-return convention as
+    ``ReplayRejection`` and ``ExperienceLoadRejection``). Nothing was selected, no ``Plan`` was generated, no attempt
+    ran, no event was recorded and no ``ExecutionExperience`` was appended. It carries no ``MissionFailureCause``: the
+    mission never existed as far as the log is concerned, so no cause of a *failed mission* applies (D-201).
+
+    ``outcome`` is the existing selection vocabulary (``SelectionOutcome``) saying why the first selection produced
+    nothing — never ``SELECTED`` — and ``reason`` is that selection's own stated reason."""
+
+    code: ReplanRejectionCode
+    outcome: SelectionOutcome
+    reason: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _check_the_outcome_is_a_refusal(self) -> "ReplanRejection":
+        if self.outcome is SelectionOutcome.SELECTED:
+            raise ValueError("a refused selection is never SELECTED")
+        return self
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -180,7 +209,7 @@ def run_with_replanning(
     selector: Selector,
     store: ExperienceStore,
     log: EventLog | None = None,
-) -> ReplanRun:
+) -> ReplanRun | ReplanRejection:
     """Run ``state``'s own task genome to a conclusion, trying more than one candidate strategy in turn when an
     attempt's own outcome is replan-eligible (D-199) and the mission's own configured budget allows it.
 
@@ -188,6 +217,9 @@ def run_with_replanning(
     factory shape) — never one guard instance reused across attempts, so a guard that itself holds any
     per-attempt state can never leak between them. ``selector`` is the caller's own already-configured
     ``Selector``, called again, unmodified, for every attempt — never a new one, never a different kind.
+
+    Returns a ``ReplanRejection`` — recording nothing — when no first strategy can be selected (D-201 item 2);
+    otherwise a ``ReplanRun``. This function raises nothing for a domain outcome.
     """
     log = log if log is not None else EventLog()
     genome = state.task_genome
@@ -200,10 +232,10 @@ def run_with_replanning(
     max_replans = _effective_max_replans(state, limits)
 
     # Refused before anything is recorded: a mission with no selectable first strategy has no plan to run, so it
-    # leaves no event on the log at all (D-201 records this as a provisional choice).
+    # leaves no event on the log at all and appends no experience (D-201 item 2).
     first = select_strategy(selector, tuple(remaining), genome)
     if first.outcome is not SelectionOutcome.SELECTED:
-        raise ValueError(f"no feasible candidate strategy could be selected: {first.outcome.value}")
+        return ReplanRejection(code=ReplanRejectionCode.NO_SELECTABLE_STRATEGY, outcome=first.outcome, reason=first.reason)
     selected = first.selected
     remaining = [c for c in remaining if c.strategy_id != selected.strategy_id]
     plan = expand_strategy(selected, ids=plan_ids)  # v1: fresh-plan defaults (version=1, no parent, no reason)

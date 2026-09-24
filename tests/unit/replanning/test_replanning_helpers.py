@@ -8,9 +8,13 @@ mirroring V1.0 Step 6's own honest treatment of a similarly unreachable case.
 """
 
 import pytest
+from pydantic import ValidationError
 
 from eidos.contracts import MissionStatus, StepId
+from eidos.planning import SelectionOutcome
 from eidos.replanning import (
+    ReplanRejection,
+    ReplanRejectionCode,
     _effective_max_replans,
     _is_replan_eligible,
     _outcome_fields,
@@ -123,8 +127,8 @@ def test_replan_cause_and_reason_for_an_unverified_completion_reuses_verificatio
     # The one genuine gap in the existing six-member taxonomy: nothing means "finished, but nothing verified
     # it." Reuses the closest existing member rather than inventing a seventh, per the owner's own instruction.
     cause, reason = _replan_cause_and_reason(completed(verified=False))
-    assert cause is MissionFailureCause.VERIFICATION_INCONCLUSIVE
-    assert "verify" in reason.lower()
+    assert cause is MissionFailureCause.VERIFICATION_INCONCLUSIVE  # accepted as D-201 item 1: no seventh cause, cause never optional
+    assert reason == "finished without a successful VERIFY (verified is false)"
 
 
 # --- _effective_max_replans: D-065's own precedent, applied to max_replans, no new precedence rule ------------
@@ -154,3 +158,35 @@ def test_effective_max_replans_never_exceeds_the_system_ceiling_even_if_asked():
 def _limits(**overrides):
     from eidos_validation_factories import make_system_limits
     return make_system_limits(**overrides)
+
+
+# --- D-201: a mission refused before anything ran is a typed rejection, with no new failure vocabulary -------------
+
+
+_REFUSALS = [outcome for outcome in SelectionOutcome if outcome is not SelectionOutcome.SELECTED]
+
+
+@pytest.mark.parametrize("outcome", _REFUSALS)
+def test_every_refused_selection_outcome_can_be_carried_and_round_trips(outcome):
+    rejection = ReplanRejection(code=ReplanRejectionCode.NO_SELECTABLE_STRATEGY, outcome=outcome, reason="nothing was selected")
+    assert ReplanRejection.model_validate_json(rejection.model_dump_json()) == rejection
+
+
+def test_a_rejection_can_never_claim_the_selection_succeeded():
+    with pytest.raises(ValidationError):
+        ReplanRejection(code=ReplanRejectionCode.NO_SELECTABLE_STRATEGY, outcome=SelectionOutcome.SELECTED, reason="x")
+
+
+def test_a_rejection_must_state_its_reason():
+    with pytest.raises(ValidationError):
+        ReplanRejection(code=ReplanRejectionCode.NO_SELECTABLE_STRATEGY, outcome=SelectionOutcome.SELECTOR_FAILED, reason="")
+
+
+def test_the_rejection_adds_no_failure_vocabulary():
+    # D-201: no seventh MissionFailureCause, no optional cause, no new failure taxonomy — the rejection carries the
+    # existing selection vocabulary and one code, and nothing that reads as the cause of a failed mission.
+    from eidos.state import MissionFailureCause
+
+    assert len(MissionFailureCause) == 6
+    assert set(ReplanRejection.model_fields) == {"code", "outcome", "reason"}
+    assert [code.value for code in ReplanRejectionCode] == ["no_selectable_strategy"]

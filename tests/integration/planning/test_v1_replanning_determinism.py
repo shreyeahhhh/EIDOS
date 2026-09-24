@@ -28,7 +28,7 @@ from eidos.planning import DeterministicSelector
 from eidos.state import NodeSettledPayload, ReplanTriggeredPayload
 
 from eidos_mission_factories import make_mission
-from eidos_replanning_factories import fail_first_n_calls, replan, under_cited_first_n_calls
+from eidos_replanning_factories import fail_first_n_calls, replan, replan_outcome, under_cited_first_n_calls
 from eidos_validation_factories import make_system_limits
 
 
@@ -77,10 +77,24 @@ def run(seed, capabilities, respond, **kwargs):
         return describe(replan(state, selector=DeterministicSelector(), store=store, respond=respond, **kwargs))
 
 
+class NoCandidates:
+    def generate(self, task_genome):
+        return ()
+
+
+def run_rejected(seed):
+    with tempfile.TemporaryDirectory() as directory:
+        store = JsonlExperienceStore.open(Path(directory) / "experience.jsonl")
+        state = make_mission(capabilities=("research", "cost"), seed=seed)
+        outcome = replan_outcome(state, selector=DeterministicSelector(), store=store, candidate_generator=NoCandidates())
+        return {"rejection": outcome.model_dump(mode="json"), "experiences_stored": len(store.all())}
+
+
 scenarios = [
     run(1, ("research", "cost"), fail_first_n_calls(1)),
     run(2, ("research", "cost", "security"), under_cited_first_n_calls(6), limits=make_system_limits(max_replans=2)),
     run(3, ("research", "cost", "security"), fail_first_n_calls(99), limits=make_system_limits(max_replans=1)),
+    run_rejected(4),
 ]
 digest = hashlib.sha256(json.dumps(scenarios, sort_keys=True, default=str).encode())
 print(digest.hexdigest())

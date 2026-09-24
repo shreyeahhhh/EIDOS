@@ -4554,36 +4554,22 @@ one is not.
   still holds (same shape, same capabilities, same dependency structure).
 
 
-### D-201 — Two provisional V1.1 Step 4 choices, awaiting the owner's ruling (OPEN)
+### D-201 — V1.1 Step 4: the cause of a replan after an unverified completion, and a mission with no selectable first strategy (both approved, 2026-09-24)
 
-- **Status:** Open · **Date:** 2026-09-24 · **Decided by:** awaiting human owner
+- **Status:** Accepted · **Date:** 2026-09-24 · **Decided by:** human owner · **Resolved by the owner's ruling** (originally Open; both provisional behaviours resolved)
 - **Source:** D-199, D-200; found implementing `run_with_replanning` (V1.1 Step 4); CLAUDE.md §7 (a gap is recorded and raised, never resolved silently)
-- **Item 1 — the cause recorded for a replan after a `FINISHED`, `verified=false` attempt.** `ReplanTriggeredPayload.cause` (V1.1 Step 3) is a
+- **Item 1 — the cause recorded for a replan after a `FINISHED`, `verified=false` attempt: accepted as built.** `ReplanTriggeredPayload.cause` (V1.1 Step 3) is a
   `MissionFailureCause`, which has six members; none means "finished, but nothing verified it". The outcome is replan-eligible under D-199 ruling 2 but is
   reachable only when a candidate's `VerificationPosture` is `NONE`, which `RuleBasedCandidateGenerator` never produces for a non-empty genome (a custom
-  `CandidateGenerator` can). **Provisional behaviour:** the closest existing member, `VERIFICATION_INCONCLUSIVE`, is used with the reason
-  `finished without a successful VERIFY (verified is false)`, both in the recorded payload and in the next plan's `replan_reason`. The abandoned attempt's
-  own `ExecutionExperience` is unaffected: it records `COMPLETED`, `verified=false` and no `failure_cause`. Options: (a) keep the reuse; (b) make `cause`
-  optional on `ReplanTriggeredPayload` (a change to the Step 3 payload); (c) add a seventh `MissionFailureCause` member (a new failure taxonomy, which the
-  owner ruled out for this step).
-- **Item 2 — a mission with no selectable first strategy.** `run_with_replanning` raises `ValueError` before it records anything: the log it was given is left
-  empty (not even `MISSION_CREATED`) and no experience is appended, because no plan exists to run. Options: (a) keep raising; (b) return a typed
-  result instead of raising; (c) record `MISSION_CREATED` and a terminal `MISSION_FAILED`, which needs a `MissionFailureCause` that fits (`PLAN_REJECTED`
-  means a plan was refused, and none was ever produced).
-- **Effect:** neither item changes an invariant or a measured result. Both are pinned by tests, so a ruling changes those tests and at most one small branch
-  of `eidos.replanning`, not the architecture.
-- **Finding (measured, not assumed):** `expand_strategy` (D-194) names steps `stage{stage_index}_{position}_{capability}`,
-  independent of plan version. D-147 (option a) requires a newly executed work step to use a **fresh** step id across
-  plan versions of one execution, and the agents' write-once store refuses a repeat before any model call. So a replanned
-  plan v2 whose first attempt already stored artifacts is refused at its first work step: observed reason
-  `step_id_reused: step 'stage0_0_research' already has an artifact ('artifact:stage0_0_research') in this execution …
-  (D-147). No model call was made.` — downstream nodes skipped, mission ends `FAILED`. This defeats the approved replan
-  for `VERIFICATION_FAILED`, `VERIFICATION_INCONCLUSIVE`, `FINISHED` with `verified` false, and any
-  `EXECUTION_FAILED`/`NO_RESULT` whose earlier steps had already succeeded. It was masked in the first smoke test only
-  because that attempt failed at the very first step, before any artifact existed.
-- **Options considered (Option 1 approved; 2 and 3 not chosen):**
-  1. `expand_strategy` produces version-aware step ids **only when `version > 1`**, leaving every version-1 id byte-identical.
-     **Chosen.**
-  2. `run_with_replanning` takes an agents/artifact-store factory and supplies a fresh store per attempt (D-147's
-     option c). Not chosen: changes the orchestrator's signature and drops prior attempts' artifacts from the store.
-  3. Plan-scoped artifact keys (D-147's option b, rejected there). Not chosen: larger; touches D-137/D-147 artifact identity.
+  `CandidateGenerator` can). **Ruling:** the closest existing member, `VERIFICATION_INCONCLUSIVE`, is used with the reason
+  `finished without a successful VERIFY (verified is false)`, both in the recorded payload and in the next plan's `replan_reason`. **No seventh
+  `MissionFailureCause` member is added, `cause` is not made optional, and no other failure taxonomy is introduced.** The abandoned attempt's own
+  `ExecutionExperience` is unaffected: it records `COMPLETED`, `verified=false` and no `failure_cause`.
+- **Item 2 — a mission with no selectable first strategy: a typed rejection, not an exception.** This is a pre-execution condition: no strategy was selected,
+  no `Plan` was generated, no attempt ran, no event was recorded (not even `MISSION_CREATED`) and no `ExecutionExperience` was appended. **Ruling:**
+  `run_with_replanning` returns `ReplanRun | ReplanRejection` — the same union-return convention as `ReplayRejection` and `ExperienceLoadRejection`
+  — and raises nothing for this outcome. `ReplanRejection` carries a `ReplanRejectionCode` (one member, `NO_SELECTABLE_STRATEGY`), the existing
+  `SelectionOutcome` saying why the first selection produced nothing (`NO_FEASIBLE_CANDIDATES`, `SELECTOR_FAILED` or `INVALID_CANDIDATE_RETURNED`, never
+  `SELECTED`), and that selection's own reason. **It carries no `MissionFailureCause`, and none is invented for this case:** no mission ever failed, because
+  none ever began. A refused selection *after* a first attempt is unchanged: the mission ends on that attempt's own real outcome (D-199).
+- **Effect:** the rest of the accepted Step 4 behaviour is unchanged. `MissionFailureCause` keeps exactly its six members, pinned by a test.
