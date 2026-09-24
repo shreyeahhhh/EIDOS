@@ -22,15 +22,19 @@ direct edge. ``NONE`` produces no ``VERIFY`` step. Empty stages produce an empty
 **Identity.** ``step_id`` is string-backed and exempt from D-053's UUID default (D-092: planner-authored, unique
 within one Plan) — so it is a pure, deterministic derivation from ``(stage_index, position_in_stage, capability)``,
 needing no injected source at all; two distinct occurrences can never collide, because their ``(stage_index,
-position_in_stage)`` pair is already unique across the whole Plan. ``plan_id`` is UUID-backed with no exemption
+position_in_stage)`` pair is already unique across the whole Plan. **Across plan versions (D-200, D-147):** version
+``1`` keeps the D-194 form ``stage{i}_{p}_{capability}`` byte for byte; a version greater than ``1`` prefixes it
+``v{version}_``, so a replanned plan's work-step ids are fresh relative to every earlier version and D-147's write-once
+guard is never asked to refuse one. The ``verify`` control step keeps its id (it stores no artifact; D-162 keys the
+repeated-step guard by plan). ``plan_id`` is UUID-backed with no exemption
 (D-053 default), so it is drawn from an injected ``PlanIdSource`` — never generated internally — exactly mirroring
 ``eidos.planning.pipeline.StrategyIdSource`` one layer down and ``eidos.recording.ports.IdSource`` before that.
 ``tenant_id``/``mission_id`` are copied from the ``Strategy`` unchanged. ``version``/``parent_plan_id``/
 ``replan_reason`` default to a fresh Plan's own values (``1``/``None``/``None``, every existing caller
 unaffected) and are otherwise supplied verbatim by the caller (D-199, V1.1 Step 1) — this module stamps them
-onto the ``Plan``, nothing more; it does not decide when a replan is warranted, which candidate comes next, or
-whether the three values are mutually coherent, all of which stay a caller's own job (V1.1's own orchestration
-layer, not built by this step).
+onto the ``Plan`` (``version`` additionally namespaces work-step ids, above), nothing more; it does not decide when
+a replan is warranted, which candidate comes next, or whether the three values are mutually coherent, all of which
+stay a caller's own job (V1.1's own orchestration layer).
 
 **What this module does not do.** It does not re-run the feasibility gate one layer down — admissibility was
 already decided before a ``Strategy`` was selected (D-180, D-183). It does not run, duplicate or approximate
@@ -63,8 +67,9 @@ class PlanIdSource(Protocol):
     def next_plan_id(self) -> PlanId: ...
 
 
-def _agent_step_id(stage_index: int, position: int, capability: CapabilityId) -> StepId:
-    return StepId(f"stage{stage_index}_{position}_{capability}")
+def _agent_step_id(version: int, stage_index: int, position: int, capability: CapabilityId) -> StepId:
+    base = f"stage{stage_index}_{position}_{capability}"
+    return StepId(base if version == 1 else f"v{version}_{base}")
 
 
 def expand_strategy(
@@ -79,8 +84,9 @@ def expand_strategy(
     ``ids``: no I/O, no clock, no randomness, no model call, no live agent lookup, no feasibility re-check.
 
     ``version``/``parent_plan_id``/``replan_reason`` default to a fresh Plan's own values (``1``/``None``/
-    ``None``) — every existing caller is unaffected. A within-mission replan caller (D-199, V1.1; not built by
-    this decision) supplies its own values for all three; this function does not check they agree with each
+    ``None``) — every existing caller is unaffected. A within-mission replan caller (D-199, V1.1) supplies its own
+    values for all three (``version > 1`` also gives every work step a version-namespaced id, D-200; version ``1``
+    ids are the D-194 ids, unchanged); this function does not check they agree with each
     other or with anything already recorded — that coherence is its caller's own responsibility, exactly as
     ``Plan`` itself imposes no cross-field rule relating them (nothing here duplicates a check that belongs one
     layer up, mirroring this module's own established "not our job" stance toward V0.2 validation and
@@ -91,7 +97,7 @@ def expand_strategy(
     for stage_index, stage in enumerate(strategy.stages):
         stage_ids: list[StepId] = []
         for position, capability in enumerate(stage.capabilities):
-            step_id = _agent_step_id(stage_index, position, capability)
+            step_id = _agent_step_id(version, stage_index, position, capability)
             steps.append(AgentStep(step_id=step_id, depends_on=previous_stage_ids, capability=capability))
             stage_ids.append(step_id)
         previous_stage_ids = tuple(stage_ids)

@@ -61,3 +61,35 @@ def story_digest(hash_seed: str) -> str:
 @pytest.mark.parametrize("other_seed", ["1", "42", "2718281828"])
 def test_expansion_serializes_to_the_same_bytes_under_any_hash_seed(other_seed):
     assert story_digest(other_seed) == story_digest("0")
+
+
+# --- versioned step ids (D-200): plan versions 1, 2 and 3 of the same strategy ---------------------------------------
+
+VERSIONED_STORY = STORY.replace(
+    "digest.update(expand_strategy(strategy, ids=FixedPlanIdSource()).model_dump_json().encode())",
+    "for version in (1, 2, 3, 12):\n"
+    "    digest.update(expand_strategy(strategy, ids=FixedPlanIdSource(), version=version).model_dump_json().encode())",
+)
+
+
+@functools.cache
+def versioned_story_digest(hash_seed: str) -> str:
+    completed = subprocess.run(
+        [sys.executable, "-c", VERSIONED_STORY],
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
+        env=dict(os.environ, PYTHONHASHSEED=hash_seed),
+    )
+    assert completed.returncode == 0, completed.stderr
+    return completed.stdout.strip().splitlines()[-1]
+
+
+def test_the_versioned_story_really_expands_every_version():
+    assert VERSIONED_STORY != STORY and "version=version" in VERSIONED_STORY
+    assert versioned_story_digest("0") != story_digest("0")  # versions 2, 3 and 12 changed the bytes, version 1 alone did not
+
+
+@pytest.mark.parametrize("other_seed", ["1", "42", "2718281828"])
+def test_versioned_expansion_serializes_to_the_same_bytes_under_any_hash_seed(other_seed):
+    assert versioned_story_digest(other_seed) == versioned_story_digest("0")

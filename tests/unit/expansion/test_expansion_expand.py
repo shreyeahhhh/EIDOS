@@ -1,5 +1,7 @@
 """``expand_strategy`` (decisions.md D-194, D-195; V0.9 Step 2)."""
 
+import re
+
 import pytest
 from pydantic import ValidationError
 
@@ -255,15 +257,158 @@ def test_lineage_parameters_are_independent_of_each_other_and_of_plan_id():
     assert plan.version == 3 and plan.parent_plan_id is None and plan.replan_reason is None
 
 
-def test_lineage_parameters_never_affect_step_construction():
-    # A replanned Plan's own steps depend only on the Strategy's own shape, exactly as a fresh Plan's do.
+def test_lineage_parameters_never_change_the_plans_shape():
+    # A replanned Plan's own steps depend only on the Strategy's own shape, exactly as a fresh Plan's do — same
+    # step kinds, same capabilities, same dependency structure. Only the work-step *ids* differ (D-200, which
+    # superseded this test's original "ids are identical" claim: D-147 requires fresh ids across plan versions);
+    # `parent_plan_id`/`replan_reason` themselves never affect construction at all.
     strategy = strategy_with_stages(1, ("research",), ("cost",), verification=VerificationPosture.FINAL)
     fresh = expand_strategy(strategy, ids=FixedPlanIdSource())
     replanned = expand_strategy(
         strategy, ids=FixedPlanIdSource(), version=2, parent_plan_id=make_plan_id(99), replan_reason="execution_failed: x",
     )
-    assert [s.step_id for s in fresh.steps] == [s.step_id for s in replanned.steps]
-    assert [s.depends_on for s in fresh.steps] == [s.depends_on for s in replanned.steps]
+    assert [type(s) for s in fresh.steps] == [type(s) for s in replanned.steps]
+    assert [getattr(s, "capability", None) for s in fresh.steps] == [getattr(s, "capability", None) for s in replanned.steps]
+    fresh_index = {s.step_id: n for n, s in enumerate(fresh.steps)}
+    replanned_index = {s.step_id: n for n, s in enumerate(replanned.steps)}
+    assert [tuple(fresh_index[d] for d in s.depends_on) for s in fresh.steps] == [
+        tuple(replanned_index[d] for d in s.depends_on) for s in replanned.steps
+    ]
+    only_parent_and_reason = expand_strategy(
+        strategy, ids=FixedPlanIdSource(), parent_plan_id=make_plan_id(99), replan_reason="execution_failed: x",
+    )
+    assert [s.step_id for s in only_parent_and_reason.steps] == [s.step_id for s in fresh.steps]
+
+
+# --- work-step ids across plan versions (D-200, D-147): version 1 untouched, version > 1 namespaced --------------
+
+
+_SHAPES = (
+    strategy_with_stages(1, ("research",), verification=VerificationPosture.NONE),
+    strategy_with_stages(1, ("research",), ("cost",), verification=VerificationPosture.FINAL),
+    strategy_with_stages(1, ("research", "cost"), ("security",), verification=VerificationPosture.FINAL),
+    strategy_with_stages(1, ("research", "research"), ("cost", "security", "cost"), ("architecture",), verification=VerificationPosture.FINAL),
+)
+
+
+def _work_ids(plan):
+    return [s.step_id for s in plan.steps if isinstance(s, AgentStep)]
+
+
+def _reference_pre_v11_ids(strategy):
+    """The D-194 formula exactly as it stood before V1.1 — an independent re-statement, not a call into the code
+    under test."""
+    return [
+        f"stage{stage_index}_{position}_{capability}"
+        for stage_index, stage in enumerate(strategy.stages)
+        for position, capability in enumerate(stage.capabilities)
+    ]
+
+
+def test_version_1_ids_are_the_d194_literals_byte_for_byte():
+    strategy = strategy_with_stages(
+        1, ("research",), ("cost", "security"), ("architecture",), verification=VerificationPosture.FINAL
+    )
+    plan = expand_strategy(strategy, ids=FixedPlanIdSource())
+    assert [s.step_id for s in plan.steps] == [
+        "stage0_0_research", "stage1_0_cost", "stage1_1_security", "stage2_0_architecture", "verify",
+    ]
+
+
+@pytest.mark.parametrize("strategy", _SHAPES)
+def test_version_1_ids_equal_the_pre_v11_formula_for_every_shape(strategy):
+    assert _work_ids(expand_strategy(strategy, ids=FixedPlanIdSource())) == _reference_pre_v11_ids(strategy)
+    assert _work_ids(expand_strategy(strategy, ids=FixedPlanIdSource(), version=1)) == _reference_pre_v11_ids(strategy)
+
+
+def test_version_1_plans_are_identical_with_and_without_the_explicit_version_argument():
+    strategy = strategy_with_stages(1, ("research",), ("cost",), verification=VerificationPosture.FINAL)
+    assert expand_strategy(strategy, ids=FixedPlanIdSource()) == expand_strategy(strategy, ids=FixedPlanIdSource(), version=1)
+
+
+def test_version_2_ids_differ_from_version_1_ids():
+    strategy = strategy_with_stages(1, ("research",), ("cost", "security"), verification=VerificationPosture.FINAL)
+    v1 = _work_ids(expand_strategy(strategy, ids=FixedPlanIdSource()))
+    v2 = _work_ids(expand_strategy(strategy, ids=FixedPlanIdSource(), version=2))
+    assert v2 == ["v2_stage0_0_research", "v2_stage1_0_cost", "v2_stage1_1_security"]
+    assert set(v1).isdisjoint(v2)
+
+
+def test_version_3_ids_differ_from_both_version_1_and_version_2_ids():
+    strategy = strategy_with_stages(1, ("research",), ("cost", "security"), verification=VerificationPosture.FINAL)
+    v1, v2, v3 = (_work_ids(expand_strategy(strategy, ids=FixedPlanIdSource(), version=n)) for n in (1, 2, 3))
+    assert v3 == ["v3_stage0_0_research", "v3_stage1_0_cost", "v3_stage1_1_security"]
+    assert set(v3).isdisjoint(v1) and set(v3).isdisjoint(v2) and set(v1).isdisjoint(v2)
+
+
+@pytest.mark.parametrize("version", [1, 2, 3, 10])
+@pytest.mark.parametrize("strategy", _SHAPES)
+def test_ids_are_deterministic_for_every_version(strategy, version):
+    first = expand_strategy(strategy, ids=FixedPlanIdSource(), version=version)
+    second = expand_strategy(strategy, ids=FixedPlanIdSource(), version=version)
+    assert [s.step_id for s in first.steps] == [s.step_id for s in second.steps]
+
+
+@pytest.mark.parametrize("version", [2, 3, 10])
+@pytest.mark.parametrize("strategy", _SHAPES)
+def test_versioned_ids_stay_structurally_derived_from_stage_position_and_capability(strategy, version):
+    plan = expand_strategy(strategy, ids=FixedPlanIdSource(), version=version)
+    # The version prefix wraps the unchanged D-194 id: stripping it recovers exactly the version-1 id.
+    assert [str(i).removeprefix(f"v{version}_") for i in _work_ids(plan)] == _reference_pre_v11_ids(strategy)
+    expected = [
+        (stage_index, position, str(capability))
+        for stage_index, stage in enumerate(strategy.stages)
+        for position, capability in enumerate(stage.capabilities)
+    ]
+    parsed = [re.fullmatch(rf"v{version}_stage(\d+)_(\d+)_(.+)", str(i)) for i in _work_ids(plan)]
+    assert all(parsed)
+    assert [(int(m.group(1)), int(m.group(2)), m.group(3)) for m in parsed] == expected
+
+
+@pytest.mark.parametrize("strategy", _SHAPES)
+def test_no_work_step_id_collides_between_any_two_plan_versions(strategy):
+    # Versions 1..12 deliberately include 2 vs 12 and 1 vs 11: the digits-only version is recovered uniquely
+    # from the first underscore, so `v2_…` can never equal `v12_…`.
+    per_version = {n: _work_ids(expand_strategy(strategy, ids=FixedPlanIdSource(), version=n)) for n in range(1, 13)}
+    for a in per_version:
+        for b in per_version:
+            if a != b:
+                assert set(per_version[a]).isdisjoint(per_version[b]), (a, b)
+    everything = [i for ids in per_version.values() for i in ids]
+    assert len(everything) == len(set(everything))
+
+
+def test_a_versioned_plan_keeps_every_dependency_edge_inside_its_own_versions_ids():
+    strategy = strategy_with_stages(1, ("research",), ("cost", "security"), verification=VerificationPosture.FINAL)
+    plan = expand_strategy(strategy, ids=FixedPlanIdSource(), version=2)
+    work = [s for s in plan.steps if isinstance(s, AgentStep)]
+    verify = next(s for s in plan.steps if isinstance(s, ControlStep))
+    assert work[0].depends_on == ()
+    assert work[1].depends_on == (work[0].step_id,) and work[2].depends_on == (work[0].step_id,)
+    assert set(verify.depends_on) == {work[1].step_id, work[2].step_id}
+    assert all(str(i).startswith("v2_") for s in work for i in (s.step_id, *s.depends_on))
+
+
+def test_the_verify_control_step_keeps_its_id_in_every_version():
+    # `verify` stores no artifact and the intake's repeated-step guard is keyed by plan (D-162), so it needs no namespace.
+    strategy = strategy_with_stages(1, ("research",), verification=VerificationPosture.FINAL)
+    for version in (1, 2, 3):
+        plan = expand_strategy(strategy, ids=FixedPlanIdSource(), version=version)
+        assert next(s for s in plan.steps if isinstance(s, ControlStep)).step_id == "verify"
+
+
+def test_a_version_2_plan_still_passes_full_validation_and_compiles():
+    state = make_mission(capabilities=("research", "cost"))
+    strategy = make_strategy(
+        tenant_id=state.tenant_id, mission_id=state.mission_id,
+        stages=(make_strategy_stage("research"), make_strategy_stage("cost")), verification=VerificationPosture.FINAL,
+    )
+    plan = expand_strategy(
+        strategy, ids=FixedPlanIdSource(start=2), version=2, parent_plan_id=make_plan_id(1), replan_reason="execution_failed: x",
+    )
+    report = validate_plan(plan, state, GENEROUS_LIMITS)
+    assert report.accepted, report.violations
+    assert compile_plan(plan, report).succeeded
 
 
 # --- VERIFY edges: exactly the final stage, never transitively earlier -----------------------------------------

@@ -4526,3 +4526,64 @@ one is not.
   step begun without the prior one's own explicit go-ahead): 1 `expand_strategy`'s additive lineage parameters;
   2 `ReplanTriggeredPayload` + its one reducer case; 3 `execution_record`/`project`'s additive `plan_id` scoping
   parameter; 4 the replan orchestration function; 5 the full test/mutation/documentation pass.
+
+
+### D-200 — Fresh work-step ids across plan versions for a within-mission replan (Option 1 approved, 2026-09-24)
+
+- **Status:** Accepted · **Date:** 2026-09-24 · **Decided by:** human owner · **Resolved by the owner's ruling** (originally Open; Option 1 chosen)
+- **Source:** D-147, D-194, D-199; found running the real V1.1 Step 4 orchestrator against real V0.4 agents
+- **Ruling (Option 1):** version-aware step ids for replanned plans, applied at the plan producer.
+  1. **Plan version 1 preserves the D-194 id scheme exactly:** `stage{stage_index}_{position}_{capability}`, byte for byte
+     as before V1.1. **D-194's original version-1 ids are unchanged**, so every existing version-1 plan, hash and benchmark
+     digest is untouched.
+  2. **Plan versions greater than 1 use a deterministic version-aware namespace:** `v{version}_stage{stage_index}_{position}_{capability}`.
+     The stage/position/capability structure is preserved as a suffix; no randomness and no UUID is involved. Every work-step id
+     of version N therefore differs from every work-step id of every other version (a version-1 id starts with `stage`, a
+     version-N id with `v{N}_`, and `N` is digits-only so it is recovered uniquely from the first `_`).
+  3. **The `verify` control step keeps its id.** It is not a work step: it stores no artifact, and the intake's repeated-step
+     guard is keyed by (event type, plan, step) (D-162), so a `verify` step in another plan version is another step.
+  4. **Nothing else changes.** The artifact store stays write-once and `artifact:<step_id>` / `(execution_id, step_id)` identity is
+     unchanged (D-137, D-147). No fresh artifact store per attempt (D-147 option c) and no plan-scoped artifact keys (option b)
+     are introduced. **D-147 is not weakened:** its guard still refuses a reused work-step id before any model call, and now
+     a replan produced by `expand_strategy` never asks it to.
+- **Rationale:** D-147 (option a) already places the obligation on whoever chooses step ids across versions. V1.1 Step 1 added
+  `version` to `expand_strategy` but left the ids version-independent, so a replan's plan v2 collided with v1's stored artifacts.
+  This is a necessary compatibility correction discovered at Step 4 integration, **not** a widening of the V1.1 milestone.
+- **Affects:** `eidos.expansion.expand` only (`_agent_step_id` gains the version). Amends the D-194 id scheme for `version > 1` only. The
+  V1.1 Step 1 test asserting a replanned plan's step ids equal a fresh plan's is superseded by this ruling and rewritten to assert what
+  still holds (same shape, same capabilities, same dependency structure).
+
+
+### D-201 — Two provisional V1.1 Step 4 choices, awaiting the owner's ruling (OPEN)
+
+- **Status:** Open · **Date:** 2026-09-24 · **Decided by:** awaiting human owner
+- **Source:** D-199, D-200; found implementing `run_with_replanning` (V1.1 Step 4); CLAUDE.md §7 (a gap is recorded and raised, never resolved silently)
+- **Item 1 — the cause recorded for a replan after a `FINISHED`, `verified=false` attempt.** `ReplanTriggeredPayload.cause` (V1.1 Step 3) is a
+  `MissionFailureCause`, which has six members; none means "finished, but nothing verified it". The outcome is replan-eligible under D-199 ruling 2 but is
+  reachable only when a candidate's `VerificationPosture` is `NONE`, which `RuleBasedCandidateGenerator` never produces for a non-empty genome (a custom
+  `CandidateGenerator` can). **Provisional behaviour:** the closest existing member, `VERIFICATION_INCONCLUSIVE`, is used with the reason
+  `finished without a successful VERIFY (verified is false)`, both in the recorded payload and in the next plan's `replan_reason`. The abandoned attempt's
+  own `ExecutionExperience` is unaffected: it records `COMPLETED`, `verified=false` and no `failure_cause`. Options: (a) keep the reuse; (b) make `cause`
+  optional on `ReplanTriggeredPayload` (a change to the Step 3 payload); (c) add a seventh `MissionFailureCause` member (a new failure taxonomy, which the
+  owner ruled out for this step).
+- **Item 2 — a mission with no selectable first strategy.** `run_with_replanning` raises `ValueError` before it records anything: the log it was given is left
+  empty (not even `MISSION_CREATED`) and no experience is appended, because no plan exists to run. Options: (a) keep raising; (b) return a typed
+  result instead of raising; (c) record `MISSION_CREATED` and a terminal `MISSION_FAILED`, which needs a `MissionFailureCause` that fits (`PLAN_REJECTED`
+  means a plan was refused, and none was ever produced).
+- **Effect:** neither item changes an invariant or a measured result. Both are pinned by tests, so a ruling changes those tests and at most one small branch
+  of `eidos.replanning`, not the architecture.
+- **Finding (measured, not assumed):** `expand_strategy` (D-194) names steps `stage{stage_index}_{position}_{capability}`,
+  independent of plan version. D-147 (option a) requires a newly executed work step to use a **fresh** step id across
+  plan versions of one execution, and the agents' write-once store refuses a repeat before any model call. So a replanned
+  plan v2 whose first attempt already stored artifacts is refused at its first work step: observed reason
+  `step_id_reused: step 'stage0_0_research' already has an artifact ('artifact:stage0_0_research') in this execution …
+  (D-147). No model call was made.` — downstream nodes skipped, mission ends `FAILED`. This defeats the approved replan
+  for `VERIFICATION_FAILED`, `VERIFICATION_INCONCLUSIVE`, `FINISHED` with `verified` false, and any
+  `EXECUTION_FAILED`/`NO_RESULT` whose earlier steps had already succeeded. It was masked in the first smoke test only
+  because that attempt failed at the very first step, before any artifact existed.
+- **Options considered (Option 1 approved; 2 and 3 not chosen):**
+  1. `expand_strategy` produces version-aware step ids **only when `version > 1`**, leaving every version-1 id byte-identical.
+     **Chosen.**
+  2. `run_with_replanning` takes an agents/artifact-store factory and supplies a fresh store per attempt (D-147's
+     option c). Not chosen: changes the orchestrator's signature and drops prior attempts' artifacts from the store.
+  3. Plan-scoped artifact keys (D-147's option b, rejected there). Not chosen: larger; touches D-137/D-147 artifact identity.
