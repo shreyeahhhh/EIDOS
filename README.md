@@ -7,7 +7,7 @@
 
 ## Status
 
-**V1.0 — Execution Experience / Strategy Memory: architecture accepted (D-198), Steps 1 to 4 and 6 of 7 implemented (`eidos.memory.experience` — `ExecutionExperience`, `evaluate_experience`; `eidos.memory.relevance` — task/strategy relevance filtering; `eidos.memory.store` — local JSONL persistence; `eidos.selectors.experience_informed` — `ExperienceInformedSelector`; Step 6 — the complete adaptive loop proven end to end across two real missions, zero `src/eidos` changes), not pushed. Benchmark 1 — Execution-Control Comparison: implemented (13 tests, conditions A/B/C/D1/D2, five task classes; deliberately unassigned a milestone number, D-196/D-197), not pushed. V0.9 — Telemetry: Steps 2, 3 and 4 implemented (`eidos.telemetry`, a pure multi-execution projection over already-recorded facts; Step 3 connects the full live chain from a `TaskGenome` through candidate generation, selection, Strategy-to-Plan expansion, validation, execution/recording and telemetry projection, for one real mission; Step 4 closes two evidence gaps an inspection found), none pushed. V0.8 — Strategy Selection: architecture accepted, Steps 2, 3, 5, 6, 7 and 8 implemented (the Selector contracts and orchestration boundary; a boundary-hardening audit; the model-assisted Selector adapter, `eidos.selectors`; a deterministic selection-integration suite; the Strategy-to-Plan expansion design and its implementation, `eidos.expansion`), none pushed. V0.7 — Strategy & Candidate Generation: closed as scoped, none pushed. V0.6 — A2A: Steps 1–6 of 9 implemented and pushed. V0.5 — the event log and the state reducer: complete as scoped. V0.4 — real local agents: complete as scoped.
+**V1.0 — Execution Experience / Strategy Memory: closed as scoped (D-198), all 7 steps implemented (`eidos.memory.experience` — `ExecutionExperience`, `evaluate_experience`; `eidos.memory.relevance` — task/strategy relevance filtering; `eidos.memory.store` — local JSONL persistence; `eidos.selectors.experience_informed` — `ExperienceInformedSelector`; Step 6 — the complete adaptive loop proven end to end across two real missions, zero `src/eidos` changes; Step 7 — Benchmark 2, a controlled 45-mission evaluation proving that measured experience changes real selection from mission 2 onward, reported as a plain per-mission table, never a score), not pushed. Benchmark 1 — Execution-Control Comparison: implemented (13 tests, conditions A/B/C/D1/D2, five task classes; deliberately unassigned a milestone number, D-196/D-197), not pushed. V0.9 — Telemetry: Steps 2, 3 and 4 implemented (`eidos.telemetry`, a pure multi-execution projection over already-recorded facts; Step 3 connects the full live chain from a `TaskGenome` through candidate generation, selection, Strategy-to-Plan expansion, validation, execution/recording and telemetry projection, for one real mission; Step 4 closes two evidence gaps an inspection found), none pushed. V0.8 — Strategy Selection: architecture accepted, Steps 2, 3, 5, 6, 7 and 8 implemented (the Selector contracts and orchestration boundary; a boundary-hardening audit; the model-assisted Selector adapter, `eidos.selectors`; a deterministic selection-integration suite; the Strategy-to-Plan expansion design and its implementation, `eidos.expansion`), none pushed. V0.7 — Strategy & Candidate Generation: closed as scoped, none pushed. V0.6 — A2A: Steps 1–6 of 9 implemented and pushed. V0.5 — the event log and the state reducer: complete as scoped. V0.4 — real local agents: complete as scoped.
 
 This repository contains the project rules, the architecture knowledge base, the decision record,
 the V0.1 typed contracts (`eidos.contracts`), the V0.2 plan validator (`eidos.validation`), the V0.3
@@ -134,9 +134,9 @@ classes (sequential reasoning, parallel subtasks, verification-heavy, constraine
 interception), reporting a metric vector per condition/case, never a combined score. Reproducibility is checked
 by hashing serialized results across repeated identical runs, mirroring V0.3's own determinism precedent. Lives
 under `tests/` (`eidos_benchmark_harness.py` + `test_benchmark_execution_control.py`), not `src/eidos` — no core
-contract, `MissionEvent`, or package changed. Strategy Memory, adaptive/historical selection and a future
-"Benchmark 2" stay explicitly deferred. See [progress.md](progress.md), "Benchmark 1 — Execution-Control
-Comparison".
+contract, `MissionEvent`, or package changed. Strategy Memory and adaptive/historical selection were explicitly
+deferred at the time; "Benchmark 2" has since been implemented as V1.0 Step 7, below. See
+[progress.md](progress.md), "Benchmark 1 — Execution-Control Comparison".
 
 **V1.0 — Execution Experience / Strategy Memory** (architecture accepted, D-198): the research question is
 whether measured execution experience from previous missions can improve future strategy selection — never
@@ -160,12 +160,21 @@ never a silently filtered history, mirroring the event log's own established JSO
 implementation, no change to the `Selector` Protocol or `select_strategy`. Prefers candidates with directly
 observed, verified-successful historical experience over untested or historically non-successful ones — a
 lexicographic tiered comparison (never a scalar score), deferring entirely to an injected `fallback` selector
-whenever no candidate has any relevant experience at all. **Step 6** (this commit): the complete loop proven end
+whenever no candidate has any relevant experience at all. **Step 6**: the complete loop proven end
 to end across two real, separate missions — cold start, a real non-success recorded, a fresh mission with fresh
 `StrategyId`s recognizing that history by structure and switching away from the deterministic selector's own
 structural-cost bias, and the resulting success recorded in turn — with **zero changes anywhere in `src/eidos`**,
-confirmed by `git status`. Every stage is the real, already-shipped implementation; nothing is duplicated. One
-step remains: Benchmark 2, not started. See
+confirmed by `git status`. Every stage is the real, already-shipped implementation; nothing is duplicated.
+**Step 7** (this commit, the final step — **V1.0 is now closed as scoped**): Benchmark 2, a controlled evaluation
+of the research question itself. Three fixed capability pairs (research+cost, research+security, cost+security),
+three conditions (D1 `DeterministicSelector`; D2 `ModelAssistedSelector` scripted to a fixed choice; E1 the real
+`ExperienceInformedSelector` over a real, per-pair `ExperienceStore`), five missions each — 45 executions. D1 and
+D2 select the same topology every time and never touch a store; E1 matches them exactly on mission 1 (the
+cold-start equivalence) but switches to the untested topology from mission 2 onward in every pair, despite
+`DeterministicSelector`'s own bias, recomputed fresh each mission, still favoring the other one throughout —
+measured, not asserted, and never framed as a "best strategy," a score, or a superiority claim. Reported as a
+plain per-mission table; reproducibility checked by running the full 45-mission benchmark in two independent
+subprocesses under two different `PYTHONHASHSEED` values and comparing digest vectors byte-for-byte. See
 [progress.md](progress.md), "V1.0 Execution Experience / Strategy Memory".
 
 Current status and the milestone ladder: [progress.md](progress.md).
