@@ -2436,6 +2436,7 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
   - If a later milestone gives an agent a tool or an action, this decision no longer covers it, and policy must be decided
     first (MCP at V0.7, policy at V1.2).
   - A minimal agent-call-count guard remains an option for the owner. It is not built.
+- **Annotated 2026-09-24 (D-203):** the consequence above (a tool needs policy decided first) is met for read-only tools by D-203's minimal deterministic tool-admission policy, and only for the Research agent. D-060, D-061, D-074 and D-110 stay Open; the plan-validation POLICY stage stays `NOT_APPLICABLE`.
 
 ### D-006 — Which capabilities exist in the MVP agent set
 
@@ -3338,6 +3339,7 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
 - **Decision:** MCP and RAG are **not** slotted anywhere in the V0.7–V1.0 strategy-intelligence sequence (Strategy contracts → candidate generation → feasibility → selection → benchmark → memory). Neither is assigned a milestone number now. Each gets one **only when a concrete EIDOS requirement or benchmark actually needs it** — not pre-reserved, not guessed at.
 - **Consequences:** `progress.md`'s "Intentionally not built yet" table rows for `mcp/`/`rag/` are updated from "V0.7 unclear"/"V0.8 unclear" to explicitly deferred-and-unassigned, per this ruling. D-027/D-028 (the original decisions putting MCP/RAG at V0.7/V0.8) are superseded by this renumbering, not reopened in substance — nothing about MCP's or RAG's own eventual design is decided here.
 - **Affects:** the milestone ladder in `progress.md` only. No source code, contract or test is affected.
+- **Annotated 2026-09-24 (D-203):** MCP now has its milestone, V1.2, because a concrete requirement exists (the Research agent returns `NO_RESULT` when no documents are supplied). RAG is unaffected and stays deferred and unassigned.
 
 ### D-185 — Candidate generation and feasibility are not MissionEvent lifecycle events in V0.7
 
@@ -4184,6 +4186,7 @@ one is not.
   `retrieve_evidence`) and warns against 20 tools in V1. No MCP code, dependency or package exists.
 - **Annotated 2026-09-22 (D-184):** V0.7 was redefined as Strategy & Candidate Generation; MCP no longer has a
   reserved milestone number. It stays Deferred, unassigned, until a concrete requirement or benchmark needs it.
+- **Annotated 2026-09-24 (D-203):** superseded in part: MCP is assigned to V1.2 (one pinned read-only tool, a minimal stdio client). The status line above is left as it was recorded.
 
 ### D-028 — Agentic RAG and Qdrant deferred to V0.8
 
@@ -4622,3 +4625,80 @@ one is not.
      `progress.md`, and one line each in `docs/09_rag_architecture.md` and `docs/11_evaluation.md`. Dated historical narrative in `progress.md` that names V1.1 as
      Adaptive Learning or as the evaluation package is left as the record it is.
 - **Effect:** documentation and governance only. No source, test, contract or behaviour changes. D-043, D-127 and D-156 are unchanged, and no new Open decision is created.
+
+
+### D-203 — V1.2 MCP / Tool Intelligence: scope, minimal tool policy and the vertical slice (approved, 2026-09-24)
+
+- **Status:** Accepted · **Date:** 2026-09-24 · **Decided by:** human owner · **Resolved by the owner's rulings** (proposal: the V1.2 readiness pass, read-only, at `57180fc`)
+- **Source:** handoff §27, §28, §29, §50, §63; D-027, D-028, D-094, D-101, D-110, D-127, D-132, D-135, D-140, D-160, D-171, D-184, D-202; CLAUDE.md §3, §6 and invariants 3, 9, 11, 12, 14, 15, 16
+- **What the readiness pass found (by inspection, not assumed):** no tool exists: there is no `eidos.mcp`, no tool contract and no dependency. Inert hooks exist:
+  `ReliabilityContract.max_tool_calls`, `MissionState.tool_calls_used` (never produced), `MissionEventType.MCP_TOOL_CALLED` (no payload), `TaskGenome.allowed_actions` (opaque strings,
+  D-094, read by nothing) and `autonomy_level` (D-014). D-140 makes agents read-only with no tools and says a later tool needs policy decided first; D-127 and `docs/08` §7 placed
+  policy semantics at V1.2; D-184 left MCP unassigned until a concrete requirement exists. The Research agent returns `NO_RESULT` whenever no documents are supplied. The MCP
+  specification has also moved: when checked, the published latest revision was `2026-07-28` (no `initialize` handshake; per-request `_meta`; a `server/discover` method), while
+  revisions up to `2025-11-25` use `initialize`. That reading came from a summarised fetch and is re-verified at Step 5.
+- **Decision, in full:**
+  1. **Milestone.** V1.2 is MCP / Tool Intelligence. The authoritative handoff is preserved: it defines V1.2 as *Reliability/Governance* (policy engine, autonomy levels, human approval,
+     failure recovery, replan limits, execution budgets). Those handoff V1.2 governance items are **deferred and unassigned** until explicitly decided. The concrete trigger D-184 asked for is the
+     Research agent's `NO_RESULT` when no documents are supplied.
+  2. **Minimal deterministic policy, and nothing more:** a pinned tool allowlist; an exact match between the tool's `action_id` and `TaskGenome.allowed_actions`; `autonomy_level` >= 1
+     (`SAFE_READ_ONLY`, handoff §29); read-only tools only; `max_tool_calls`; argument and schema validation; timeout and result-size bounds; deterministic, typed denial. **No general policy
+     engine is built.** Server-declared tool annotations are never trusted: read-only comes from the allowlist.
+  3. **MCP client.** A minimal, hand-rolled, standard-library client. MCP transport stays inside `eidos.mcp`. Before the wire protocol is implemented, the current published specification is
+     re-verified and the one revision the reference server needs is implemented. No historical protocol compatibility is added unless an actual requirement appears (a server speaking another
+     revision is refused with a typed failure, not adapted to). **No SDK dependency; `pyproject.toml` does not change.**
+  4. **Event model.** No new MCP or tool event. Additive `tool_calls` facts on `NODE_SETTLED`, following the existing model-call recording pattern (D-160). Old logs replay unchanged.
+  5. **Tool-call budget.** No cumulative mission-wide `max_tool_calls` enforcement; the V1.1 and D-043 ruling that cumulative cross-attempt budgets are deferred (D-202 ruling 2) is preserved.
+     The frozen reading:
+     - `max_tool_calls` is enforced per plan attempt, scoped by `(execution_id, plan_id)`;
+     - each replan starts a fresh tool-call budget;
+     - duplicate detection remains execution-wide, identified by `(execution_id, tool_id, args_digest)`;
+     - a duplicate served from the stored artifact invokes no external tool and consumes no invocation budget;
+     - cumulative mission-wide tool-call enforcement remains deferred under D-043.
+  6. **Evidence.** Tool-retrieved documents may satisfy `min_independent_evidence` when they are independently identifiable and traceable to their tool call and source. **The verification rules
+     do not change.** Provenance is preserved in the artifact reference and in the recorded tool-call fact.
+  7. **Architecture.** Strategy is unchanged. The Plan DSL is unchanged. **There is no `TOOL` plan step.** Tool use happens inside the Research agent through a `ToolPort`. No new capability
+     (D-132's five stay) and no fourth agent.
+  8. **MVP.** Exactly one local, read-only, stdio MCP server exposing `search_documents`, with keyword matching only. Excluded: RAG, Qdrant, embeddings, OAuth, HTTP/SSE, resources, prompts, sampling,
+     elicitation, write tools, tool-selection intelligence, learning, a human-approval flow, artifact persistence and multiple servers.
+- **Readings carried from the approved design (not additional rulings):**
+  - Tool policy is evaluated **at call time only**. The plan-validation POLICY stage stays `NOT_APPLICABLE` (D-110); a plan never names a tool.
+  - Each retrieved document becomes its own artifact with its own reference, so distinct documents are distinct sources; the reference carries the tool id and provenance, and the recorded
+    tool-call fact lists the references it produced.
+  - Placement: the `ToolPort` seam and its typed request, result and failure in `eidos.agents` (as `ModelPort`, D-135); `ToolDescriptor` and `ToolRegistry` in `eidos.capabilities`; the pure
+    admission function in a new `eidos.policy`; transport in a new `eidos.mcp`; a recording wrapper in `eidos.recording`. `tool_id` is a plain non-empty string, so `eidos.contracts` does not change.
+  - A tool failure or a denial is a typed result, never an exception, and a tool call that succeeds is neither evidence sufficiency nor mission success (invariant 12).
+- **What does not change (frozen):** V1.1 in full (`expand_strategy`, the `plan_id` scoping of `execution_record`/`project`, `ReplanTriggeredPayload` and its reducer case, `run_with_replanning`,
+  `ReplanRejection`, D-199 to D-202) and every V0.1 to V1.0 decision. Also unchanged: Strategy, the Plan DSL and `PlanStepKind`, the capability vocabulary, the compiler and both executors, the
+  validation pipeline, A2A, the selectors, `ExperienceStore`, `TelemetryRecord` and `ExecutionExperience`, and `MissionEventType` (`MCP_TOOL_CALLED` stays an unused vocabulary slot).
+  `tool_calls_used` keeps the V1.1 semantics of a whole-mission running total; exact per-attempt tool counts come from the per-step facts.
+- **What changes, additively only:** new `eidos.mcp`, `eidos.policy` and tool types in `eidos.capabilities` and `eidos.agents`; `ToolCallFacts` and `NodeSettledPayload.tool_calls` (default empty)
+  in `eidos.state`; the reducer's `NODE_SETTLED` case also folds `tool_calls_used` from admitted invocations; `StepRecord.tool_calls`; the recorder's observation carries tool facts; the model-call
+  tracker also collects tool facts so that `record_baseline` and `record_attempt` keep their signatures; the Research agent gains optional tool access. One V1.1-era private helper,
+  `_record_settled_nodes`, passes the new field through. The module docstrings that say agents have "no tools (D-140)" are updated when the Research agent changes.
+- **Implementation order:** 1 record this decision (documentation only); 2 tool contracts and deterministic admission (pure); 3 tool-call facts in state and replay; 4 Research → `ToolPort` →
+  admission → recording, using a **scripted** `ToolPort`; 5 the real minimal MCP client, with protocol tests against a real subprocess; 6 the end-to-end vertical slice on the real subprocess path, and the close-out audit.
+  MCP protocol tests go in `tests/protocol/`, which holds no tests yet (CLAUDE.md §6). Acceptance criteria are recorded in `progress.md`.
+- **Still Open, unaffected:** D-060, D-061, D-074, D-110, D-043, D-127, D-156, D-017 and D-129. **D-204** records two gaps found while inspecting the affected contracts and is **Open and deferred**:
+  V1.2 does not modify `run_with_replanning`, `record_attempt`, tracker propagation or any V1.1 execution-path signature. Tool-call facts (like model-call facts) are therefore captured through
+  the baseline recording path (`record_baseline`) only; replanned executions do not capture them, and V1.2 makes no claim that they do.
+- **Effect:** documentation only at this step. No source, test, contract or dependency changes.
+
+
+### D-204 — Recording-tracker propagation under replanning, and `tool_calls_used` plan scoping (OPEN, deferred)
+
+- **Status:** Open (deferred) · **Date:** 2026-09-24 · **Decided by:** human owner (kept Open and deferred; not to be fixed in V1.2)
+- **Source:** the V1.2 readiness inspection; D-199, D-160, V1.1 Step 2; CLAUDE.md §7 (a gap is recorded and raised, never resolved silently)
+- **Ruling:** D-204 stays **Open and deferred**. **V1.2 does not modify `run_with_replanning`, `record_attempt`, tracker propagation, or any V1.1 execution-path signature.** It does not block
+  V1.2 and is not to be fixed now.
+- **Item 1 — the finding:** replanned executions currently do not propagate the recording tracker used by the baseline recording path, so model and tool call facts are not currently captured
+  through that path. Evidence, a probe and not a committed test: with the model wrapped in a `RecordingModel` sharing the caller's tracker, `run_with_replanning` finished with
+  `telemetry.model_call_count` 0 and 0 model calls on every settled node. `record_attempt` creates its own default tracker and `run_with_replanning` has no `tracker` parameter, so the
+  caller's tracker is never the one the recorder reads. `record_baseline` accepts a tracker and is not affected. The V1.1 Step 4 note that model-call facts were "not exercised at this layer"
+  understated this: wrapping the model would not have recorded them either.
+- **Item 2 — `tool_calls_used` under plan scoping:** V1.1 Step 2 left `tool_calls_used` as the whole-mission total under `execution_record(plan_id=...)` because no per-node source existed. Once
+  V1.2 records per-step tool facts it could be scoped per plan like `agent_calls_used`. V1.2 keeps the V1.1 semantics: it stays a whole-mission running total, and exact per-attempt tool counts
+  come from the per-step facts.
+- **Candidate resolutions, not to be taken in V1.2:** item 1, an additive optional `tracker` parameter on `run_with_replanning` passed to `record_attempt` (this changes a frozen V1.1 signature);
+  item 2, scoping `tool_calls_used` per plan (this changes documented V1.1 behaviour). Each needs its own ruling.
+- **Effect:** none on V1.2. The vertical slice runs through `record_baseline`, and tool-call facts are captured through that path only. V1.1 behaviour is unchanged.

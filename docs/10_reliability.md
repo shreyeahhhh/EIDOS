@@ -1,6 +1,6 @@
 # 10 — Reliability, Verification, Governance and Recovery
 
-**Status:** DERIVED — current · verification confidence **OPEN** · target milestone **V1.2** (policy engine), with contracts at **V0.1**
+**Status:** DERIVED — current · verification confidence **OPEN** · target milestone: the handoff's **V1.2** (policy engine), deferred and unassigned after D-203 (V1.2 as implemented is MCP / Tool Intelligence, with only a minimal tool-admission gate), with contracts at **V0.1**
 **Derived from:** handoff §18, §19, §29, §30, §31, §32, §40, §47, §63, §64
 **Authority:** This document is derived from `EIDOS_CLAUDE_CODE_HANDOFF.md` and subordinate to it.
 If this document and the handoff conflict, stop and report the conflict to the human owner.

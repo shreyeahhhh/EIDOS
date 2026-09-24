@@ -1,7 +1,7 @@
 # 08 — MCP Contract
 
-**Status:** DERIVED — **DEFERRED, no milestone assigned (decisions.md D-184, 2026-09-22).** Specification only;
-nothing is implemented.
+**Status:** DERIVED — **V1.2 (decisions.md D-203, 2026-09-24): scope frozen, nothing implemented yet.** Earlier deferred and
+unassigned (D-184, 2026-09-22).
 **Derived from:** handoff §27, §28, §29, §33, §50, §63
 **Authority:** This document is derived from `EIDOS_CLAUDE_CODE_HANDOFF.md` and subordinate to it.
 If this document and the handoff conflict, stop and report the conflict to the human owner.
@@ -10,7 +10,8 @@ If this document and the handoff conflict, stop and report the conflict to the h
 > and no tool. §50 named this V0.7 in the handoff's own original sequence; the owner has since
 > redefined V0.7 as Strategy & Candidate Generation (`decisions.md` D-178 onward) and ruled, as
 > **D-184**, that MCP is not renumbered into the V0.7–V1.0 strategy-intelligence sequence — it gets a
-> milestone only when a concrete requirement or benchmark needs it. See `decisions.md` D-027, D-184.
+> milestone only when a concrete requirement or benchmark needs it. **D-203 then assigned it to V1.2**, with one pinned read-only tool, a client only and a hand-rolled
+> stdlib stdio client, no SDK, no new plan step and no new event (tool calls are `tool_calls` facts on `NODE_SETTLED`). See `decisions.md` D-027, D-184, D-203.
 
 ---
 
@@ -111,8 +112,8 @@ These belong in `tests/protocol/`.
 | Prerequisite | Where |
 |---|---|
 | Bound values including `max_tool_calls`, and where bounds originate | `decisions.md` D-009 |
-| The policy engine and autonomy model | `10_reliability.md`, V1.2 |
-| MCP SDK / server-client topology choice | open, below |
+| Minimal deterministic tool admission (allowlist, exact `allowed_actions` match, `autonomy_level` >= 1, read-only, `max_tool_calls`) | D-203, V1.2. The general policy engine and autonomy model stay deferred and unassigned |
+| MCP SDK / server-client topology choice | Resolved by D-203: client only, stdio, hand-rolled stdlib, no SDK |
 
 ---
 
@@ -121,10 +122,10 @@ These belong in `tests/protocol/`.
 | Id | Question |
 |---|---|
 | D-009 | `max_tool_calls` value and its source of authority |
-| — | Which MCP SDK, and whether EIDOS hosts tools as an MCP server, consumes them as a client, or both. The handoff names the protocol but not the topology |
-| — | Concrete argument and result schemas for `search_documents` and `retrieve_evidence` — deliberately unspecified until V0.7, and coupled to the RAG design (`09_rag_architecture.md`) |
-| — | Whether tool-level policy is evaluated at plan-validation time (§14 "policy validation"), at call time, or both |
-| — | Default timeout values, and what a duplicate tool call means — idempotency at the tool boundary is required by the §50 test list but its key is not defined |
+| — | **Resolved (D-203):** EIDOS is a client only, over stdio, with a minimal hand-rolled stdlib client; no SDK. (Was: which MCP SDK, and whether EIDOS hosts tools as an MCP server, consumes them as a client, or both.) |
+| — | Concrete argument and result schemas for `search_documents` and `retrieve_evidence` — deliberately unspecified until V0.7, and coupled to the RAG design (`09_rag_architecture.md`). **Narrowed (D-203):** V1.2 uses only `search_documents` (keyword matching, no RAG); its schemas are fixed at Step 2 of the V1.2 order; `retrieve_evidence` stays deferred |
+| — | Whether tool-level policy is evaluated at plan-validation time (§14 "policy validation"), at call time, or both. **Call time only in V1.2 (D-203); the plan-validation POLICY stage stays `NOT_APPLICABLE`, D-110** |
+| — | Default timeout values, and what a duplicate tool call means — idempotency at the tool boundary is required by the §50 test list but its key is not defined. **Duplicate call resolved (D-203 ruling 5):** the key is `(execution_id, tool_id, args_digest)`; a duplicate is served from the stored artifact, invokes no tool and uses no invocation budget. Default timeouts stay open until Step 2 (set per tool descriptor) |
 
 ## Out of scope for this document
 
