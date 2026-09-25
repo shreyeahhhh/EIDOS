@@ -4702,3 +4702,61 @@ one is not.
 - **Candidate resolutions, not to be taken in V1.2:** item 1, an additive optional `tracker` parameter on `run_with_replanning` passed to `record_attempt` (this changes a frozen V1.1 signature);
   item 2, scoping `tool_calls_used` per plan (this changes documented V1.1 behaviour). Each needs its own ruling.
 - **Effect:** none on V1.2. The vertical slice runs through `record_baseline`, and tool-call facts are captured through that path only. V1.1 behaviour is unchanged.
+
+
+### D-205 — V1.2 Step 2: readings taken where D-203 was silent (items 1, 2, 4, 6 and 11 ruled 2026-09-25; the rest OPEN)
+
+- **Status:** Partly ruled, partly Open · **Date:** 2026-09-25 · **Raised by:** Claude Code while implementing V1.2 Step 2 (pure tool contracts and deterministic admission) · **Decided by:** the human
+  owner, for items 1, 2, 4, 6 and 11 only (marked **Ruled**); items 3, 5, 7, 8, 9 and 10 are readings taken and **not yet confirmed**
+- **Source:** D-203 rulings 2, 5, 7 and 8; D-009, D-046, D-065; handoff §14, §28, §32; `docs/08`; CLAUDE.md §7 and invariants 7, 12, 14; the contracts and package guards as inspected at `e3968c7`
+- **Why recorded:** Step 2 implements every D-203 rule as ruled. D-203 fixed *what* admission enforces, not every detail of *how*, and a gap is recorded, never resolved silently (CLAUDE.md §7). Each
+  reading below is the smallest implementation, is local to `eidos.capabilities`, `eidos.agents` and `eidos.policy`, and can be reversed without touching a V1.1 file, `eidos.contracts` or D-204.
+  The owner's rulings of 2026-09-25 reopen nothing in D-203 and change no V1.1 contract; D-204 stays Open and deferred.
+- **Items:**
+  1. **An absent `max_tool_calls`. Ruled (owner, 2026-09-25).** `ReliabilityContract.max_tool_calls` is `int | None` (D-065: every budget is optional). `None` does **not** mean unlimited (invariant 7),
+     does not silently become zero and is never replaced by an invented numeric default. Admission requires an explicit finite integer budget: `admit_tool_call` takes `int | None`, and `None` is
+     unresolved configuration, denied deterministically with the typed, returned denial `BUDGET_UNRESOLVED`. A value that is set but is not a non-negative integer (a negative number, a `bool`, a float
+     such as infinity) is a programming error and raises. The budget semantics are unchanged: scoped `(execution_id, plan_id)`, a fresh budget for each replan, duplicate detection execution-wide on
+     `(execution_id, tool_id, args_digest)`, a served stored duplicate consuming no invocation budget, and cumulative mission-wide enforcement deferred under D-043. **Not changed, not decided:**
+     `ReliabilityContract` and its `None` default; `SystemLimits.max_tool_calls` (a plan-validation ceiling in `eidos.validation`), which is not used as a fallback here; D-009 and D-046 (the value and its
+     source of authority stay Open).
+  2. **Order of the rules, and the unset budget against duplicate detection. Ruled (owner, 2026-09-25).** D-203 lists the rules without an order. Fixed order: first the precondition of item 1
+     (`BUDGET_UNRESOLVED`), then unknown tool, not read-only, action not allowed, autonomy below 1, invalid arguments, duplicate, budget; the first failing rule decides the denial. **The ruling:**
+     `BUDGET_UNRESOLVED` takes precedence over duplicate detection. An admission request with `max_tool_calls=None` is rejected deterministically before any duplicate lookup, so a stored duplicate is
+     not served when the current execution attempt has no explicit tool-call budget. This is a configuration and admission precondition, not a tool invocation and not a consumed budget. All existing
+     semantics are preserved: an explicit finite budget only; the budget scoped `(execution_id, plan_id)`; a fresh budget for each replan; duplicate identity `(execution_id, tool_id, args_digest)`; a
+     served duplicate consuming no invocation budget; and cumulative mission-wide tool-call enforcement still deferred (D-043). As implemented, the precondition is decided before every rule, the
+     duplicate lookup included (the history is not even read); the ruling states the precedence over duplicate detection and calls the check a precondition, and does not separately address the four
+     policy rules that precede the duplicate rule. Because the duplicate check follows every policy rule and precedes the budget rule, an explicit-budget request for an exact duplicate is served even when
+     the attempt's budget is spent (ruling 5: it "consumes no invocation budget"), and a duplicate can never bypass a policy rule. No fallback from `SystemLimits.max_tool_calls` is introduced.
+  3. **What counts against the budget, and what can serve a duplicate.** Every invocation that reached a tool counts against its plan attempt's budget, including one that ended in a failure
+     (timeout, unavailable, error). Only an invocation whose result was stored can serve a later duplicate: ruling 5 serves "from the stored artifact" and a failure stores none, so a retry of a
+     failed call is a fresh invocation and consumes budget. The history is an explicit input (`ToolInvocationRecord`); how Step 4's ledger builds it is Step 4's.
+  4. **`read_only` on a descriptor. Ruled (owner, 2026-09-25).** It is EIDOS's own boolean declaration on the allowlist entry. Constructing or representing a descriptor whose entry says
+     `read_only=False` is valid: neither the descriptor nor the registry rejects it. V1.2 admission denies such a tool deterministically with `NOT_READ_ONLY`. (The other reading, refusing construction, is
+     not taken.)
+  5. **Scope of the argument schema.** Flat, named arguments, each a string or an integer with mandatory `minimum`/`maximum` (a string's length in characters, an integer's value), required or
+     optional, with no defaults. No enumerations, patterns, nested, array, boolean or floating-point arguments; an unknown argument is a violation and a `bool` is not an integer. Anything richer is
+     a later, separate decision.
+  6. **The concrete `search_documents` entry is not in `src`. Ruled (owner, 2026-09-25).** No production configuration value is invented beyond the approved V1.2 design, and the scope stays the single
+     approved local read-only `search_documents` tool. The entry exists only in `tests/support/eidos_tool_factories.py` (`query`: string, 1 to 256 characters, required; `limit`: integer, 1 to 10,
+     optional; timeout 5.0 s; `max_result_bytes` 4,096; a placeholder schema digest), as test values and **not as decisions** (the module says so). **Step 4 must establish the concrete production and
+     test fixture location and explicitly document its timeout, its result-size bound and how its schema digest is treated.** `docs/08` said the schemas are "fixed at Step 2"; Step 2 fixed their
+     *representation* only, because a domain tool is configuration (invariant 10).
+  7. **Bounds are per entry.** A request carries its own timeout and result-size bound and has no default for either; both come from the allowlist entry through the `INVOKE` decision. Result size
+     is checked after the call by `bound_result` (a `RESULT_TOO_LARGE` failure, never a truncation); enforcing the timeout belongs to the transport (Step 5). Admission itself does not deny on either
+     bound.
+  8. **Result shape and failure kinds.** A result is a tuple of `ToolDocument(document_id, content)` with distinct ids and no other field (no title, locator or score); its size is the UTF-8 bytes
+     of the ids and contents. Failure kinds: `unavailable`, `timeout`, `tool_error`, `malformed_result`, `result_too_large`. D-203 ruling 6 needs each document to be identifiable and traceable to its
+     source; if the reference server has to supply more (a source locator), Step 5 raises the additive change rather than assuming it.
+  9. **Argument digest and identifiers.** `args_digest` is the SHA-256 (lowercase hex) of the arguments as compact, key-sorted, ASCII-escaped JSON, so `"1"` and `1` differ and an omitted
+     optional argument differs from an explicit one (there are no defaults to normalise them). A `tool_id` is `<provider_id>/<tool_name>`, each part `[A-Za-z0-9_.-]{1,128}`; a request's and a
+     record's `tool_id` stay plain non-empty strings (D-203: no `eidos.contracts` change), and an unmatched one, an empty one included, is denied `UNKNOWN_TOOL` and echoed verbatim.
+  10. **Handoff §28 tool metadata not represented.** The descriptor carries a read-only declaration, an action, arguments, bounds and a schema pin. It carries no description, "allowed agents",
+      risk level or cacheability (§28 says a tool should "eventually" carry them). D-203 froze a minimal policy and none of the four is read by it.
+  11. **Layering for the admission seam. Ruled (owner, 2026-09-25).** The `eidos.agents` static guard (`tests/unit/agents/test_agents_guards.py`) is extended by exactly one layer, `eidos.policy`, to
+      permit the intended `eidos.agents` → `eidos.policy` admission seam, and by nothing else: no transport, recorder, provider or backend is newly allowed. The extension is pinned (a test fails if the
+      allowed set is anything other than the previous set plus `eidos.policy`), the seam is one-way (no `eidos.policy` module imports an agent), and the seam's own request and result types
+      (`agents/tool.py`) stay free of `eidos.policy`. No dependency rule was broadly relaxed. No agent module imports `eidos.policy` yet; Step 4 will.
+- **Effect:** the source Step 2 adds, including the ruling-1 change (`admit_tool_call(max_tool_calls: int | None)` and the `BUDGET_UNRESOLVED` denial) and the ruling-4 guard extension. No `eidos.contracts`,
+  dependency, V1.1 or D-204-related change. The docstrings saying agents have "no tools (D-140)" are left for Step 4, when the Research agent changes (D-203).

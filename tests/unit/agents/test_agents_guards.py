@@ -23,7 +23,10 @@ FORBIDDEN_IMPORTS = {
 }
 # The only third-party or standard-library modules the agents package may import.
 ALLOWED_ROOTS = {"__future__", "collections", "dataclasses", "enum", "re", "threading", "typing", "pydantic", "eidos"}
-ALLOWED_EIDOS = {"eidos.contracts", "eidos.runtime", "eidos.compiler", "eidos.capabilities", "eidos.agents"}
+ALLOWED_EIDOS = {"eidos.contracts", "eidos.runtime", "eidos.compiler", "eidos.capabilities", "eidos.agents", "eidos.policy"}
+# D-205 ruling 4: the one deliberate extension, for the eidos.agents -> eidos.policy tool-admission seam and nothing wider. Pinned below so a
+# further dependency (a transport, a recorder, a provider) cannot be added here without changing this line on purpose.
+PRE_ADMISSION_ALLOWED_EIDOS = {"eidos.contracts", "eidos.runtime", "eidos.compiler", "eidos.capabilities", "eidos.agents"}
 
 VENDOR_NAMES = {
     "anthropic", "claude", "openai", "gpt", "gemini", "mistral", "llama", "cohere", "ollama", "qdrant", "a2a", "mcp",
@@ -55,6 +58,24 @@ def test_only_the_eidos_layers_an_agent_may_depend_on_are_imported(module):
         if name.startswith("eidos"):
             assert ".".join(name.split(".")[:2]) in ALLOWED_EIDOS, f"{module.name} imports {name}"
             assert "providers" not in name and "backends" not in name, f"{module.name} imports {name}"
+
+
+def test_the_only_layer_added_to_what_an_agent_may_depend_on_is_the_tool_admission_seam():
+    assert ALLOWED_EIDOS - PRE_ADMISSION_ALLOWED_EIDOS == {"eidos.policy"}
+    assert PRE_ADMISSION_ALLOWED_EIDOS <= ALLOWED_EIDOS
+
+
+@pytest.mark.parametrize("module", sorted((SRC / "policy").glob("*.py")), ids=lambda m: m.name)
+def test_the_admission_seam_points_one_way_policy_never_imports_an_agent_or_anything_above_the_capabilities(module):
+    for name in imports_of(module):
+        if name.startswith("eidos"):
+            assert ".".join(name.split(".")[:2]) in {"eidos.contracts", "eidos.capabilities", "eidos.policy"}, f"{module.name} imports {name}"
+
+
+def test_the_tool_seam_types_themselves_stay_free_of_the_admission_package_and_every_transport():
+    # The extension permits an agent module to call admission; it does not let the seam's own request/result types depend on it.
+    for name in imports_of(AGENTS / "tool.py"):
+        assert not name.startswith(("eidos.policy", "eidos.mcp", "eidos.providers", "eidos.backends", "eidos.a2a", "eidos.recording")), name
 
 
 @pytest.mark.parametrize("module", MODULES, ids=lambda m: m.name)

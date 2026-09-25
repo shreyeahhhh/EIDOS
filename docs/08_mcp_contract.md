@@ -1,13 +1,13 @@
 # 08 — MCP Contract
 
-**Status:** DERIVED — **V1.2 (decisions.md D-203, 2026-09-24): scope frozen, nothing implemented yet.** Earlier deferred and
-unassigned (D-184, 2026-09-22).
+**Status:** DERIVED — **V1.2 (decisions.md D-203, 2026-09-24): scope frozen; Step 2 (2026-09-25) implemented only the pure, transport-free tool contracts and deterministic admission (§4a); no MCP client, server or
+dependency exists yet.** Earlier deferred and unassigned (D-184, 2026-09-22).
 **Derived from:** handoff §27, §28, §29, §33, §50, §63
 **Authority:** This document is derived from `EIDOS_CLAUDE_CODE_HANDOFF.md` and subordinate to it.
 If this document and the handoff conflict, stop and report the conflict to the human owner.
 
-> **Nothing in this document is implemented.** There is no `eidos.mcp` package, no MCP dependency
-> and no tool. §50 named this V0.7 in the handoff's own original sequence; the owner has since
+> **No MCP is implemented.** There is no `eidos.mcp` package, no MCP dependency and no tool provider; only
+> the transport-free contracts and admission of §4a exist. §50 named this V0.7 in the handoff's own original sequence; the owner has since
 > redefined V0.7 as Strategy & Candidate Generation (`decisions.md` D-178 onward) and ruled, as
 > **D-184**, that MCP is not renumbered into the V0.7–V1.0 strategy-intelligence sequence — it gets a
 > milestone only when a concrete requirement or benchmark needs it. **D-203 then assigned it to V1.2**, with one pinned read-only tool, a client only and a hand-rolled
@@ -80,6 +80,17 @@ configuration changes require human approval, deletion of a critical resource is
 `read/write class` and `risk level` are the tool-side inputs to that decision. The **enforcement is
 deterministic and lives in code, never in a prompt** (invariant 14).
 
+## 4a. Tool contracts and admission as implemented (V1.2 Step 2, D-203)
+
+Pure and transport-free: no I/O, no clock, no process, no MCP. `ToolDescriptor`, `ToolRegistry` and `ToolArgumentSpec` (`eidos.capabilities`) are the **pinned allowlist** EIDOS writes itself; a
+tool's read-only declaration, action, arguments and bounds are the entry's, and nothing a provider reports about itself is ever read. `ToolPort`, `ToolRequest`, `ToolResult`, `ToolFailure` and
+`bound_result` (`eidos.agents`) are the seam, shaped like `ModelPort` (D-135); a failure is returned, never raised. `admit_tool_call` (`eidos.policy`) is a total pure function returning one typed
+decision, `INVOKE`, `SERVE_STORED` or a typed `DENY`, after one precondition, an explicit finite integer `max_tool_calls` (an unset value is unresolved configuration, denied `BUDGET_UNRESOLVED`, and is never unlimited, never zero and never a default; D-205
+ruling 1), decided before duplicate detection so that a stored duplicate is not served either (D-205 item 2), applying these rules in this fixed order, the first failure deciding the denial: unknown tool, not read-only, action not exactly among
+`allowed_actions`, `autonomy_level` below 1, arguments not matching the entry's schema, an exact duplicate `(execution_id, tool_id, args_digest)` with a stored result (served with no invocation and
+no budget), and the per-plan-attempt `max_tool_calls` budget scoped `(execution_id, plan_id)`. Tool policy is call-time only; a plan never names a tool. Where D-203 was silent, the readings taken are
+recorded as **D-205** (partly ruled 2026-09-25; the rest Open).
+
 ## 5. Telemetry
 
 `MCP_TOOL_CALLED` is a named structured event (§33), and `mcp_calls` is one of the per-mission
@@ -121,11 +132,11 @@ These belong in `tests/protocol/`.
 
 | Id | Question |
 |---|---|
-| D-009 | `max_tool_calls` value and its source of authority |
+| D-009 | `max_tool_calls` value and its source of authority. **V1.2 (D-205 ruling 1):** an unset value is unresolved configuration and admission denies it (`BUDGET_UNRESOLVED`); no default or ceiling is invented, and the value and its source of authority stay Open |
 | — | **Resolved (D-203):** EIDOS is a client only, over stdio, with a minimal hand-rolled stdlib client; no SDK. (Was: which MCP SDK, and whether EIDOS hosts tools as an MCP server, consumes them as a client, or both.) |
-| — | Concrete argument and result schemas for `search_documents` and `retrieve_evidence` — deliberately unspecified until V0.7, and coupled to the RAG design (`09_rag_architecture.md`). **Narrowed (D-203):** V1.2 uses only `search_documents` (keyword matching, no RAG); its schemas are fixed at Step 2 of the V1.2 order; `retrieve_evidence` stays deferred |
+| — | Concrete argument and result schemas for `search_documents` and `retrieve_evidence` — deliberately unspecified until V0.7, and coupled to the RAG design (`09_rag_architecture.md`). **Narrowed (D-203):** V1.2 uses only `search_documents` (keyword matching, no RAG); its schemas are fixed at Step 2 of the V1.2 order; `retrieve_evidence` stays deferred. **Step 2 (2026-09-25):** the argument-schema *representation* is fixed (flat string and integer arguments with explicit bounds); the concrete `search_documents` entry exists only as a test-support instance; **D-205 ruling 3:** no production value is invented, and Step 4 establishes the concrete production and test fixture location and documents its timeout, result-size bound and schema-digest treatment |
 | — | Whether tool-level policy is evaluated at plan-validation time (§14 "policy validation"), at call time, or both. **Call time only in V1.2 (D-203); the plan-validation POLICY stage stays `NOT_APPLICABLE`, D-110** |
-| — | Default timeout values, and what a duplicate tool call means — idempotency at the tool boundary is required by the §50 test list but its key is not defined. **Duplicate call resolved (D-203 ruling 5):** the key is `(execution_id, tool_id, args_digest)`; a duplicate is served from the stored artifact, invokes no tool and uses no invocation budget. Default timeouts stay open until Step 2 (set per tool descriptor) |
+| — | Default timeout values, and what a duplicate tool call means — idempotency at the tool boundary is required by the §50 test list but its key is not defined. **Duplicate call resolved (D-203 ruling 5):** the key is `(execution_id, tool_id, args_digest)`; a duplicate is served from the stored artifact, invokes no tool and uses no invocation budget. Timeouts are set per allowlist entry and a request has no default (Step 2); the concrete `search_documents` values are Step 4's to establish and document (D-205 ruling 3) |
 
 ## Out of scope for this document
 

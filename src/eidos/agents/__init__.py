@@ -10,7 +10,8 @@ Constraints (the repository rules, §8; D-135, D-140):
 
 - Vendor-free: no model, provider or SDK name appears here. Adapters live in ``eidos.providers``, the only
   place a vendor name may appear; this package never imports them.
-- No I/O, no network, no clock, no randomness. Agents are read-only with no tools (D-140).
+- No I/O, no network, no clock, no randomness. Agents are read-only with no tools (D-140). The tool seam (``ToolPort`` and its typed request,
+  result and failure, D-203) exists from V1.2 Step 2; no agent uses it yet.
 - Core layers (contracts, validation, compiler, runtime, backends) never import this package.
 """
 
@@ -29,6 +30,17 @@ from .model import (
     ModelSettings,
 )
 from .research import ResearchAgent
+from .tool import (
+    ToolArgument,
+    ToolDocument,
+    ToolFailure,
+    ToolFailureKind,
+    ToolOutcome,
+    ToolPort,
+    ToolRequest,
+    ToolResult,
+    bound_result,
+)
 from .verification import (
     NOT_EVALUATED_CLAUSES,
     Rule,
@@ -60,10 +72,19 @@ __all__ = [
     "RuleResult",
     "STEP_ID_REUSED",
     "SUPPORTED_CONTENT_TYPES",
+    "ToolArgument",
+    "ToolDocument",
+    "ToolFailure",
+    "ToolFailureKind",
+    "ToolOutcome",
+    "ToolPort",
+    "ToolRequest",
+    "ToolResult",
     "VerificationAgent",
     "VerificationReport",
     "WorkAgent",
     "artifact_ref_for",
+    "bound_result",
     "cited_refs",
     "refuse_a_reused_step",
 ]
