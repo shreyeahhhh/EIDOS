@@ -1,17 +1,19 @@
 # 09 — Agentic RAG Architecture
 
-**Status:** DERIVED — **DEFERRED, no milestone assigned (decisions.md D-184, 2026-09-22).** Specification only;
-nothing is implemented.
+**Status:** DERIVED — **V1.3 (decisions.md D-208 to D-220, 2026-09-25) assigns the knowledge/evidence layer only (§9); nothing is implemented yet: Step 1, documentation and governance, is done. The agentic loop, reranking, the evidence judge and Qdrant stay deferred and unassigned (D-184).**
 **Derived from:** handoff §24, §25, §26, §31, §33, §50, §51, §63, §74, §76
 **Authority:** This document is derived from `EIDOS_CLAUDE_CODE_HANDOFF.md` and subordinate to it.
 If this document and the handoff conflict, stop and report the conflict to the human owner.
 
-> **Nothing in this document is implemented.** There is no `eidos.rag` package, no Qdrant, no
+> **Nothing in this document is implemented.** There is no `eidos.knowledge` package yet, no Qdrant, no
 > embedding model, no reranker and no dependency for any of them. §50 named this V0.8 in the
 > handoff's own original sequence; the owner has since redefined V0.8 as the Strategy Selector
 > (`decisions.md` D-178 onward, V0.7 Step 1's own naming) and ruled, as **D-184**, that RAG is not
 > renumbered into the V0.7–V1.0 strategy-intelligence sequence — it gets a milestone only when a
 > concrete requirement or benchmark needs it. See `decisions.md` D-028, D-184.
+>
+> **Update (2026-09-25, D-208):** the concrete requirement now exists (the V1.2 limitation of D-207 reading 1) and the owner assigned the knowledge/evidence layer to **V1.3**, as a staged subset of this
+> design. §9 records what was ruled. The package is `eidos.knowledge`, not `eidos.rag` (D-219).
 
 ---
 
@@ -91,7 +93,8 @@ than as a runtime abstraction with two backends — but that is a reading, not a
 ## 5. Local components
 
 From §51 and §76, all local and zero-cost: sentence-transformers for embeddings, a local
-cross-encoder / reranker, local Qdrant. No paid API.
+cross-encoder / reranker, local Qdrant. No paid API. **V1.3 (D-208, D-214, D-220):** the first semantic candidate is a locally cached Sentence Transformer, run only in an isolated benchmark process; Qdrant and
+the cross-encoder are not part of the first slice.
 
 ## 6. Evidence
 
@@ -106,6 +109,9 @@ The RAG layer produces the evidence that verification consumes. Two requirements
 The reliability contract may require a minimum count of independent evidence items (§30), and
 evidence coverage is one of the measurable quality proxies (§19).
 
+**V1.3 (D-208, D-209, D-218, §9):** evidence is held in a typed `EvidenceLedger`; the retrieval query is recorded as `query_id` on the recorded retrieval facts and the citation edges are recorded, so the lineage above
+can be walked from the log; independence is counted by declared source identity, not by reference strings. Evidence *evaluation* (the evidence judge, `EVIDENCE_REJECTED`) is not part of V1.3.
+
 ## 7. Required tests
 
 §63's minimum failure-scenario list includes: bad retrieval, conflicting evidence.
@@ -117,9 +123,74 @@ successful verification, is the flagship demo path (§43) and belongs in `tests/
 
 | Prerequisite | Where |
 |---|---|
-| MCP tool boundary — retrieval is reached through `search_documents` / `retrieve_evidence` | `08_mcp_contract.md`, V0.7 |
+| MCP tool boundary — retrieval is reached through `search_documents` / `retrieve_evidence` | `08_mcp_contract.md`. V1.2 implemented `search_documents` only; V1.3 reaches knowledge through a separate `KnowledgePort` seam, not the tool path (D-208, §9) |
 | How evidence sufficiency is judged | `decisions.md` D-015 |
-| Collection schemas | explicitly deferred by §25 |
+| Collection schemas | explicitly deferred by §25; V1.3 uses a pinned snapshot with a manifest instead of Qdrant collections (D-220) |
+
+## 9. V1.3 — the knowledge/evidence layer (ruled 2026-09-25; nothing implemented)
+
+Decisions D-208 to D-220 (`decisions.md`). This section describes what V1.3 will build; **none of it exists yet** (Step 1, documentation and governance, is done). Sections 1 to 8 remain the handoff-derived
+specification of the full agentic design, of which V1.3 builds a staged subset.
+
+**Scope (D-208).** Local documents only: ingestion, document and chunk identity, indexing, retrieval, source and provenance tracking, retrieval-query identity, evidence references, duplicate-source handling,
+bounded retrieval, traceability into verification, and replay without the knowledge store. Excluded: web crawling and autonomous acquisition, LLM query planning, multiple knowledge agents, the
+reformulate-and-retrieve-again loop of §2, reranking and an evidence judge, Qdrant, RAG chains, and any new plan step, agent or event type. The V1.2 contracts are consumed, not changed.
+
+**The boundary.**
+
+```text
+ResearchAgent                            (integration begins only after the retrieval comparison is reviewed)
+   -> KnowledgeAccess / KnowledgeGate    admission, duplicate service, bounds, the evidence ledger
+        -> KnowledgePort                 retrieve(request) -> result | failure
+             |- LexicalKnowledgePort
+             '- SemanticKnowledgePort -> Embedder (the Sentence Transformer adapter lives only here)
+                                       -> a derived vector index -> exact cosine search
+   (later, only if a measured need justifies it: QdrantKnowledgePort)
+```
+
+`KnowledgePort` is a seam of its own, parallel to and independent of the V1.2 `ToolPort`. The package is `eidos.knowledge` (D-219) and stays independent of Qdrant, Sentence Transformers, BM25 and any specific
+embedding model.
+
+**The evidence model.** Source, document, chunk, retrieval result, evidence reference, conclusion. **A retrieval result is not automatically an independent source.** Retrieved evidence lives in a typed
+`EvidenceLedger`, one per execution, and not in the supplied-artifact set: `put_supplied` is not the knowledge model (`decisions.md` D-207 reading 1). A model still cites `[[ref]]`, and the citation is the one
+model-asserted edge: traceable means the chain exists, not that the cited text supports the claim (D-015, Open).
+
+**Identity (D-211, D-212).** No identifier depends on the query order, the plan, the execution, a random UUID or the wall clock.
+
+| Id | Derived from |
+|---|---|
+| `source_id` | Declared in the manifest. Mandatory; no default is invented. |
+| `document_id` | SHA-256 of the normalised document text. |
+| `chunk_id` | SHA-256 of a version tag, `source_id`, `document_id`, `chunking_scheme_id`, the chunk boundaries and the chunk-text digest. |
+| `query_id` | SHA-256 of the canonical retrieval request. |
+| `evidence_ref` | Deterministic from `chunk_id`. |
+| `snapshot_id` | The sorted source/document manifest and the scheme identifiers. |
+
+**Independence (D-209).** Counted by declared source identity, content-derived document identity and declared `derived_from`. The same chunk retrieved again, several chunks of one document and several documents of
+one declared source are one source; identical content under different declared sources is separate sources; known derived content can collapse through `derived_from`; undeclared derivation is not inferred, and no
+semantic plagiarism detection is attempted. The resolver is pure and deterministic, and the verifier behaves byte-identically when none is supplied. The ruling's name and its consequences need one confirmation
+(D-221, Open), and how existing V1.2 supplied and tool documents are keyed is D-210 (Open).
+
+**Bounds and the query (D-216, D-217).** Retrieval is bounded by per-knowledge-base configuration (`top_k`, a maximum result count, a maximum returned size); there is no new global retrieval budget. The Research
+agent forms one deterministic query from the mission goal: no LLM query planning and no autonomous decomposition. This answers the loop question below for V1.3 only (D-029 stays Open).
+
+**Recording and replay (D-218).** Additive fields on the existing `NODE_SETTLED` facts record `scheme_id`, `snapshot_id`, `query_id`, the outcome, the ordered hits (`chunk_id`, `document_id`, `source_id`, rank,
+content digest, an optional score and its kind), the sizes and the elapsed time, plus the citation edges as a tuple. There is no new event; `RAG_SEARCH` and `EVIDENCE_REJECTED` stay unused. The existing replay
+architecture stays authoritative: replay folds the recorded log and needs no store, index, embedder or knowledge package. As with tool facts, they are captured through `record_baseline` only (D-204 is unchanged).
+
+**Retrieval technology and the benchmark (D-208, D-213 to D-215, D-220).** The retrieval method is chosen by measurement, not in advance. One frozen, English-only, gold-query fixture (a fictional facility: about 12
+documents, 6 sources, 48 to 60 chunks, about 36 queries of which about 30 are frozen test queries) is run against lexical retrieval and Sentence Transformer semantic retrieval behind the same port. It includes
+lexical-overlap, paraphrase, multi-source and distractor-bait queries, a byte-identical mirror under another source and an undeclared paraphrased copy, and is frozen before any result is observed, with nothing
+tuned against the test set. Measures: Recall@1, Recall@3, Recall@5, MRR and source-coverage@k, plus latency, memory, dependency cost and reproducibility, from actual runs only. The semantic candidate is the
+locally cached `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`, pinned by revision and weight digest and run only in an isolated process in the existing Python 3.13 environment; it is not a runtime
+dependency, and EIDOS stays on Python 3.12 (D-214). Its 128-token window is a hard bound: chunks are checked against the tokenizer's word-piece count and never silently truncated (D-215). The vector index is
+derived from the pinned snapshot, rebuildable and not replay authority; Qdrant and approximate search are not part of the first slice (D-220). The cross-encoder is excluded.
+
+**Determinism (D-220).** Deterministic: identifiers, normalisation, chunking, filtering, ordering and tie-breaking, and the replay of recorded retrieval. Potentially environment-dependent: embedding generation and
+floating-point similarity (an informal probe saw vector bits move by about 3e-7 with the thread count and the batch shape on one machine). Bit-identical semantic retrieval across machines is not promised.
+
+**Trust.** Retrieved text is data: it is never read as an instruction (invariant 3), and the knowledge layer cannot modify MissionState, tool permissions, strategy policy or budgets, bypass verification, or
+execute tools. A retrieval outcome, like a tool outcome, is not evidence sufficiency (invariant 12).
 
 ---
 
@@ -131,8 +202,10 @@ successful verification, is the flagship demo path (§43) and belongs in `tests/
 | D-024 | Is the FAISS comparison an out-of-runtime experiment or a runtime abstraction with two backends? |
 | D-016 | Retrieval confidence is listed as a quality proxy (§19) but not defined |
 | — | Collection schemas — deferred by §25 itself |
-| — | Which embedding model and which cross-encoder; chunking strategy; whether reranking is always applied or conditional |
-| — | The bound on retrieval rounds. `rag_rounds` is measured (§33) but no `max_rag_rounds` appears in the §14/§32 bound lists, so the reformulation loop in §2 has no stated termination limit. This needs an answer before implementation — it is the one loop in the handoff without an explicit bound |
+| — | Which embedding model and which cross-encoder; chunking strategy; whether reranking is always applied or conditional. **V1.3 (D-208, D-213 to D-215):** the embedding model is chosen by a measured comparison, not in advance; the chunking scheme is part of chunk identity and stays within the semantic model's 128-token window; the cross-encoder and reranking are excluded from the first slice |
+| — | The bound on retrieval rounds. `rag_rounds` is measured (§33) but no `max_rag_rounds` appears in the §14/§32 bound lists, so the reformulation loop in §2 has no stated termination limit. This needs an answer before implementation — it is the one loop in the handoff without an explicit bound. **V1.3 (D-216, D-217):** answered for the initial implementation only (per-knowledge-base bounds, one deterministic query, no loop); D-029 stays Open |
+| D-210 | V1.3: how existing V1.2 supplied and tool documents are keyed for independence once a resolver exists. Open, not ruled |
+| D-221 | V1.3: confirmation of the ruled independence rule (its name and its enumerated consequences read differently against the readiness report's rules). Open |
 
 ## Out of scope for this document
 

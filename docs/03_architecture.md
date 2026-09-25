@@ -148,6 +148,14 @@ small — `search_documents`, `retrieve_evidence`. **Do not create 20 MCP tools 
 Research agent returns `NO_RESULT` when no documents are supplied). V1.2's slice is one local read-only stdio server exposing
 `search_documents`, reached through a `ToolPort` inside the Research agent behind a deterministic admission gate. **Implemented in V1.2 (D-203, D-205 to D-207);** `retrieve_evidence` and RAG are not.
 
+### RAG — the knowledge boundary (V1.3: ruled, not built)
+
+```text
+ResearchAgent -> KnowledgeAccess / KnowledgeGate -> KnowledgePort -> lexical | semantic   (later, only on measured need: Qdrant)
+```
+
+Retrieved knowledge reaches the Research agent through a `KnowledgePort` seam of its own, parallel to and independent of the MCP tool boundary above (the V1.2 tool contracts are consumed, not changed). V1.3 (D-208 to D-220) is the knowledge/evidence layer only, over local documents: a pinned snapshot with stable source, document, chunk and query identity; a typed `EvidenceLedger` that holds retrieved evidence instead of the supplied-artifact set; independent sources counted by declared source identity (D-209); retrieval bounded by per-knowledge-base configuration; and additive recorded facts and citation edges, so a mission replays without the knowledge store, an index or an embedder. **The retrieval implementation is not chosen in advance:** a lexical and a Sentence Transformer semantic implementation are compared on one frozen fixture behind the same port (the semantic one runs only in an isolated benchmark process on Python 3.13, D-214), and Qdrant and a cross-encoder are excluded from the first slice. Research integration begins only after that comparison is reviewed. Detail in `09_rag_architecture.md` §9. **Nothing here is built yet.**
+
 ## 7. Strategy architecture
 
 For each mission EIDOS generates a **small number** of candidate strategies — start with 2–3, never
@@ -300,7 +308,7 @@ the architectural map; `progress.md` tracks which of these exist.
 | `eidos.memory` | Strategy and execution memory | V1.0 | **yes** — `ExecutionExperience`/`evaluate_experience` (`experience.py`, Step 1), task/strategy relevance filtering (`relevance.py`, Step 2), the `ExperienceStore` Protocol and `JsonlExperienceStore` (`store.py`, Step 3); D-198. V1.0's adaptive-memory work is complete, including the end-to-end adaptive-loop integration proof (Step 6) and Benchmark 2 (Step 7) |
 | `eidos.evaluation` | Evaluation harness, experiments | Unassigned: the handoff's V1.1 (Adaptive Learning) items are deferred, D-202 | no |
 | `eidos.mcp` | MCP tool boundary: a minimal hand-rolled stdlib stdio client implementing the agents' `ToolPort`; transport only, imported by no core layer (D-203) | V1.2 (D-203; Step 5 of its order) | **yes** — `StdioMcpToolPort`, `McpServerLaunch` and `protocol.py` (V1.2 Steps 4 and 5, D-207): revision `2026-07-28` only, stdio, a local trusted server, standard library only, no SDK; the only package that starts a process |
-| `eidos.rag` | Agentic RAG, retrieval, reranking, evidence judging | Deferred, unassigned (D-184) | no |
+| `eidos.knowledge` | The V1.3 knowledge/evidence layer: pure contracts, identity, normalisation, chunking, snapshot and the independence resolver; independent of Qdrant, Sentence Transformers, BM25 and any embedding model (D-219). It replaces the earlier reserved name `eidos.rag` | V1.3 (D-208 to D-220; Step 2 of its order) | no — **not yet built**; Step 1 (documentation) only. The agentic loop, reranking and the evidence judge stay deferred and unassigned (D-184) |
 | `eidos.api` | FastAPI surface | later | no |
 
 ### Contract representation rules

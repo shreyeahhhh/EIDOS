@@ -2530,6 +2530,8 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
     No runtime type changes.
   - `RunResult.verified` keeps its meaning: never a claim that the mission or its contract succeeded.
   - **D-059 stays Open** (no status is invented for "contract not satisfied"); **D-063 and D-064 stay Open and dormant.**
+- **Annotated 2026-09-25 (D-209):** the meaning of "distinct sources" is extended additively for V1.3 knowledge evidence (independence by declared source identity, with declared `derived_from`). The V0.4
+  verifier's behaviour, and its behaviour with no resolver, are unchanged; how existing supplied and tool documents are keyed once a resolver exists is D-210 (Open).
 
 ### D-141 — The five V0.4 capabilities: spelling, the agents that serve them, and what `Verification` binds to
 
@@ -3345,6 +3347,8 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
 - **Consequences:** `progress.md`'s "Intentionally not built yet" table rows for `mcp/`/`rag/` are updated from "V0.7 unclear"/"V0.8 unclear" to explicitly deferred-and-unassigned, per this ruling. D-027/D-028 (the original decisions putting MCP/RAG at V0.7/V0.8) are superseded by this renumbering, not reopened in substance — nothing about MCP's or RAG's own eventual design is decided here.
 - **Affects:** the milestone ladder in `progress.md` only. No source code, contract or test is affected.
 - **Annotated 2026-09-24 (D-203):** MCP now has its milestone, V1.2, because a concrete requirement exists (the Research agent returns `NO_RESULT` when no documents are supplied). RAG is unaffected and stays deferred and unassigned.
+- **Annotated 2026-09-25 (D-208):** RAG now has its milestone, V1.3 (the knowledge/evidence layer only), because a concrete requirement exists: retrieved evidence enters the supplied set and the verifier's
+  distinct-source count cannot tell one source from several (D-207 reading 1). The agentic loop, reranking, Qdrant and web acquisition stay deferred and unassigned.
 
 ### D-185 — Candidate generation and feasibility are not MissionEvent lifecycle events in V0.7
 
@@ -3717,6 +3721,7 @@ one is not.
   that the experiment lives outside the core runtime, but that is a reading, not a statement.
 - **Needs:** Confirmation that the comparison is an out-of-runtime experiment rather than a runtime
   abstraction with two backends.
+- **Annotated 2026-09-25 (D-208, D-220):** V1.3 uses an in-process exact cosine index over a pinned snapshot; neither FAISS nor Qdrant is part of it. D-024 stays Open.
 
 ### D-025 — Branch and commit conventions
 
@@ -3742,6 +3747,9 @@ one is not.
 - **Needs:** Either a `max_rag_rounds` bound added to the budget set, or an explicit statement that
   the loop terminates only on the evidence judge plus the overall `max_execution_time`. Blocks V0.8,
   and should be settled when D-009 is settled.
+- **Annotated 2026-09-25 (D-216, D-217):** answered for the V1.3 initial implementation only. Retrieval is bounded by per-knowledge-base configuration (`top_k`, a maximum result count and a maximum
+  returned size), there is no new global retrieval budget, and there is no reformulation loop (one deterministic query per acceptance path, no LLM query planning). D-029 stays Open for the
+  agentic reformulation loop and any `max_rag_rounds`.
 
 ### D-057 — How the two risk values are determined
 
@@ -4200,6 +4208,8 @@ one is not.
   later". No Qdrant, embedding model, reranker, dependency or package exists.
 - **Annotated 2026-09-22 (D-184):** V0.8 is now the Strategy Selector (V0.7 Step 1's own naming); RAG no longer
   has a reserved milestone number. It stays Deferred, unassigned, until a concrete requirement or benchmark needs it.
+- **Annotated 2026-09-25 (D-208):** RAG now has a milestone, V1.3, as the knowledge/evidence layer only: a staged subset of what this entry deferred. Qdrant, reranking, the evidence judge and
+  the agentic loop stay deferred and unassigned.
 
 ### D-127 — V0.3 explicit deferrals
 
@@ -4857,6 +4867,8 @@ one is not.
      and an identical document a tool retrieves count as two, as two identical caller-supplied documents already would. Nothing in `put_supplied`, the store or the verifier was changed. **What
      "independent" means for retrieved documents must be revisited, by the owner, before any multi-query retrieval or RAG is introduced** (or anything else that lets one execution issue more than one
      distinct query); how is not decided here.
+     **Revisited by D-209 (2026-09-25):** the owner has ruled the independence semantics for V1.3 knowledge evidence. V1.2 behaviour is unchanged, and how existing V1.2 supplied and tool documents are keyed
+     under a resolver is D-210 (Open).
   2. **The gate lives in `eidos.agents` and the Research agent holds a `ToolAccess`, not a `ToolPort`.** Admission sits between the agent and the port, inside the gate, which is the seam D-205 ruling 4 opened
      (`eidos.agents` → `eidos.policy`). The agent cannot tell a scripted port from a real one, and names no transport.
   3. **The ledger is in memory inside the gate, and the budget is reserved under its lock before the port is called**, so a call still in flight already counts and two nodes on worker threads cannot both spend the
@@ -4887,3 +4899,215 @@ one is not.
   and cumulative enforcement behind D-009 (D-046, D-043), the autonomy semantics behind D-110 (D-060, D-061, D-074) and the three questions D-156 itself leaves Open (D-043, D-059, D-015). **D-204 stays Open and deferred:** V1.2 modified none of
   `run_with_replanning`, `record_attempt`, tracker propagation or any V1.1 signature.
 - **Effect:** additive only. No `eidos.contracts`, `eidos.state`, `eidos.policy`, dependency or V1.1 change; `pyproject.toml` is unchanged and declares no MCP package.
+
+
+### D-208 — V1.3 RAG / Knowledge Intelligence: scope, and a measured lexical-versus-semantic retrieval comparison (2026-09-25)
+
+- **Status:** Accepted · **Date:** 2026-09-25 · **Decided by:** human owner — the V1.3 rulings D-208 to D-220, given after two read-only readiness reports (2026-09-25); D-210 was not ruled (see it)
+- **Source:** the owner's V1.3 rulings and the accepted readiness report; handoff §24 to §26, §30, §31, §33, §50, §74; `docs/09`; D-184, D-203, D-207 reading 1; invariants 7 and 12 to 16
+- **Why:** since V1.2 the Research agent can retrieve documents through a tool, but a retrieved document enters the supplied-artifact set and the verifier's "distinct sources" is a count of distinct reference strings,
+  which embed the request digest (D-207 reading 1: a known V1.2 limitation, not reachable in the current one-query path). V1.3 introduces a controlled knowledge and evidence layer: how EIDOS ingests, indexes,
+  retrieves, identifies, constrains and verifies external knowledge so that retrieved evidence can take part in execution without weakening provenance, determinism, verification or replay.
+- **Decision:**
+  1. V1.3 is the **knowledge/evidence layer only**: document ingestion, document and chunk identity, indexing, retrieval, source and provenance tracking, retrieval-query identity, evidence references,
+     duplicate-source handling, bounded retrieval, evidence traceability into verification, and replay without querying the knowledge store. The initial system supports **local documents**.
+  2. V1.3 uses **a measured lexical-versus-semantic retrieval comparison behind one `KnowledgePort`.** The retrieval implementation is **not chosen in advance.** The two candidates are (1) lexical retrieval and
+     (2) Sentence Transformer semantic retrieval, run on the same fixture (D-213); the choice follows the measured results and is the owner's (implementation order, step 11).
+  3. **Qdrant is not part of the first slice.** It may be introduced later only if measured scale, filtering, persistence, concurrency or latency requirements justify it (D-220).
+  4. **Cross-encoder reranking is excluded** from the initial V1.3 implementation. It is a possible future stage only if a later measured result justifies it.
+  5. **The V1.2 contracts are frozen and consumed, not redesigned:** MissionState authority and the reducer architecture; the event and replay model; the validated Plan DSL; strategy selection; replanning;
+     `ToolPort`, `ToolGate` and tool admission; the MCP transport boundary and protocol; the Research agent's `ToolPort` abstraction; the existing tool-call facts; the existing verification architecture, unless a
+     concrete V1.3 requirement proves an additive change necessary (D-209 is that requirement); `run_with_replanning`, `record_attempt` and tracker propagation; D-204; and the V1.2 tool budget semantics.
+  6. **Excluded from the initial scope:** web crawling, autonomous web search and autonomous knowledge acquisition; multiple knowledge agents; LLM query planning and autonomous query decomposition; DSPy; Laya;
+     cross-encoder reranking; production Qdrant; RAG chains and LangChain RAG; a new `PlanStepKind`, agent or event type; a frontend, FastAPI, Supabase, authentication and deployment. **Research agent
+     integration does not begin until the retrieval comparison has been reviewed.**
+  7. The **implementation order and the testing requirements** are the owner's and are recorded in `progress.md` ("V1.3 RAG / Knowledge Intelligence"). The first step is documentation and governance only.
+- **Relation to the handoff (reported, not a conflict; the handoff is not modified):** §25 and §26 name Qdrant as the planned local vector database and the default, and §50's V0.8 list names Qdrant, local
+  embeddings, retrieval, reranking and an evidence judge. V1.3 as ruled is a staged subset of that list: Qdrant is deferred to a later adapter behind the same port (D-024 stays Open), reranking and the evidence
+  judge are deferred, and the agentic reformulation loop of §24 is not built. This is a scoping and sequencing ruling of the same kind as D-184 and D-203.
+- **Milestone label (raised, D-222 point 1):** the owner named this milestone V1.3. The `progress.md` ladder, the handoff's milestone list and several decisions and documents use the label V1.3 for Frontend and
+  V1.4 for Deployment. Nothing was renumbered; the older references keep meaning the handoff's Frontend milestone until the owner rules.
+- **Effect:** documentation only at this step: no source, test, dependency or contract change.
+
+### D-209 — V1.3 evidence independence: the ruled counting rule (2026-09-25; its confirmation is D-221, Open)
+
+- **Status:** Accepted · **Date:** 2026-09-25 · **Decided by:** human owner (the ruling is recorded as given; D-221 asks for one confirmation and is Open)
+- **Source:** the owner's V1.3 rulings; the readiness report §6 (rules S1 to S5); D-145, D-146, D-207 reading 1; invariants 12, 13 and 16
+- **Decision (the owner's ruling, "Rule: S4"):** independent-source counting uses **declared source identity**, **content-derived document identity** and **explicit `derived_from` relationships when declared.**
+  Consequences, as ruled:
+  - repeated retrieval of the same chunk = one source;
+  - multiple chunks from one document = one source;
+  - multiple documents under one declared source = one source;
+  - identical content under different declared sources = separate sources;
+  - known derived content can collapse through `derived_from`;
+  - undeclared derivation cannot be inferred automatically.
+  **No broad semantic plagiarism or derivation detection is attempted.** The resolver must be **deterministic and pure.**
+- **What changes:** this rule changes the interpretation of the existing "distinct sources" semantics (D-145, D-146: the verifier counts distinct supplied references) and is recorded as an explicit **additive V1.3
+  decision.** As ruled for Step 3, an absent resolver leaves the verifier's behaviour byte-identical. The V1.2 limitation of D-207 reading 1 is revisited by this ruling; nothing in V1.2 behaviour changes until Step 3,
+  and how existing V1.2 supplied and tool documents are keyed once a resolver is present is not ruled (D-210, Open).
+- **Confirmation needed (D-221, Open):** the ruling's name and its enumerated consequences read differently against the readiness report's rules. Not resolved here.
+- **Effect:** documentation only at this step.
+
+### D-210 — V1.3: how existing V1.2 supplied and tool documents are keyed for independence (OPEN, not ruled)
+
+- **Status:** Open · **Date:** 2026-09-25 · **Raised by:** Claude Code while recording D-208 to D-220: the owner's rulings give no ruling for D-210, which the readiness report listed as needed before Step 3; **not decided**
+- **Source:** the readiness report §17; D-207 reading 1; D-209
+- **Question:** once the verifier is given a resolver (Step 3), which independence key does a document that is not knowledge evidence have: a caller-supplied artifact, and a V1.2 tool document stored as
+  `tool:<tool_id>:<args_digest>:<document_id>`? The readiness report listed (a) the SHA-256 of the artifact's text (provider-independent; identical caller and tool text would count once); (b) `(tool_id, provider
+  document_id)` for a tool document and the reference itself for a caller document (provider-asserted identity); (c) unchanged, the reference string.
+- **Not affected:** with no resolver the verifier is byte-identical (the owner's Step 3 requirement), so V1.2 behaviour is unchanged whatever is ruled.
+- **Blocks:** V1.3 Step 3 (the EvidenceLedger and the verifier resolver). No reading has been taken and nothing is implemented.
+
+### D-211 — V1.3 source identity: `source_id` is mandatory (2026-09-25)
+
+- **Status:** Accepted · **Date:** 2026-09-25 · **Decided by:** human owner
+- **Source:** the owner's V1.3 rulings; D-209, D-212
+- **Decision:** `source_id` is **mandatory** in V1.3 knowledge manifests. **No default source id is invented.** Every ingested document must belong to an explicitly declared source.
+- **Consequences:** a manifest entry that names no source is refused at ingestion, never given a default; independence (D-209) therefore always rests on a declared identity. The manifest schema and the typed
+  refusal are Step 2 work; the manifest's `derived_from` representation is part of D-221.
+
+### D-212 — V1.3 identity model (2026-09-25)
+
+- **Status:** Accepted · **Date:** 2026-09-25 · **Decided by:** human owner
+- **Source:** the owner's V1.3 rulings; the readiness report §5 (this corrects its first version)
+- **Decision:** the corrected model.
+  - `source_id`: declared manifest identity;
+  - `document_id`: SHA-256 of the normalised document text;
+  - `chunk_id`: SHA-256 of a version tag, `source_id`, `document_id`, `chunking_scheme_id`, the chunk boundaries and the chunk-text digest;
+  - `query_id`: SHA-256 of the canonical retrieval request;
+  - `evidence_ref`: deterministic from `chunk_id`;
+  - `snapshot_id`: deterministic from the sorted source/document manifest and the scheme identifiers.
+  **No id may depend on query order, the plan, the execution, a random UUID or the wall clock.**
+- **The correction:** the first readiness report's `chunk_id` omitted `source_id`, so a byte-identical mirror declared under a second source would have produced the same chunk ids as the original. With
+  `source_id` in the chunk id, identical content under two sources has one `document_id` and two `chunk_id`s.
+- **Details from the accepted readiness report (§5), not restated by the ruling:** normalisation is strict UTF-8 decoding, Unicode NFC, and CRLF and CR to LF, nothing else (the repository's own working copies
+  mix CRLF and LF under `autocrlf`, so hashing raw bytes would give one document several ids); `evidence_ref` is `evidence:` followed by the first 16 hexadecimal digits of `chunk_id`, and ingestion refuses a
+  prefix collision inside a snapshot (the canonical identity stays the full digest); identifiers are plain constrained strings, not new `eidos.contracts` types.
+- **Effect:** documentation only at this step; the derivations are implemented and tested at Step 2.
+
+### D-213 — V1.3 benchmark fixture (2026-09-25)
+
+- **Status:** Accepted · **Date:** 2026-09-25 · **Decided by:** human owner
+- **Source:** the owner's V1.3 rulings; the readiness report §14 and §15
+- **Decision:** the proposed fictional-facility benchmark structure is approved: approximately 12 documents; approximately 6 sources; approximately 48 to 60 chunks; approximately 36 queries, of which approximately
+  6 are dev queries and approximately 30 are frozen test queries; lexical-overlap cases; paraphrase cases; multi-source cases; distractor-bait cases; a byte-identical mirror under another source; and an
+  undeclared paraphrased copy. **The cross-lingual stratum is not added to the first benchmark:** English only is sufficient for the initial V1.3 measurement.
+- **Freeze rule:** the fixture and its gold labels are frozen before any retrieval result is observed, and nothing is tuned against the test set.
+- **Metrics (the owner's Step 5 list):** Recall@1, Recall@3, Recall@5, MRR and source-coverage@k, plus latency, memory and reproducibility; the dependency cost of each method is recorded too. No measurement is
+  fabricated, and no method is called better before actual fixture results exist.
+- **Not restated by the ruling (D-222 point 7):** the gold-label rule for the mirror pair, whether decision margins are pre-registered, and the review protocol for the paraphrase queries.
+- **Effect:** the fixture is authored at Step 5, not now.
+
+### D-214 — V1.3 semantic environment: an isolated benchmark process on Python 3.13 (2026-09-25)
+
+- **Status:** Accepted · **Date:** 2026-09-25 · **Decided by:** human owner
+- **Source:** the owner's V1.3 rulings; the second readiness report (environment verified read-only, 2026-09-25)
+- **Decision:** EIDOS's main Python version stays **3.12.** For the first Sentence Transformer benchmark: the existing **Python 3.13 environment** is used; semantic retrieval runs as an **isolated benchmark process**;
+  `torch`, `sentence-transformers` and `transformers` are **not** added to EIDOS's `pyproject.toml`; no other model is installed or downloaded. The model is the locally cached
+  `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`, and **its exact cached revision and weight digest are pinned.** The semantic benchmark **fails loudly** if that isolated environment or model is
+  unavailable. **This is a benchmark environment decision, not permission to make semantic retrieval a runtime dependency yet.**
+- **Verified context (read-only; nothing installed or downloaded):** the model is in the default Hugging Face cache and loads offline from its local snapshot (384 dimensions, `max_seq_length` 128, 117,653,760
+  parameters, licence apache-2.0). Two revisions are cached, `e8f8c211226b894fcb81acc59f3b34ba3efd5f42` (the one `refs/main` names) and `86741b4e3f5cb7765a600d3a3d55a0f6a6cb443d`, with byte-identical weights
+  (SHA-256 `eaa086f0ffee582aeb45b36e34cdd1fe2d6de2bef61f8a559a1bbc9bd955917b`) and tokenizer, differing only in `tokenizer_config.json`. The semantic stack (torch 2.9.0+cpu, sentence-transformers 5.1.1,
+  transformers 4.57.1) exists only in Python 3.13.1; EIDOS's Python 3.12 has none of it. EIDOS's core packages import under 3.13 with `PYTHONPATH=src` alone (the test suite has not been run there).
+- **Which revision is pinned is not stated by the ruling (D-222 point 2).**
+- **The cross-encoder** `cross-encoder/ms-marco-MiniLM-L-6-v2` is also cached and loads offline; it is not used (D-208).
+
+### D-215 — V1.3 chunking: the semantic model's 128-token window (2026-09-25)
+
+- **Status:** Accepted · **Date:** 2026-09-25 · **Decided by:** human owner
+- **Source:** the owner's V1.3 rulings; the second readiness report (a probe showed text past the window changes nothing in the embedding)
+- **Decision:** chunk size must stay within the semantic model's **128-token window.** The target is approximately 85 English words or fewer, but **the authoritative check is the tokenizer's word-piece count.**
+  The fixture and harness **mechanically verify the bound.** **No silent truncation.**
+- **Consequences:** the semantic side refuses a chunk over the bound instead of truncating it (the exact typed failure is a Step 8 detail). The tokenizer exists only in the Python 3.13 benchmark environment, so the
+  authoritative check runs there; the default suite can check only a non-authoritative proxy (D-222 point 3).
+
+### D-216 — V1.3 retrieval bounds: per-knowledge-base configuration (2026-09-25)
+
+- **Status:** Accepted · **Date:** 2026-09-25 · **Decided by:** human owner
+- **Source:** the owner's V1.3 rulings; D-029, D-009, D-043; invariant 7
+- **Decision:** per-knowledge-base configuration for the first V1.3 implementation. **No new global system-level retrieval budget yet.** Retrieval is bounded by `top_k`, a configured maximum result count and a
+  configured maximum returned size (bytes or tokens, as appropriate). **Retrieval is never unbounded.**
+- **Consequences:** this answers D-029 for the V1.3 initial implementation only; D-029 stays Open for any agentic loop and `max_rag_rounds`. The remaining details are D-222 point 5.
+
+### D-217 — V1.3 query generation: the mission goal, one deterministic query (2026-09-25)
+
+- **Status:** Accepted · **Date:** 2026-09-25 · **Decided by:** human owner
+- **Source:** the owner's V1.3 rulings; D-099, D-207 reading 7
+- **Decision:** the Research agent uses the human mission objective (goal) to form the retrieval query. **No LLM query planning. No autonomous multi-query decomposition. No new `information_dependencies`
+  mechanism yet.** One deterministic query per initial acceptance path. Multi-query behaviour may be tested at the evidence layer, to prove the duplicate-source semantics, but it is not part of the initial agent
+  planning architecture.
+- **Consequences:** Research integration is not part of the steps before the retrieval comparison has been reviewed (D-208); how exactly the query is formed from the goal is D-222 point 6.
+
+### D-218 — V1.3 recording: additive fields on the existing `NODE_SETTLED` facts (2026-09-25)
+
+- **Status:** Accepted · **Date:** 2026-09-25 · **Decided by:** human owner
+- **Source:** the owner's V1.3 rulings; D-076, D-153, D-206; invariants 8, 15 and 16
+- **Decision:** additive fields on the existing `NODE_SETTLED` facts. Record `scheme_id`, `snapshot_id`, `query_id`, the outcome, the ordered hits (each with `chunk_id`, `document_id`, `source_id`, rank and content
+  digest, and an optional score with its kind), the retrieval sizes and the elapsed time. Also record the **citation edges** as an additive tuple field. **No new RAG event yet.** The existing replay
+  architecture remains authoritative.
+- **Consequences:** `RAG_SEARCH` and `EVIDENCE_REJECTED` stay unused vocabulary, as `MCP_TOOL_CALLED` did in V1.2. Old logs replay unchanged and a newly written `NODE_SETTLED` gains the new empty fields, as
+  D-206 reading 7 did for `tool_calls`. As with tool facts, retrieval facts are captured through `record_baseline` only: D-204 is unchanged. Replay must not require Sentence Transformers, Qdrant, BM25 or the
+  knowledge store; the derived `evidence_audit` projection is Step 4.
+
+### D-219 — V1.3 package: `eidos.knowledge` (2026-09-25)
+
+- **Status:** Accepted · **Date:** 2026-09-25 · **Decided by:** human owner
+- **Source:** the owner's V1.3 rulings; CLAUDE.md §3 and §8; D-175's and D-190's precedent for adapter packages
+- **Decision:** the package is **`eidos.knowledge`**, not `eidos.rag`. Knowledge and retrieval contracts live in it. It must remain independent of Qdrant, Sentence Transformers, BM25 and any specific embedding model.
+- **Contract set (the accepted readiness report, §18):** of the 20 contracts first proposed, the boundary contracts are `KnowledgeChunk`, `KnowledgeSnapshot`, `RetrievalRequest`, `RetrievedChunk`,
+  `RetrievalResult`, `RetrievalFailure`, `KnowledgePort`, `EvidenceRecord`, the recorded `RetrievalFacts` (with a hit fact) and `SourceKeyResolver`. The identifiers are plain constrained strings, so
+  `eidos.contracts` is not changed. `KnowledgeSource`, `RetrievalQuery` and `EvidenceReference` are deleted, and `KnowledgeDocument` is an ingestion-local input. A small knowledge-base descriptor, an admission
+  result and denial, and an `Embedder` protocol (semantic side only) were found necessary.
+- **Effect:** the package is created at Step 2, not now (CLAUDE.md §3). Where the retrieval implementations live, and the import-guard ruling the verifier and ledger will need, are D-222 point 4.
+
+### D-220 — V1.3 vector storage: a pinned snapshot is authoritative; a derived exact index is not (2026-09-25)
+
+- **Status:** Accepted · **Date:** 2026-09-25 · **Decided by:** human owner
+- **Source:** the owner's V1.3 rulings; the second readiness report
+- **Decision:** a **pinned knowledge snapshot is the authoritative knowledge state.** For semantic retrieval: snapshot, then a **derived vector index**, then **exact cosine search.** The vector index is rebuildable and
+  is **not** part of replay authority. **No Qdrant. No ANN retrieval.** **No claim of cross-machine bit-identical embedding generation.**
+- **Context (informal probe, 2026-09-25, eight fixed sentences on this machine, not a benchmark):** repeating an encode in one process gave identical vectors, while changing the torch thread count or the batch
+  shape changed vector bits by at most about 3.1e-7 (max absolute difference) and did not change the toy ranking. This shows sensitivity to configuration; it says nothing about another machine.
+- **Consequences:** deterministic parts are identifiers, normalisation, chunking, filtering, ordering and tie-breaking and the replay of recorded retrieval; embedding generation and floating-point similarity are
+  potentially environment-dependent. Qdrant remains a possible later adapter behind the same port (D-208, D-024).
+
+### D-221 — V1.3: confirmation of the ruled independence rule (D-209) (OPEN)
+
+- **Status:** Open · **Date:** 2026-09-25 · **Raised by:** Claude Code while recording D-209; **not decided**
+- **Source:** D-209; the readiness report §6 (rules S1 to S5); CLAUDE.md §7
+- **Why recorded:** the owner ruled "Rule: S4", but the ruling's own enumerated consequences do not match the S4 defined in the readiness report, and a gap is recorded and raised, never resolved silently. The report
+  defined S3 as the distinct declared `source_id`; S4 as S3 plus collapsing documents of identical content across sources; and S5 as S4 plus declared `derived_from`. The ruling names S4 but lists as consequences
+  that identical content under different declared sources counts as **separate** sources (S3's behaviour, not S4's) and that known derived content can collapse through `derived_from` (S5's relation). Read
+  literally, the consequences describe **declared source identity plus declared `derived_from`, with no content-based collapse across sources**; read by its name, S4 would count a byte-identical mirror once.
+- **Points to confirm:**
+  1. Which is intended: the enumerated consequences (a mirror under another declared source counts as a separate source) or the name S4 (a mirror counts once)? This decides what the fixture's byte-identical
+     mirror (D-213) does to the independent-source count.
+  2. The role of "content-derived document identity" in counting. Under the enumerated consequences it identifies a document inside one source (so chunks of one document are one source) and would not merge
+     documents across sources.
+  3. `derived_from`: whether it is declared between sources or between documents; its direction; whether it is transitive; whether a cycle or an unknown target is a manifest error; and its manifest
+     representation. The smallest reading, **offered and not applied,** is that declared `derived_from` edges connect sources, the connection is transitive, a cycle or an unknown target is a manifest error, and all
+     sources in one connected group count once.
+- **Blocks:** V1.3 Step 2's independence resolver and manifest schema, and Step 3. Step 2 is not started: the owner asked to wait for confirmation before the knowledge contracts are implemented.
+
+### D-222 — V1.3 Step 1: points the rulings left open (OPEN)
+
+- **Status:** Open (points raised, none decided) · **Date:** 2026-09-25 · **Raised by:** Claude Code while recording D-208 to D-220
+- **Source:** the rulings and the two readiness reports; CLAUDE.md §7
+- **Points** (each is a gap or an unstated detail; none was resolved):
+  1. **Milestone label.** The owner named this milestone V1.3. The `progress.md` ladder, the handoff's milestone list (§50) and D-022, D-072, `docs/02` and `docs/10` use V1.3 for Frontend and V1.4 for
+     Deployment. Nothing was renumbered. Does Frontend keep the number V1.3 alongside this milestone, become unassigned (as D-184 did for MCP and RAG), or move? Blocks nothing.
+  2. **Which cached revision is pinned (D-214).** Two revisions are cached with identical weights and tokenizer, differing only in `tokenizer_config.json`. The proposal, not applied, is `e8f8c211…` (what
+     `refs/main` names and an unpinned load resolves) with the weights digest recorded in D-214. Blocks Step 8.
+  3. **Where the word-piece bound is checked (D-215).** The tokenizer exists only in the Python 3.13 benchmark environment, so the authoritative check cannot run in the default 3.12 suite, which can check only
+     a proxy (a word count). The pure chunker has no tokenizer, and its size unit (words, characters or sentences) is a Step 2 proposal. Blocks Step 5 and Step 8.
+  4. **Where the retrieval implementations live, and the layering rulings (D-219).** `eidos.knowledge` must stay independent of BM25, Sentence Transformers, Qdrant and any embedding model, so
+     `LexicalKnowledgePort` and `SemanticKnowledgePort` need a home outside it or a rule for what may sit inside it. The verifier and the ledger in `eidos.agents` will need to import `eidos.knowledge`, an
+     extension of the agents import guard of the kind D-205 ruling 4 made for `eidos.policy`, which needs its own pinned ruling. Blocks Step 3 (the guard) and Step 6.
+  5. **Retrieval bound details (D-216).** The maximum number of queries per execution or plan attempt; bytes or tokens; the denial vocabulary; whether an exhausted bound returns a typed denial, as tool admission
+     does. Blocks Research integration.
+  6. **The form of the query (D-217).** "Form the retrieval query from the goal": verbatim `goal.strip()`, as V1.2 does (D-207 reading 7), or transformed. Blocks Research integration.
+  7. **Benchmark rules the rulings did not restate (D-213).** (a) Gold labels over content-equivalence groups, so a byte-identical mirror pair counts once in Recall (readiness report §14); (b) no numeric
+     decision rule or margin is pre-registered, so the retrieval decision is the owner's at step 11 from the comparison report; (c) the review protocol for the paraphrase queries. Blocks Step 5.
+  8. **The isolated benchmark process (D-214).** How semantic results leave the Python 3.13 process and how "fail loudly" is realised (a marker like `real_model`, D-136). A Step 8 proposal, not a question now.
+- **Effect:** none on Step 1, which is documentation only.
