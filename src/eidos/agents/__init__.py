@@ -10,8 +10,9 @@ Constraints (the repository rules, §8; D-135, D-140):
 
 - Vendor-free: no model, provider or SDK name appears here. Adapters live in ``eidos.providers``, the only
   place a vendor name may appear; this package never imports them.
-- No I/O, no network, no clock, no randomness. Agents are read-only with no tools (D-140). The tool seam (``ToolPort`` and its typed request,
-  result and failure, D-203) exists from V1.2 Step 2; no agent uses it yet.
+- No I/O, no network, no clock, no randomness. Agents are read-only (D-140). The tool seam (``ToolPort`` and its typed request, result and
+  failure, D-203) exists from V1.2 Step 2; from Step 4 the Research agent may be given tool access through ``ToolAccess``, whose implementation
+  ``ToolGate`` admits a call before any port is reached (D-203, D-207). No agent knows how a port reaches its tool.
 - Core layers (contracts, validation, compiler, runtime, backends) never import this package.
 """
 
@@ -40,6 +41,15 @@ from .tool import (
     ToolRequest,
     ToolResult,
     bound_result,
+)
+from .tool_gate import (
+    TOOL_DOCUMENT_CONTENT_TYPE,
+    ToolAccess,
+    ToolGate,
+    ToolGateKind,
+    ToolGateOutcome,
+    parse_tool_document_ref,
+    tool_document_ref,
 )
 from .verification import (
     NOT_EVALUATED_CLAUSES,
@@ -72,10 +82,15 @@ __all__ = [
     "RuleResult",
     "STEP_ID_REUSED",
     "SUPPORTED_CONTENT_TYPES",
+    "TOOL_DOCUMENT_CONTENT_TYPE",
+    "ToolAccess",
     "ToolArgument",
     "ToolDocument",
     "ToolFailure",
     "ToolFailureKind",
+    "ToolGate",
+    "ToolGateKind",
+    "ToolGateOutcome",
     "ToolOutcome",
     "ToolPort",
     "ToolRequest",
@@ -86,5 +101,7 @@ __all__ = [
     "artifact_ref_for",
     "bound_result",
     "cited_refs",
+    "parse_tool_document_ref",
     "refuse_a_reused_step",
+    "tool_document_ref",
 ]

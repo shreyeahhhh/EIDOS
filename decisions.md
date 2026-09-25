@@ -4796,3 +4796,69 @@ one is not.
   9. **Producing the facts is Step 4's.** Step 3 defines no mapping from an admission decision and a `ToolPort` outcome to a fact, so what measures `elapsed_ms` and `result_bytes`, and how a served duplicate's stored
      references are obtained, are Step 4's to establish (with the `RecordingToolPort`, D-203).
 - **Effect:** additive only. No `eidos.contracts`, dependency, V1.1 or D-204-related change; old logs replay unchanged.
+
+
+### D-207 — V1.2 Steps 4 and 5: the tool integration and the real MCP client; readings taken (OPEN)
+
+- **Status:** Open (readings taken, none blocking) · **Date:** 2026-09-25 · **Raised by:** Claude Code while implementing V1.2 Steps 4 and 5 as one milestone (Phase A, a scripted `ToolPort`; then Phase B, the real
+  MCP stdio client); **not decided**
+- **Source:** D-203 rulings 2, 3, 5, 6, 7 and 8; D-204; D-205 (ruling 3 in particular); D-206; the published MCP specification, verified 2026-09-25 (below); CLAUDE.md §3, §7 and invariants 3, 9, 12, 14, 15, 16
+- **Why recorded:** D-203 froze the design, not every detail of how the pieces meet. Nothing required a new architectural decision, so none was made; each reading below is the smallest implementation and can be
+  changed without touching `eidos.contracts`, `eidos.state`, `eidos.policy`, a V1.1 signature or D-204.
+- **What was built.** *Phase A:* in `eidos.agents`, `ToolAccess` (what an agent calls), `ToolGate` (admission first, the invocation ledger, duplicates served from stored artifacts, the port, normalisation and
+  storage of results as one artifact per document), `ToolGateOutcome`, `ToolGateKind`, `tool_document_ref`/`parse_tool_document_ref`, and optional tool access for `ResearchAgent` (`tools`, `search_tool_id`); in
+  `eidos.recording`, `tool_facts_of` and `RecordingToolAccess`. *Phase B:* `eidos.mcp` (`protocol.py`, `stdio.py`): `StdioMcpToolPort`, `McpServerLaunch`, `PROTOCOL_VERSION`, `schema_digest`,
+  `normalise_call_result`. *Test support (the fixture):* `search_documents_corpus.py`, `mcp_search_documents_server.py`, `eidos_search_fixture.py`, `eidos_mcp_fixture.py`. Unchanged: `eidos.contracts`,
+  `eidos.state`, `eidos.policy`, `pyproject.toml`, `run_with_replanning`, `record_attempt`, `record_baseline` and tracker propagation.
+- **The flow, exactly.** `ResearchAgent.run` → `ToolAccess.call(context, tool_id, {"query": goal})` (in a recorded run, `RecordingToolAccess` → `ToolGate`) → `admit_tool_call` under the gate's lock, with the
+  context's `allowed_actions`, autonomy level, `max_tool_calls`, execution and plan ids and the ledger → *denied:* returned typed, the port is never reached · *served:* rebuilt from the stored artifacts, nothing
+  invoked and no budget used · *invoke:* the budget is reserved in the ledger, a `ToolRequest` carrying only the allowlist entry's timeout and size bound is built → `ToolPort.call` (`StdioMcpToolPort`, or the scripted
+  port) → `ToolResult`/`ToolFailure` → size bound → each document stored as an artifact (`put_supplied`) → ledger marked stored → the outcome returns → the recording wrapper adds one `ToolCallFacts` for the call
+  → Research reads the documents in the store, asks the model, records its artifact → verification (unchanged) → `NODE_SETTLED` carries the facts → the reducer folds `tool_calls_used`.
+- **MCP revision and behaviour, verified against the published specification on 2026-09-25.** The versioning page marks **`2026-07-28`** the current revision; revisions up to `2025-11-25` use an `initialize`
+  handshake. `2026-07-28` is stateless: every request carries `_meta` with `io.modelcontextprotocol/protocolVersion` and `io.modelcontextprotocol/clientCapabilities` (both required) and
+  `io.modelcontextprotocol/clientInfo` (recommended); `server/discover` is mandatory for a server; results carry `resultType` (`complete`; an absent one is read as complete; an unrecognised one is invalid); stdio
+  framing is one UTF-8 JSON-RPC message per line with no embedded newline and nothing but messages on stdout; a client abandons a request with `notifications/cancelled` `{requestId, reason}`; it shuts a server down
+  by closing its input, waiting, then terminating; it restarts a server that exits unexpectedly; tools are `tools/list` (paged by `cursor`/`nextCursor`) and `tools/call` (`name`, `arguments`), with results in
+  `content`/`structuredContent`/`isError`; protocol errors are JSON-RPC errors and tool execution errors are `isError`; tool annotations are untrusted. **Implemented: exactly this revision, over stdio, to a local
+  trusted server.** Not implemented, by ruling: any earlier revision (a server of another revision is refused with a typed failure), HTTP, multi round-trip requests (`input_required` is treated as invalid),
+  subscriptions, extensions, resources, prompts, sampling, elicitation, progress and caching.
+- **The `search_documents` fixture (D-205 ruling 3, discharged).** *Location:* `tests/support/eidos_search_fixture.py` (allowlist entry, mission builder, scripted port), `search_documents_corpus.py` (corpus, keyword
+  search, declared input schema), `mcp_search_documents_server.py` (the reference server) and `eidos_mcp_fixture.py` (its launch). *Tool id* `docs/search_documents`, capability `research`, action `read_documents`,
+  `read_only` true by EIDOS's own declaration; arguments `query` (string, 1 to 256 characters, required) and `limit` (integer, 1 to 10, optional), no defaults. ***Timeout 5.0 seconds; result-size bound 4,096 bytes***
+  (the UTF-8 size of the documents' ids and texts); ***schema digest*** `298b120661e86f97c4cb09438c7d5dd7f441314386b76d4b679cae6ccc9a8f9f`, the SHA-256 of the canonical JSON (sorted keys, no whitespace, ASCII-escaped)
+  of the `inputSchema` the reference server declares, pinned on the entry, checked when the server is contacted and never read by admission; a test keeps the literal equal to the digest of the schema. The client's
+  line cap is 65,536 bytes and the server's own default `limit` is 3, over a six-document corpus. These are test-fixture values, not production configuration.
+- **Readings:**
+  1. **Retrieved documents count as sources through the store's existing `put_supplied`.** D-203 ruling 6 says tool documents may satisfy `min_independent_evidence` and the verification rules do not change; the
+     verifier counts distinct *supplied* documents, so a retrieved document is stored as a supplied one, under a reference that carries its provenance. No store or verifier change was needed. The consequence: a
+     retrieved document appears among the supplied documents that every agent reads and that a later plan attempt of the same execution reads. The alternative, a separate retrieved-artifact notion that the verifier
+     also counts, would change the verifier and the store's contract and was not taken.
+  2. **The gate lives in `eidos.agents` and the Research agent holds a `ToolAccess`, not a `ToolPort`.** Admission sits between the agent and the port, inside the gate, which is the seam D-205 ruling 4 opened
+     (`eidos.agents` → `eidos.policy`). The agent cannot tell a scripted port from a real one, and names no transport.
+  3. **The ledger is in memory inside the gate, and the budget is reserved under its lock before the port is called**, so a call still in flight already counts and two nodes on worker threads cannot both spend the
+     last unit. It is not persisted. One gate is shared by all the plan attempts of a mission, which is what makes duplicate detection execution-wide.
+  4. **References and identifiers.** A document is stored as `tool:<tool_id>:<args_digest>:<document_id>`; its id must be a plain identifier (`[A-Za-z0-9_.-]{1,128}`) or the whole result is a typed
+     `MALFORMED_RESULT`, so a reference can always be cited as `[[ref]]`. A reference already taken in the execution is also `MALFORMED_RESULT`, and nothing is written. Both count as invocations.
+  5. **A port is total, and one that is not is contained.** A port that raises is a `TOOL_ERROR` failure and one that returns neither a result nor a failure is a `MALFORMED_RESULT`; both are charged (D-205 item 3).
+  6. **Recording wraps the gate, not a `ToolPort`.** D-203 named a `RecordingToolPort`; a denial and a served duplicate never reach a port, so the recording wrapper is `RecordingToolAccess`, over `ToolAccess`. It
+     takes the same tracker and clock as `record_baseline`. `elapsed_ms` is the injected monotonic clock's reading across the gate call, for an invocation only (it includes admission and storage, which are
+     negligible beside an invocation); `result_bytes` is `ToolResult.size_bytes`. D-206 item 9 is discharged this way. Through `run_with_replanning` no tool-call fact is captured, exactly as no model-call fact is (D-204).
+  7. **Research uses the tool whenever it is configured, once per run**, not only when nothing is supplied, so a later plan attempt asks again and is served the stored documents. The query is the mission goal,
+     stripped, verbatim: no limit is invented, so a goal the allowlist entry will not accept as a query is a typed `INVALID_ARGUMENTS` denial, not a truncation. A denial, a failure or an empty result never stops a run
+     that has documents (supplied, or retrieved earlier); with none, a denial, `MALFORMED_RESULT`, `RESULT_TOO_LARGE` and an empty result are `NO_RESULT`, and `UNAVAILABLE`, `TIMEOUT` and `TOOL_ERROR` are `FAILED`,
+     mirroring how a model failure is read.
+  8. **The client's process discipline.** One local server process, started on first use with exactly the environment the launch names (nothing inherited) and no shell, its standard error discarded; kept between
+     calls (the protocol is stateless); started again if it has exited; killed on a timeout, a malformed message or a message over the cap. The call's timeout covers launch and discovery too, and on expiry the
+     required cancellation notification is sent before the process is ended. A server refused at the start of a session (another revision, no tools capability, a missing pinned tool, a changed schema) is refused for
+     the life of the port, and a new port is needed to retry. One call is in flight at a time. `max_message_bytes` is required, with no default. The bound on `tools/list` pages (5) and the shutdown grace (1 s) are
+     technical bounds inside `eidos.mcp`, not policy.
+  9. **The result convention for `search_documents` over MCP is this milestone's own.** MCP does not define a document search result, so the client requires `structuredContent.documents`, a list of `{id, text}`
+     objects with distinct non-empty ids; unstructured content is never parsed for documents; `isError` is a `TOOL_ERROR`; a JSON-RPC error on a call is a `TOOL_ERROR`; anything else is `MALFORMED_RESULT`.
+  10. **The schema pin.** The digest is defined in `eidos.mcp` (the schema is the MCP side's artefact): SHA-256 of the canonical JSON of the declared `inputSchema`. A missing pinned tool or a different digest is an
+      `UNAVAILABLE` refusal.
+  11. **`eidos.mcp` imports `eidos.agents`** for the port vocabulary only (a guard enforces the exact names), and importing the agents package brings the gate and the policy layer with it; the guards check the MCP
+      package's own source, which names neither.
+- **Still Open, unaffected:** D-205 items 3, 5, 7, 8, 9 and 10; D-206's readings; D-009; D-060, D-061, D-074, D-110, D-043, D-127, D-156, D-017 and D-129. **D-204 stays Open and deferred:** V1.2 modified none of
+  `run_with_replanning`, `record_attempt`, tracker propagation or any V1.1 signature.
+- **Effect:** additive only. No `eidos.contracts`, `eidos.state`, `eidos.policy`, dependency or V1.1 change; `pyproject.toml` is unchanged and declares no MCP package.

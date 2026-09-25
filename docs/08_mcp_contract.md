@@ -1,17 +1,16 @@
 # 08 — MCP Contract
 
-**Status:** DERIVED — **V1.2 (decisions.md D-203, 2026-09-24): scope frozen; Step 2 (2026-09-25) implemented only the pure, transport-free tool contracts and deterministic admission (§4a), and (Step 3) their recording as additive facts (§4b); no MCP client, server or
-dependency exists yet.** Earlier deferred and unassigned (D-184, 2026-09-22).
+**Status:** DERIVED — **V1.2 (decisions.md D-203, 2026-09-24): implemented 2026-09-25 — the pure tool contracts and deterministic admission (§4a), their recording as additive facts (§4b), the tool gate and the
+Research agent's tool access, and a real stdio client for revision `2026-07-28` (§4c, D-207).** Earlier deferred and unassigned (D-184, 2026-09-22).
 **Derived from:** handoff §27, §28, §29, §33, §50, §63
 **Authority:** This document is derived from `EIDOS_CLAUDE_CODE_HANDOFF.md` and subordinate to it.
 If this document and the handoff conflict, stop and report the conflict to the human owner.
 
-> **No MCP is implemented.** There is no `eidos.mcp` package, no MCP dependency and no tool provider; only
-> the transport-free contracts, admission (§4a) and the recording seam for tool-call facts (§4b) exist. §50 named this V0.7 in the handoff's own original sequence; the owner has since
-> redefined V0.7 as Strategy & Candidate Generation (`decisions.md` D-178 onward) and ruled, as
-> **D-184**, that MCP is not renumbered into the V0.7–V1.0 strategy-intelligence sequence — it gets a
-> milestone only when a concrete requirement or benchmark needs it. **D-203 then assigned it to V1.2**, with one pinned read-only tool, a client only and a hand-rolled
-> stdlib stdio client, no SDK, no new plan step and no new event (tool calls are `tool_calls` facts on `NODE_SETTLED`). See `decisions.md` D-027, D-184, D-203.
+> **MCP is implemented for one revision, one transport and one tool (V1.2, D-203, D-207).** `eidos.mcp` is a hand-rolled standard-library stdio client for revision **`2026-07-28`** speaking to a local
+> trusted server that exposes `search_documents`; there is no SDK, no HTTP, no earlier revision, no resources, prompts, sampling or elicitation, and no server hosted by EIDOS. §50 named this V0.7 in the handoff's
+> own original sequence; the owner has since redefined V0.7 as Strategy & Candidate Generation (`decisions.md` D-178 onward) and ruled, as **D-184**, that MCP is not renumbered into the V0.7–V1.0
+> strategy-intelligence sequence — it got a milestone only when a concrete requirement needed it. **D-203 then assigned it to V1.2**, with one pinned read-only tool, a client only, no new plan step and no new event
+> (tool calls are `tool_calls` facts on `NODE_SETTLED`). See `decisions.md` D-027, D-184, D-203, D-207.
 
 ---
 
@@ -101,6 +100,23 @@ failures) and nothing else, so a served duplicate and a denial cost nothing; it 
 and the counter from the log alone, with no tool and no transport; a log written before the field existed reads back unchanged. Nothing here invokes a tool: the facts reach the recorder through the tracker's tool
 collection, and producing them from admission decisions and tool results is Step 4.
 
+## 4c. The tool gate and the real client as implemented (V1.2 Steps 4 and 5, D-207)
+
+**The flow.** `ResearchAgent` asks a `ToolAccess` (in practice the `ToolGate`, wrapped for recording by `RecordingToolAccess`) for documents matching the mission goal → admission (§4a) decides first; a denial is
+returned typed and **no request reaches the port** → an exact duplicate in the execution is answered from the artifacts it became, with no invocation and no budget → otherwise the budget of this plan attempt is
+reserved and a `ToolRequest`, carrying only the allowlist entry's timeout and size bound, goes to a `ToolPort` → the answer is size-bounded and each document is stored as its own artifact,
+`tool:<tool_id>:<args_digest>:<document_id>`, so it is a source the unchanged verifier counts → the recording wrapper adds one fact per call (§4b). The gate raises nothing for a tool outcome.
+
+**The client.** `StdioMcpToolPort` implements `ToolPort` and holds no policy. Revision `2026-07-28` is stateless: there is no `initialize`; every request carries `_meta` with the protocol version and client
+capabilities, and `server/discover` is the mandatory first request, so the client learns that the server speaks this revision before sending anything else. It then lists tools (paged, bounded) and requires every tool
+the allowlist pins for its provider, with a declared `inputSchema` whose SHA-256 (canonical JSON) equals the pinned digest; a server that fails is refused for the life of the port with a typed `UNAVAILABLE`. A call is
+one `tools/call`; a successful result must carry `structuredContent.documents`, and unstructured content is never parsed. Text a server returns is data, never an instruction; annotations, identity and instructions a
+server reports are never read. The timeout covers launch and discovery too and, on expiry, the client sends `notifications/cancelled` and ends the process; a line over the configured cap and a result over the entry's
+bound are typed `RESULT_TOO_LARGE`; the server runs with exactly the environment it is configured with, no shell, standard error discarded.
+
+**The fixture** (a test fixture, not production configuration): tool id `docs/search_documents`; timeout 5.0 s; result bound 4,096 bytes; schema digest `298b120661e86f97c4cb09438c7d5dd7f441314386b76d4b679cae6ccc9a8f9f`;
+`tests/support/` holds the entry, the corpus and the reference server. The same end-to-end scenarios run over the scripted port and the real server, and a mission's recorded log is byte-identical for both.
+
 ## 5. Telemetry
 
 `MCP_TOOL_CALLED` is a named structured event (§33), and `mcp_calls` is one of the per-mission
@@ -144,9 +160,9 @@ These belong in `tests/protocol/`.
 |---|---|
 | D-009 | `max_tool_calls` value and its source of authority. **V1.2 (D-205 ruling 1):** an unset value is unresolved configuration and admission denies it (`BUDGET_UNRESOLVED`); no default or ceiling is invented, and the value and its source of authority stay Open |
 | — | **Resolved (D-203):** EIDOS is a client only, over stdio, with a minimal hand-rolled stdlib client; no SDK. (Was: which MCP SDK, and whether EIDOS hosts tools as an MCP server, consumes them as a client, or both.) |
-| — | Concrete argument and result schemas for `search_documents` and `retrieve_evidence` — deliberately unspecified until V0.7, and coupled to the RAG design (`09_rag_architecture.md`). **Narrowed (D-203):** V1.2 uses only `search_documents` (keyword matching, no RAG); its schemas are fixed at Step 2 of the V1.2 order; `retrieve_evidence` stays deferred. **Step 2 (2026-09-25):** the argument-schema *representation* is fixed (flat string and integer arguments with explicit bounds); the concrete `search_documents` entry exists only as a test-support instance; **D-205 ruling 3:** no production value is invented, and Step 4 establishes the concrete production and test fixture location and documents its timeout, result-size bound and schema-digest treatment |
+| — | Concrete argument and result schemas for `search_documents` and `retrieve_evidence` — deliberately unspecified until V0.7, and coupled to the RAG design (`09_rag_architecture.md`). **Narrowed (D-203):** V1.2 uses only `search_documents` (keyword matching, no RAG); its schemas are fixed at Step 2 of the V1.2 order; `retrieve_evidence` stays deferred. **Step 2 (2026-09-25):** the argument-schema *representation* is fixed (flat string and integer arguments with explicit bounds); the concrete `search_documents` entry exists only as a test fixture (`tests/support`); **D-205 ruling 3, discharged in D-207:** no production value is invented; the fixture's timeout (5.0 s), result-size bound (4,096 bytes) and schema digest are documented in §4c and in D-207 |
 | — | Whether tool-level policy is evaluated at plan-validation time (§14 "policy validation"), at call time, or both. **Call time only in V1.2 (D-203); the plan-validation POLICY stage stays `NOT_APPLICABLE`, D-110** |
-| — | Default timeout values, and what a duplicate tool call means — idempotency at the tool boundary is required by the §50 test list but its key is not defined. **Duplicate call resolved (D-203 ruling 5):** the key is `(execution_id, tool_id, args_digest)`; a duplicate is served from the stored artifact, invokes no tool and uses no invocation budget. Timeouts are set per allowlist entry and a request has no default (Step 2); the concrete `search_documents` values are Step 4's to establish and document (D-205 ruling 3) |
+| — | Default timeout values, and what a duplicate tool call means — idempotency at the tool boundary is required by the §50 test list but its key is not defined. **Duplicate call resolved (D-203 ruling 5):** the key is `(execution_id, tool_id, args_digest)`; a duplicate is served from the stored artifact, invokes no tool and uses no invocation budget. Timeouts are set per allowlist entry and a request has no default (Step 2); the fixture's `search_documents` values are documented in §4c and D-207 |
 
 ## Out of scope for this document
 
