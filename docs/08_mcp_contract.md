@@ -117,6 +117,29 @@ bound are typed `RESULT_TOO_LARGE`; the server runs with exactly the environment
 **The fixture** (a test fixture, not production configuration): tool id `docs/search_documents`; timeout 5.0 s; result bound 4,096 bytes; schema digest `298b120661e86f97c4cb09438c7d5dd7f441314386b76d4b679cae6ccc9a8f9f`;
 `tests/support/` holds the entry, the corpus and the reference server. The same end-to-end scenarios run over the scripted port and the real server, and a mission's recorded log is byte-identical for both.
 
+**Known limitation — independence of retrieved documents (recorded at the V1.2 close-out, 2026-09-25; not resolved).** The verifier counts an independent source as a distinct supplied reference, and the tool gate
+stores each retrieved document through `put_supplied` under a reference that embeds the request digest (D-207 reading 1). The same underlying document retrieved by two different queries would therefore be stored under two
+references and counted as two sources. That is not reachable in the current V1.2 execution path: Research makes one query per run (the mission goal, verbatim), so every plan attempt of an execution has the same digest and the
+same references. The same definition means a document a caller supplied and an identical document a tool retrieves count as two, as two identical caller-supplied documents already would. Nothing in the store, `put_supplied` or the
+verifier was changed. What "independent" means for retrieved documents must be revisited, by the owner, before any multi-query retrieval or RAG is introduced (`09_rag_architecture.md`).
+
+## 4d. Specification references — the targeted revision (V1.2, D-207)
+
+EIDOS targets **MCP revision `2026-07-28`**, and only that revision (D-203, D-207): a server that does not speak it is refused with a typed failure, and no earlier revision is supported. These are the published specification
+pages the implementation was written against. They were consulted on 2026-09-25 while building Step 5, and at the V1.2 close-out (the same day) each was checked again to resolve and to name the revision. For the wire behaviour
+in §4c they are the authority; EIDOS's own admission policy and the `search_documents` result convention are not taken from the specification (D-203; D-207 readings 9 and 10).
+
+| Topic | Specification page |
+|---|---|
+| Versioning: how revisions are named, and that `2026-07-28` is the current revision (earlier ones use an `initialize` handshake) | https://modelcontextprotocol.io/specification/versioning |
+| The `2026-07-28` basic specification (stateless requests, `_meta`, result types) | https://modelcontextprotocol.io/specification/2026-07-28/basic/index |
+| The stdio transport (framing, launch, shutdown) | https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/stdio |
+| Cancellation (`notifications/cancelled`) | https://modelcontextprotocol.io/specification/2026-07-28/basic/patterns/cancellation |
+| Server tools (`tools/list`, `tools/call`, results, `isError`) | https://modelcontextprotocol.io/specification/2026-07-28/server/tools |
+| `server/discover` (the mandatory first request) | https://modelcontextprotocol.io/specification/2026-07-28/server/discover |
+
+"Current" is as of 2026-09-25.
+
 ## 5. Telemetry
 
 `MCP_TOOL_CALLED` is a named structured event (§33), and `mcp_calls` is one of the per-mission
@@ -158,7 +181,8 @@ These belong in `tests/protocol/`.
 
 | Id | Question |
 |---|---|
-| D-009 | `max_tool_calls` value and its source of authority. **V1.2 (D-205 ruling 1):** an unset value is unresolved configuration and admission denies it (`BUDGET_UNRESOLVED`); no default or ceiling is invented, and the value and its source of authority stay Open |
+| D-009 | `max_tool_calls` value and its source of authority. **V1.2 (D-205 ruling 1):** an unset value is unresolved configuration and admission denies it (`BUDGET_UNRESOLVED`); no default or ceiling is invented, and the value and its source of authority stay Open. **D-205 supersedes D-065's omitted-budget fallback for this boundary:** `max_tool_calls=None` never falls back to `SystemLimits.max_tool_calls`, and is never unlimited, defaulted or zero |
+| D-207 | What "independent source" means for retrieved documents. The verifier counts distinct references and a retrieved document's reference embeds the request digest, so the same document retrieved by two different queries would count twice. Not reachable in V1.2 (one query per run); recorded as a known limitation (§4c), not resolved, and to be revisited by the owner before multi-query retrieval or RAG |
 | — | **Resolved (D-203):** EIDOS is a client only, over stdio, with a minimal hand-rolled stdlib client; no SDK. (Was: which MCP SDK, and whether EIDOS hosts tools as an MCP server, consumes them as a client, or both.) |
 | — | Concrete argument and result schemas for `search_documents` and `retrieve_evidence` — deliberately unspecified until V0.7, and coupled to the RAG design (`09_rag_architecture.md`). **Narrowed (D-203):** V1.2 uses only `search_documents` (keyword matching, no RAG); its schemas are fixed at Step 2 of the V1.2 order; `retrieve_evidence` stays deferred. **Step 2 (2026-09-25):** the argument-schema *representation* is fixed (flat string and integer arguments with explicit bounds); the concrete `search_documents` entry exists only as a test fixture (`tests/support`); **D-205 ruling 3, discharged in D-207:** no production value is invented; the fixture's timeout (5.0 s), result-size bound (4,096 bytes) and schema digest are documented in §4c and in D-207 |
 | — | Whether tool-level policy is evaluated at plan-validation time (§14 "policy validation"), at call time, or both. **Call time only in V1.2 (D-203); the plan-validation POLICY stage stays `NOT_APPLICABLE`, D-110** |

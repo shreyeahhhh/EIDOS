@@ -7,7 +7,8 @@ artifact's content, so this model lives here, with the store, and not in ``eidos
 The store is how a work node reads its predecessors' outputs and the supplied documents without changing the
 ``WorkExecutor`` signature (D-137). Everything in it is **namespaced by execution**:
 
-- **supplied** artifacts are placed by the caller before a run, and are addressed by their ``ArtifactRef``;
+- **supplied** artifacts are the documents the caller placed before a run and the documents a tool retrieved during it (the tool gate stores each
+  one as a supplied artifact, V1.2, D-207), and are addressed by their ``ArtifactRef``;
 - a work step's **primary** artifact (exactly one per step) is held under ``(execution_id, step_id)``;
 - every artifact, supplied or produced, is also addressable by its ``ref``, which is unique within an execution.
 

@@ -3,7 +3,8 @@
 A ``WorkAgent`` performs one work node: it is handed the frozen ``ExecutionContext`` and the compiled ``WorkNode``
 (D-122's ``WorkExecutor`` shape, unchanged) and returns a ``WorkResult``. It reads the mission goal from the context and its
 inputs from the artifact store, asks a model through ``ModelPort``, and writes exactly one primary artifact. It takes no
-action and has no tools (D-140).
+action of its own (D-140). The only way an agent reaches a tool is the Research agent's optional, admission-gated ``ToolAccess`` (V1.2, D-203,
+D-207); no agent holds a tool port.
 
 Citations. An agent asks the model to cite a source as ``[[ref]]``, where ``ref`` is the exact reference shown in the
 prompt. The agent then records **what the model cited** as the artifact's ``source_refs``. Whether those references are real

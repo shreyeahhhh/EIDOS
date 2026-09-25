@@ -1111,6 +1111,11 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
     **D-044** (`max_tokens` in the validation/execution limit model), **D-073** (optionality of the
     non-budget contract fields, explicitly **not** resolved here).
 
+- **Later note — V1.2 tool admission (added 2026-09-25 at the V1.2 close-out; nothing above is edited).** The omitted-budget fallback in this decision does **not** govern the V1.2
+  tool-admission boundary. **D-205 (item 1, ruled by the owner on 2026-09-25) supersedes D-065 for that boundary:** `max_tool_calls=None` produces `BUDGET_UNRESOLVED`; it does not fall
+  back to `SystemLimits.max_tool_calls`; there is no implicit unlimited, default or zero behaviour; and the per-`(execution_id, plan_id)` budget semantics are preserved. The supersession
+  is scoped to that one boundary: this note decides nothing about any other budget field or consumer, and D-065 stays as accepted, historically intact.
+
 ### D-069 — The high-risk approval clause is not a ReliabilityContract field
 
 - **Status:** Accepted · **Date:** 2026-09-17 · **Decided by:** human owner
@@ -4720,6 +4725,10 @@ one is not.
      `(execution_id, tool_id, args_digest)`, a served stored duplicate consuming no invocation budget, and cumulative mission-wide enforcement deferred under D-043. **Not changed, not decided:**
      `ReliabilityContract` and its `None` default; `SystemLimits.max_tool_calls` (a plan-validation ceiling in `eidos.validation`), which is not used as a fallback here; D-009 and D-046 (the value and its
      source of authority stay Open).
+     **Owner addendum, V1.2 close-out (2026-09-25): D-205 supersedes D-065 for V1.2 tool admission.** For the V1.2 tool-admission contract, `max_tool_calls=None` produces `BUDGET_UNRESOLVED`;
+     it must not fall back to `SystemLimits.max_tool_calls`; there is no implicit unlimited, default or zero behaviour; and the existing per-`(execution_id, plan_id)` budget semantics are preserved.
+     D-065 is kept historically intact and now carries a cross-reference saying its omitted-budget fallback does not govern this boundary. The supersession is scoped to tool admission; it decides
+     nothing about any other budget field or consumer, and D-009 and D-046 (the numeric value) stay Open.
   2. **Order of the rules, and the unset budget against duplicate detection. Ruled (owner, 2026-09-25).** D-203 lists the rules without an order. Fixed order: first the precondition of item 1
      (`BUDGET_UNRESOLVED`), then unknown tool, not read-only, action not allowed, autonomy below 1, invalid arguments, duplicate, budget; the first failing rule decides the denial. **The ruling:**
      `BUDGET_UNRESOLVED` takes precedence over duplicate detection. An admission request with `max_tool_calls=None` is rejected deterministically before any duplicate lookup, so a stored duplicate is
@@ -4743,6 +4752,8 @@ one is not.
      optional; timeout 5.0 s; `max_result_bytes` 4,096; a placeholder schema digest), as test values and **not as decisions** (the module says so). **Step 4 must establish the concrete production and
      test fixture location and explicitly document its timeout, its result-size bound and how its schema digest is treated.** `docs/08` said the schemas are "fixed at Step 2"; Step 2 fixed their
      *representation* only, because a domain tool is configuration (invariant 10).
+     **Discharged in D-207 (2026-09-25):** the fixture's location (`tests/support`), its timeout (5.0 s), its result-size bound (4,096 bytes) and the treatment of its schema digest are documented in
+     D-207 and `docs/08` §4c; no production value was invented.
   7. **Bounds are per entry.** A request carries its own timeout and result-size bound and has no default for either; both come from the allowlist entry through the `INVOKE` decision. Result size
      is checked after the call by `bound_result` (a `RESULT_TOO_LARGE` failure, never a truncation); enforcing the timeout belongs to the transport (Step 5). Admission itself does not deny on either
      bound.
@@ -4759,7 +4770,8 @@ one is not.
       allowed set is anything other than the previous set plus `eidos.policy`), the seam is one-way (no `eidos.policy` module imports an agent), and the seam's own request and result types
       (`agents/tool.py`) stay free of `eidos.policy`. No dependency rule was broadly relaxed. No agent module imports `eidos.policy` yet; Step 4 will.
 - **Effect:** the source Step 2 adds, including the ruling-1 change (`admit_tool_call(max_tool_calls: int | None)` and the `BUDGET_UNRESOLVED` denial) and the ruling-4 guard extension. No `eidos.contracts`,
-  dependency, V1.1 or D-204-related change. The docstrings saying agents have "no tools (D-140)" are left for Step 4, when the Research agent changes (D-203).
+  dependency, V1.1 or D-204-related change. The docstrings saying agents have "no tools (D-140)" are left for Step 4, when the Research agent changes (D-203). **Done in the V1.2 close-out commit (2026-09-25):** `agents/base.py`, `agents/artifacts.py` (its supplied-artifact wording) and the
+  `docs/03_architecture.md` package row were corrected, wording only; Step 4 had not updated them.
 
 
 ### D-206 — V1.2 Step 3: readings taken for the tool-call facts and their recording seam (OPEN)
@@ -4795,6 +4807,9 @@ one is not.
      `StepRecord.tool_calls` if a later step wants them.
   9. **Producing the facts is Step 4's.** Step 3 defines no mapping from an admission decision and a `ToolPort` outcome to a fact, so what measures `elapsed_ms` and `result_bytes`, and how a served duplicate's stored
      references are obtained, are Step 4's to establish (with the `RecordingToolPort`, D-203).
+     **Discharged by D-207 reading 6 (2026-09-25):** the mapping is `tool_facts_of` and the `RecordingToolAccess` wrapper (over the gate, not a port, so a denial and a served duplicate are recorded too);
+     `elapsed_ms` is the injected monotonic clock's reading across the gate call, for an invocation only; `result_bytes` is `ToolResult.size_bytes`; and a served duplicate's references are rebuilt from the
+     stored artifacts. Readings 1 to 8 are unchanged and stay Open.
 - **Effect:** additive only. No `eidos.contracts`, dependency, V1.1 or D-204-related change; old logs replay unchanged.
 
 
@@ -4822,7 +4837,8 @@ one is not.
   by closing its input, waiting, then terminating; it restarts a server that exits unexpectedly; tools are `tools/list` (paged by `cursor`/`nextCursor`) and `tools/call` (`name`, `arguments`), with results in
   `content`/`structuredContent`/`isError`; protocol errors are JSON-RPC errors and tool execution errors are `isError`; tool annotations are untrusted. **Implemented: exactly this revision, over stdio, to a local
   trusted server.** Not implemented, by ruling: any earlier revision (a server of another revision is refused with a typed failure), HTTP, multi round-trip requests (`input_required` is treated as invalid),
-  subscriptions, extensions, resources, prompts, sampling, elicitation, progress and caching.
+  subscriptions, extensions, resources, prompts, sampling, elicitation, progress and caching. The specification pages consulted are listed in `docs/08_mcp_contract.md` §4d (added at the V1.2
+  close-out, 2026-09-25).
 - **The `search_documents` fixture (D-205 ruling 3, discharged).** *Location:* `tests/support/eidos_search_fixture.py` (allowlist entry, mission builder, scripted port), `search_documents_corpus.py` (corpus, keyword
   search, declared input schema), `mcp_search_documents_server.py` (the reference server) and `eidos_mcp_fixture.py` (its launch). *Tool id* `docs/search_documents`, capability `research`, action `read_documents`,
   `read_only` true by EIDOS's own declaration; arguments `query` (string, 1 to 256 characters, required) and `limit` (integer, 1 to 10, optional), no defaults. ***Timeout 5.0 seconds; result-size bound 4,096 bytes***
@@ -4834,6 +4850,13 @@ one is not.
      verifier counts distinct *supplied* documents, so a retrieved document is stored as a supplied one, under a reference that carries its provenance. No store or verifier change was needed. The consequence: a
      retrieved document appears among the supplied documents that every agent reads and that a later plan attempt of the same execution reads. The alternative, a separate retrieved-artifact notion that the verifier
      also counts, would change the verifier and the store's contract and was not taken.
+     **Known V1.2 limitation (recorded at the V1.2 close-out, 2026-09-25; recorded, not resolved).** The verifier's independent source is a distinct reference: it counts the distinct supplied references
+     an artifact cites, and a retrieved document's reference embeds the request digest. The same underlying document retrieved by two different queries would therefore be stored under two references and
+     counted as two sources (shown by an audit probe over the real gate, store and verifier). This is **not reachable in the current V1.2 execution path**: Research makes one query per run (the mission
+     goal, verbatim), so every plan attempt of an execution has the same digest and the same references, and the store is per execution. The same definition also means that a document a caller supplied
+     and an identical document a tool retrieves count as two, as two identical caller-supplied documents already would. Nothing in `put_supplied`, the store or the verifier was changed. **What
+     "independent" means for retrieved documents must be revisited, by the owner, before any multi-query retrieval or RAG is introduced** (or anything else that lets one execution issue more than one
+     distinct query); how is not decided here.
   2. **The gate lives in `eidos.agents` and the Research agent holds a `ToolAccess`, not a `ToolPort`.** Admission sits between the agent and the port, inside the gate, which is the seam D-205 ruling 4 opened
      (`eidos.agents` → `eidos.policy`). The agent cannot tell a scripted port from a real one, and names no transport.
   3. **The ledger is in memory inside the gate, and the budget is reserved under its lock before the port is called**, so a call still in flight already counts and two nodes on worker threads cannot both spend the
@@ -4859,6 +4882,8 @@ one is not.
       `UNAVAILABLE` refusal.
   11. **`eidos.mcp` imports `eidos.agents`** for the port vocabulary only (a guard enforces the exact names), and importing the agents package brings the gate and the policy layer with it; the guards check the MCP
       package's own source, which names neither.
-- **Still Open, unaffected:** D-205 items 3, 5, 7, 8, 9 and 10; D-206's readings; D-009; D-060, D-061, D-074, D-110, D-043, D-127, D-156, D-017 and D-129. **D-204 stays Open and deferred:** V1.2 modified none of
+- **Still Open, unaffected:** D-205 items 3, 5, 7, 8, 9 and 10; D-206's readings 1 to 8 (its reading 9 is discharged by reading 6 above); D-043, D-046, D-015, D-059, D-060, D-061, D-074, D-017 and D-129. **Deferred, unaffected:** D-127. **Accepted,
+  unaffected:** D-009, D-110 and D-156; an earlier version of this list called them Open, corrected at the V1.2 close-out (2026-09-25). What stays Open behind each is named above: the numeric values
+  and cumulative enforcement behind D-009 (D-046, D-043), the autonomy semantics behind D-110 (D-060, D-061, D-074) and the three questions D-156 itself leaves Open (D-043, D-059, D-015). **D-204 stays Open and deferred:** V1.2 modified none of
   `run_with_replanning`, `record_attempt`, tracker propagation or any V1.1 signature.
 - **Effect:** additive only. No `eidos.contracts`, `eidos.state`, `eidos.policy`, dependency or V1.1 change; `pyproject.toml` is unchanged and declares no MCP package.
