@@ -4928,10 +4928,12 @@ one is not.
 - **Milestone label (raised, D-222 point 1):** the owner named this milestone V1.3. The `progress.md` ladder, the handoff's milestone list and several decisions and documents use the label V1.3 for Frontend and
   V1.4 for Deployment. Nothing was renumbered; the older references keep meaning the handoff's Frontend milestone until the owner rules.
 - **Effect:** documentation only at this step: no source, test, dependency or contract change.
+- **Annotated 2026-09-25 (D-222 rulings):** Qdrant is not added to V1.3 core and remains the later MVP storage implementation behind `KnowledgePort`. This states the intended later adapter of item 3 and does not
+  change it: nothing in V1.3 core uses Qdrant.
 
-### D-209 — V1.3 evidence independence: the ruled counting rule (2026-09-25; its confirmation is D-221, Open)
+### D-209 — V1.3 evidence independence: the ruled counting rule (2026-09-25; clarified by D-221)
 
-- **Status:** Accepted · **Date:** 2026-09-25 · **Decided by:** human owner (the ruling is recorded as given; D-221 asks for one confirmation and is Open)
+- **Status:** Accepted · **Date:** 2026-09-25 · **Decided by:** human owner (the ruling is recorded as given; D-221 confirmed and clarified it on 2026-09-25)
 - **Source:** the owner's V1.3 rulings; the readiness report §6 (rules S1 to S5); D-145, D-146, D-207 reading 1; invariants 12, 13 and 16
 - **Decision (the owner's ruling, "Rule: S4"):** independent-source counting uses **declared source identity**, **content-derived document identity** and **explicit `derived_from` relationships when declared.**
   Consequences, as ruled:
@@ -4945,7 +4947,8 @@ one is not.
 - **What changes:** this rule changes the interpretation of the existing "distinct sources" semantics (D-145, D-146: the verifier counts distinct supplied references) and is recorded as an explicit **additive V1.3
   decision.** As ruled for Step 3, an absent resolver leaves the verifier's behaviour byte-identical. The V1.2 limitation of D-207 reading 1 is revisited by this ruling; nothing in V1.2 behaviour changes until Step 3,
   and how existing V1.2 supplied and tool documents are keyed once a resolver is present is not ruled (D-210, Open).
-- **Confirmation needed (D-221, Open):** the ruling's name and its enumerated consequences read differently against the readiness report's rules. Not resolved here.
+- **Confirmation (D-221, ruled 2026-09-25):** the ruling's name and its enumerated consequences read differently against the readiness report's rules; the owner clarified them in D-221.
+- **Clarified by D-221:** the enumerated consequences govern. Different declared sources stay distinct even for identical content; `derived_from` applies to documents, not sources, is explicit only and is non-transitive. The name "S4" is the owner's label; the readiness report's S4 (a mirror counts once) and S5 (a transitive source-level relation) are not adopted as defined.
 - **Effect:** documentation only at this step.
 
 ### D-210 — V1.3: how existing V1.2 supplied and tool documents are keyed for independence (OPEN, not ruled)
@@ -5071,10 +5074,11 @@ one is not.
   shape changed vector bits by at most about 3.1e-7 (max absolute difference) and did not change the toy ranking. This shows sensitivity to configuration; it says nothing about another machine.
 - **Consequences:** deterministic parts are identifiers, normalisation, chunking, filtering, ordering and tie-breaking and the replay of recorded retrieval; embedding generation and floating-point similarity are
   potentially environment-dependent. Qdrant remains a possible later adapter behind the same port (D-208, D-024).
+- **Annotated 2026-09-25 (D-222 rulings):** the owner states that Qdrant remains the later MVP storage implementation behind `KnowledgePort`, and is not added to V1.3 core.
 
-### D-221 — V1.3: confirmation of the ruled independence rule (D-209) (OPEN)
+### D-221 — V1.3: confirmation of the ruled independence rule (D-209) (RULED 2026-09-25)
 
-- **Status:** Open · **Date:** 2026-09-25 · **Raised by:** Claude Code while recording D-209; **not decided**
+- **Status:** Accepted · **Date:** 2026-09-25 · **Raised by:** Claude Code while recording D-209 · **Decided by:** human owner, 2026-09-25 (it was Open when raised)
 - **Source:** D-209; the readiness report §6 (rules S1 to S5); CLAUDE.md §7
 - **Why recorded:** the owner ruled "Rule: S4", but the ruling's own enumerated consequences do not match the S4 defined in the readiness report, and a gap is recorded and raised, never resolved silently. The report
   defined S3 as the distinct declared `source_id`; S4 as S3 plus collapsing documents of identical content across sources; and S5 as S4 plus declared `derived_from`. The ruling names S4 but lists as consequences
@@ -5088,11 +5092,22 @@ one is not.
   3. `derived_from`: whether it is declared between sources or between documents; its direction; whether it is transitive; whether a cycle or an unknown target is a manifest error; and its manifest
      representation. The smallest reading, **offered and not applied,** is that declared `derived_from` edges connect sources, the connection is transitive, a cycle or an unknown target is a manifest error, and all
      sources in one connected group count once.
-- **Blocks:** V1.3 Step 2's independence resolver and manifest schema, and Step 3. Step 2 is not started: the owner asked to wait for confirmation before the knowledge contracts are implemented.
+- **Blocked (until the ruling below):** V1.3 Step 2's independence resolver and manifest schema, and Step 3.
+- **Ruling (owner, 2026-09-25):**
+  1. **Different declared `source_id`s remain distinct independent sources even when their documents contain identical or byte-identical content.** Content identity never collapses them.
+  2. **`derived_from` applies to documents, not sources.**
+  3. **`derived_from` is an explicitly declared document-derivation relationship only.** EIDOS must not infer derivation from similarity, identical content, matching text or any other heuristic.
+  4. **`derived_from` is non-transitive in V1.3:** only directly declared relationships are considered.
+- **What this settles:** the enumerated consequences of D-209 govern. A byte-identical mirror under another declared source counts as a separate source unless its own entry declares `derived_from` the
+  original. The readiness report's S4 (a mirror counts once) and S5 (a transitive source-level relation) are **not** adopted as defined, and the smallest reading offered above (source-level, transitive) is
+  **not applied**, because the ruling excludes both properties.
+- **Not settled by the ruling (D-223, the Step 2 readings, Open):** the exact function that counts independent sources under points 3 and 4; how a document is referenced as a derivation target; and what an unknown
+  target, a self-derivation or a derivation cycle does.
+- **D-210 stays Open.** The owner: it is a Step 3 resolver concern. No ruling was invented for it.
 
-### D-222 — V1.3 Step 1: points the rulings left open (OPEN)
+### D-222 — V1.3 Step 1: points the rulings left open (PARTLY RULED 2026-09-25)
 
-- **Status:** Open (points raised, none decided) · **Date:** 2026-09-25 · **Raised by:** Claude Code while recording D-208 to D-220
+- **Status:** Partly ruled, partly Open · **Date:** 2026-09-25 · **Raised by:** Claude Code while recording D-208 to D-220 · **Decided by:** human owner, for points 2, 3 and 4 in part (2026-09-25); the rest stay Open
 - **Source:** the rulings and the two readiness reports; CLAUDE.md §7
 - **Points** (each is a gap or an unstated detail; none was resolved):
   1. **Milestone label.** The owner named this milestone V1.3. The `progress.md` ladder, the handoff's milestone list (§50) and D-022, D-072, `docs/02` and `docs/10` use V1.3 for Frontend and V1.4 for
@@ -5111,3 +5126,58 @@ one is not.
      decision rule or margin is pre-registered, so the retrieval decision is the owner's at step 11 from the comparison report; (c) the review protocol for the paraphrase queries. Blocks Step 5.
   8. **The isolated benchmark process (D-214).** How semantic results leave the Python 3.13 process and how "fail loudly" is realised (a marker like `real_model`, D-136). A Step 8 proposal, not a question now.
 - **Effect:** none on Step 1, which is documentation only.
+- **Rulings on these points (owner, 2026-09-25) and what stays Open:**
+  - **Point 1, the milestone label:** not addressed; **still Open.**
+  - **Point 2, the pinned revision: ruled.** Use the verified cached model revision, and record the exact revision and digest rather than relying on a floating model name. *Reading taken, not confirmed:* "the verified
+    cached revision" is the one proposed in point 2, `e8f8c211226b894fcb81acc59f3b34ba3efd5f42` (what `refs/main` names), with weights SHA-256 `eaa086f0ffee582aeb45b36e34cdd1fe2d6de2bef61f8a559a1bbc9bd955917b`; the
+    other cached revision has identical weights and tokenizer and differs only in `tokenizer_config.json`. Applies at Step 8.
+  - **Point 3, where the token bound is enforced: ruled.** Chunking and token-bound enforcement stay deterministic, and the enforcement sits in the semantic retrieval boundary, where the tokenizer is available.
+    *Reading:* the pure chunker (Step 2) stays tokenizer-free and shared by every retriever, and the word-piece check and the refusal to truncate belong to the semantic side, in the Python 3.13 process. The chunker's
+    size unit is a Step 2 reading (D-223).
+  - **Point 4, where the retrieval ports live: ruled in part.** Retrieval ports stay under `eidos.knowledge`. **Still Open:** the import-guard ruling for `eidos.agents` importing `eidos.knowledge` (needed before
+    Step 3), and the rule that keeps the package's core modules free of any engine or model while an adapter module may name one.
+  - **Points 5, 6, 7 and 8** (retrieval bound details, the form of the query, the benchmark rules not restated, the isolated-process mechanics): not addressed; **still Open.**
+- **Also stated by the owner (2026-09-25):** the main EIDOS runtime stays on Python 3.12; semantic embedding stays isolated to the already-verified Python 3.13 environment for V1.3; **Qdrant is not added to V1.3 core
+  and remains the later MVP storage implementation behind `KnowledgePort`**; cross-encoder reranking is not introduced; the V1.2 contracts are not reopened.
+
+
+### D-223 — V1.3 Step 2: readings taken where the rulings were silent (OPEN)
+
+- **Status:** Open (readings taken, none blocking) · **Date:** 2026-09-25 · **Raised by:** Claude Code while implementing V1.3 Step 2 (the pure `eidos.knowledge` structures); **not decided**
+- **Source:** D-208 to D-222 (D-209, D-211, D-212, D-215, D-219, D-220, D-221 and D-222 in particular); the accepted readiness reports; CLAUDE.md §7 and invariants 8, 10, 13 and 16
+- **Why recorded:** the rulings fixed what independence, identity and chunking must satisfy, not every detail of how. Each reading below is the smallest implementation, lives in one function or constant, and can be
+  changed without touching a V1.2 contract, `eidos.contracts` or D-204.
+- **What Step 2 built:** `eidos.knowledge` — `identity.py`, `contracts.py`, `chunking.py`, `snapshot.py` and `independence.py`. Pure, standard library plus `pydantic` plus `eidos.contracts`; nothing imports it;
+  `pyproject.toml` is unchanged.
+- **Readings:**
+  1. **The counting function (D-221 points 3 and 4).** A cited document is set aside if a document it directly declares as an origin is also cited; the independent sources are the distinct declared sources of
+     the cited documents that remain. Different sources are never merged by content, and only declared, direct edges are read. *Alternatives not taken:* (a) counting a derived document as its origin's source, which
+     mis-counts a chain cited through its middle; (b) the largest set of pairwise-unrelated cited documents, which is exponential in general and counts a fully cited chain A, B, C as two. The three differ only for
+     chains whose middle document is cited alongside both ends. One short function (`independent_sources`).
+  2. **How a derivation names its target.** A document is named by the source it is declared under and the SHA-256 of its normalised text (`DocumentRef`), so a byte-identical mirror can declare its original across
+     sources. A friendlier manifest label is a loader concern for a later step.
+  3. **What a declaration may not be.** A self-derivation, a target that is not in the corpus, and a cycle of any length are refused at ingestion (three typed refusals), and a snapshot refuses them too, because a
+     cycle would set aside every cited document of it and count none. Not ruled.
+  4. **Duplicates.** A document declared twice under one source, even written with other line endings or Unicode forms, is refused (`DUPLICATE_DOCUMENT`), not silently merged; the same content under two sources is
+     not a duplicate (D-221 point 1). Repeated `derived_from` entries collapse to one.
+  5. **The chunker (D-215, D-222 point 3).** The unit is the word: a maximal run of characters outside a fixed whitespace set (the ASCII controls and space, U+0085, U+00A0, U+1680, U+2000 to U+200A, U+2028, U+2029,
+     U+202F, U+205F and U+3000), so no result depends on the interpreter's Unicode tables; zero-width characters, the soft hyphen and U+180E are not whitespace. Two or more line feeds between words end a
+     paragraph. Paragraphs are packed greedily into chunks of at most `max_words` words; a longer paragraph is cut into consecutive windows of `max_words` words and never merged with a neighbour. A chunk is the trimmed
+     span from its first word to its last, in code-point offsets into the normalised text, and chunks do not overlap. `max_words` has no default: the fixture (Step 5) states it, aiming under the semantic model's
+     128-piece window, whose word-piece check stays in the semantic boundary. The scheme id is `paragraph-pack-v1/max_words=N`.
+  6. **The snapshot id (D-212).** A digest of its version, the normalisation version, the chunking scheme id, the sorted `(source_id, document_id)` pairs and the sorted derivation edges. Derivations are included
+     because they change independence outcomes; the retrieval scheme is not, because it describes an index over a snapshot and not the snapshot.
+  7. **`evidence_ref`** is `evidence:` and the first 16 hexadecimal digits of the `chunk_id` (the accepted readiness report); ingestion refuses a collision (`EVIDENCE_REF_COLLISION`) and a snapshot refuses one too.
+  8. **Identifier shapes.** `source_id` matches `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`; document, chunk and snapshot ids are 64 lowercase hexadecimal digits; a chunking scheme id matches
+     `^[A-Za-z0-9][A-Za-z0-9._=/-]{0,127}$`. Plain constrained strings, so `eidos.contracts` is unchanged.
+  9. **Refusals.** A corpus that cannot be ingested returns the first refusal in a fixed order (an empty corpus; then, per document in the order given, the source id, encodability, no words, a duplicate; then the
+     derivations; then an evidence-reference collision) and never raises. Nine codes. Which refusal comes first can depend on the order the documents were given in; the snapshot never does.
+  10. **What identity depends on.** NFC follows the Unicode database of the running interpreter. Measured 2026-09-25: Python 3.12.10 (EIDOS) has database 15.0.0 and Python 3.13.1 (the D-214 benchmark
+      environment) has 15.1.0; NFC and NFD agreed on all 1,112,064 single code points and on 520,930 sampled base-plus-mark pairs (565 bases by 922 combining marks), and the test corpus gave the same snapshot id
+      and digest in both. That is evidence, not a proof for every sequence, so the isolated benchmark process should still check that the snapshot id it works from equals the snapshot's own.
+  11. **Text, not bytes.** The Step 2 entry point takes text. Strict UTF-8 decoding of files, and refusing invalid bytes, belongs to the loader, with the fixture (Step 5).
+  12. **Deferred by design.** `query_id` and the retrieval contracts (`RetrievalRequest`, `RetrievedChunk`, `RetrievalResult`, `RetrievalFailure`, `KnowledgePort`), `EvidenceRecord` and `RetrievalFacts` have no
+      consumer until Steps 3 to 6 and need D-222 points 5 and 6, so they are not built. **The readiness report's per-reference `SourceKeyResolver.key_of` cannot express the ruled rule** (whether a cited document
+      counts depends on which other documents are cited), so Step 3's resolver is set-based (`independent_sources(cited)`); D-210 stays Open.
+- **Still Open, unaffected:** D-210; D-222 points 1, 4 (its import-guard part), 5, 6, 7 and 8; D-204 to D-207.
+- **Effect:** additive only. No `eidos.contracts`, `eidos.state`, `eidos.agents`, `eidos.policy`, dependency, V1.1 or V1.2 change; `pyproject.toml` is unchanged; nothing imports `eidos.knowledge`.

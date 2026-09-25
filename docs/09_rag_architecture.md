@@ -1,11 +1,11 @@
 # 09 — Agentic RAG Architecture
 
-**Status:** DERIVED — **V1.3 (decisions.md D-208 to D-220, 2026-09-25) assigns the knowledge/evidence layer only (§9); nothing is implemented yet: Step 1, documentation and governance, is done. The agentic loop, reranking, the evidence judge and Qdrant stay deferred and unassigned (D-184).**
+**Status:** DERIVED — **V1.3 (decisions.md D-208 to D-220, 2026-09-25) assigns the knowledge/evidence layer only (§9); only the pure structures are implemented (Step 2: identity, chunking, the snapshot and the independent-source count). The agentic loop, reranking, the evidence judge and Qdrant stay deferred and unassigned (D-184).**
 **Derived from:** handoff §24, §25, §26, §31, §33, §50, §51, §63, §74, §76
 **Authority:** This document is derived from `EIDOS_CLAUDE_CODE_HANDOFF.md` and subordinate to it.
 If this document and the handoff conflict, stop and report the conflict to the human owner.
 
-> **Nothing in this document is implemented.** There is no `eidos.knowledge` package yet, no Qdrant, no
+> **Only the pure structures of §9 are implemented** (`eidos.knowledge`, V1.3 Step 2); nothing else in this document is. There is no retrieval, no Qdrant, no
 > embedding model, no reranker and no dependency for any of them. §50 named this V0.8 in the
 > handoff's own original sequence; the owner has since redefined V0.8 as the Strategy Selector
 > (`decisions.md` D-178 onward, V0.7 Step 1's own naming) and ruled, as **D-184**, that RAG is not
@@ -127,9 +127,9 @@ successful verification, is the flagship demo path (§43) and belongs in `tests/
 | How evidence sufficiency is judged | `decisions.md` D-015 |
 | Collection schemas | explicitly deferred by §25; V1.3 uses a pinned snapshot with a manifest instead of Qdrant collections (D-220) |
 
-## 9. V1.3 — the knowledge/evidence layer (ruled 2026-09-25; nothing implemented)
+## 9. V1.3 — the knowledge/evidence layer (ruled 2026-09-25; the pure structures are implemented, nothing else)
 
-Decisions D-208 to D-220 (`decisions.md`). This section describes what V1.3 will build; **none of it exists yet** (Step 1, documentation and governance, is done). Sections 1 to 8 remain the handoff-derived
+Decisions D-208 to D-220 (`decisions.md`). This section describes what V1.3 will build; **only the pure structures exist** (Steps 1 and 2 are done: identity, chunking, the snapshot and the independent-source count in `eidos.knowledge`). Sections 1 to 8 remain the handoff-derived
 specification of the full agentic design, of which V1.3 builds a staged subset.
 
 **Scope (D-208).** Local documents only: ingestion, document and chunk identity, indexing, retrieval, source and provenance tracking, retrieval-query identity, evidence references, duplicate-source handling,
@@ -168,8 +168,9 @@ model-asserted edge: traceable means the chain exists, not that the cited text s
 
 **Independence (D-209).** Counted by declared source identity, content-derived document identity and declared `derived_from`. The same chunk retrieved again, several chunks of one document and several documents of
 one declared source are one source; identical content under different declared sources is separate sources; known derived content can collapse through `derived_from`; undeclared derivation is not inferred, and no
-semantic plagiarism detection is attempted. The resolver is pure and deterministic, and the verifier behaves byte-identically when none is supplied. The ruling's name and its consequences need one confirmation
-(D-221, Open), and how existing V1.2 supplied and tool documents are keyed is D-210 (Open).
+semantic plagiarism detection is attempted. The resolver is pure and deterministic, and the verifier behaves byte-identically when none is supplied. D-221 (ruled 2026-09-25) confirmed it: different declared sources stay
+distinct even for identical content, and `derived_from` applies to documents, is explicit only and is non-transitive. Step 2 implements it in `independent_sources` (D-223, reading 1): a cited document that
+directly declares an origin which is also cited is set aside, and the distinct declared sources of the rest are counted. How existing V1.2 supplied and tool documents are keyed is D-210 (Open).
 
 **Bounds and the query (D-216, D-217).** Retrieval is bounded by per-knowledge-base configuration (`top_k`, a maximum result count, a maximum returned size); there is no new global retrieval budget. The Research
 agent forms one deterministic query from the mission goal: no LLM query planning and no autonomous decomposition. This answers the loop question below for V1.3 only (D-029 stays Open).
@@ -205,7 +206,7 @@ execute tools. A retrieval outcome, like a tool outcome, is not evidence suffici
 | — | Which embedding model and which cross-encoder; chunking strategy; whether reranking is always applied or conditional. **V1.3 (D-208, D-213 to D-215):** the embedding model is chosen by a measured comparison, not in advance; the chunking scheme is part of chunk identity and stays within the semantic model's 128-token window; the cross-encoder and reranking are excluded from the first slice |
 | — | The bound on retrieval rounds. `rag_rounds` is measured (§33) but no `max_rag_rounds` appears in the §14/§32 bound lists, so the reformulation loop in §2 has no stated termination limit. This needs an answer before implementation — it is the one loop in the handoff without an explicit bound. **V1.3 (D-216, D-217):** answered for the initial implementation only (per-knowledge-base bounds, one deterministic query, no loop); D-029 stays Open |
 | D-210 | V1.3: how existing V1.2 supplied and tool documents are keyed for independence once a resolver exists. Open, not ruled |
-| D-221 | V1.3: confirmation of the ruled independence rule (its name and its enumerated consequences read differently against the readiness report's rules). Open |
+| D-221 | V1.3: confirmation of the ruled independence rule. **Ruled 2026-09-25:** different declared sources stay distinct; `derived_from` is between documents, explicit and non-transitive |
 
 ## Out of scope for this document
 
