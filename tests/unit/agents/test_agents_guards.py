@@ -2,6 +2,9 @@
 
 The agents package is vendor-free, does no I/O beyond its ports, never reaches a provider, and no core layer
 ever imports it. These are checks on the source, so they hold however the agents are later implemented.
+
+The package may depend on ``eidos.policy`` (the tool-admission seam, D-205) and, since V1.3 Step 3, on the knowledge boundary (D-222): one module, a fixed set of
+names, taken from the package root, one way only.
 """
 
 import ast
@@ -23,10 +26,25 @@ FORBIDDEN_IMPORTS = {
 }
 # The only third-party or standard-library modules the agents package may import.
 ALLOWED_ROOTS = {"__future__", "collections", "dataclasses", "enum", "re", "threading", "typing", "pydantic", "eidos"}
-ALLOWED_EIDOS = {"eidos.contracts", "eidos.runtime", "eidos.compiler", "eidos.capabilities", "eidos.agents", "eidos.policy"}
-# D-205 ruling 4: the one deliberate extension, for the eidos.agents -> eidos.policy tool-admission seam and nothing wider. Pinned below so a
+ALLOWED_EIDOS = {"eidos.contracts", "eidos.runtime", "eidos.compiler", "eidos.capabilities", "eidos.agents", "eidos.policy", "eidos.knowledge"}
+# D-205 ruling 4: a deliberate extension, for the eidos.agents -> eidos.policy tool-admission seam and nothing wider. Pinned below so a
 # further dependency (a transport, a recorder, a provider) cannot be added here without changing this line on purpose.
 PRE_ADMISSION_ALLOWED_EIDOS = {"eidos.contracts", "eidos.runtime", "eidos.compiler", "eidos.capabilities", "eidos.agents"}
+# D-222 point 4 (the owner's import-guard ruling, 2026-09-25): the second deliberate extension, for the eidos.agents -> eidos.knowledge boundary. Only the
+# evidence ledger module depends on it, only on these names and only from the package root; eidos.knowledge never imports eidos.agents (its own guard test).
+# Until a KnowledgePort exists (a later step) this set is the boundary; a later step adds names to it on purpose (decisions.md D-224).
+KNOWLEDGE_BOUNDARY_MODULE = "evidence_ledger.py"
+APPROVED_KNOWLEDGE_NAMES = {
+    "DocumentRef",
+    "EvidenceRecord",
+    "EvidenceRefusal",
+    "EvidenceRefusalCode",
+    "IndependenceResolution",
+    "legacy_supplied_record",
+    "legacy_tool_record",
+    "merge_evidence",
+    "resolve_independence",
+}
 
 VENDOR_NAMES = {
     "anthropic", "claude", "openai", "gpt", "gemini", "mistral", "llama", "cohere", "ollama", "qdrant", "a2a", "mcp",
@@ -60,9 +78,40 @@ def test_only_the_eidos_layers_an_agent_may_depend_on_are_imported(module):
             assert "providers" not in name and "backends" not in name, f"{module.name} imports {name}"
 
 
-def test_the_only_layer_added_to_what_an_agent_may_depend_on_is_the_tool_admission_seam():
-    assert ALLOWED_EIDOS - PRE_ADMISSION_ALLOWED_EIDOS == {"eidos.policy"}
+def test_the_only_layers_added_to_what_an_agent_may_depend_on_are_the_tool_admission_seam_and_the_knowledge_boundary():
+    assert ALLOWED_EIDOS - PRE_ADMISSION_ALLOWED_EIDOS == {"eidos.policy", "eidos.knowledge"}
     assert PRE_ADMISSION_ALLOWED_EIDOS <= ALLOWED_EIDOS
+
+
+def eidos_names_imported(path: Path) -> set[str]:
+    """Every dotted ``eidos`` name a module imports, including a name taken with ``from eidos import x``."""
+    found = set()
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Import):
+            found.update(alias.name for alias in node.names if alias.name.split(".")[0] == "eidos")
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module and node.module.split(".")[0] == "eidos":
+            found.add(node.module)
+            found.update(f"{node.module}.{alias.name}" for alias in node.names)
+    return found
+
+
+@pytest.mark.parametrize("module", MODULES, ids=lambda m: m.name)
+def test_only_the_evidence_ledger_module_depends_on_the_knowledge_package(module):
+    depends = {name for name in eidos_names_imported(module) if name == "eidos.knowledge" or name.startswith("eidos.knowledge.")}
+    assert bool(depends) == (module.name == KNOWLEDGE_BOUNDARY_MODULE), f"{module.name} imports {sorted(depends)}"
+
+
+def test_the_evidence_ledger_takes_exactly_the_approved_knowledge_names_from_the_package_root_and_nothing_else():
+    tree = ast.parse((AGENTS / KNOWLEDGE_BOUNDARY_MODULE).read_text(encoding="utf-8"))
+    knowledge_imports = [
+        node for node in ast.walk(tree)
+        if (isinstance(node, ast.ImportFrom) and node.level == 0 and (node.module or "").startswith("eidos.knowledge"))
+        or (isinstance(node, ast.Import) and any(alias.name.startswith("eidos.knowledge") for alias in node.names))
+    ]
+    (statement,) = knowledge_imports
+    assert isinstance(statement, ast.ImportFrom) and statement.module == "eidos.knowledge"
+    assert {alias.name for alias in statement.names} == APPROVED_KNOWLEDGE_NAMES
+    assert all(alias.asname is None for alias in statement.names)
 
 
 @pytest.mark.parametrize("module", sorted((SRC / "policy").glob("*.py")), ids=lambda m: m.name)

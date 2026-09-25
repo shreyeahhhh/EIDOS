@@ -2531,7 +2531,7 @@ Entry format: id, title, status, date, handoff source, context, decision/questio
   - `RunResult.verified` keeps its meaning: never a claim that the mission or its contract succeeded.
   - **D-059 stays Open** (no status is invented for "contract not satisfied"); **D-063 and D-064 stay Open and dormant.**
 - **Annotated 2026-09-25 (D-209):** the meaning of "distinct sources" is extended additively for V1.3 knowledge evidence (independence by declared source identity, with declared `derived_from`). The V0.4
-  verifier's behaviour, and its behaviour with no resolver, are unchanged; how existing supplied and tool documents are keyed once a resolver exists is D-210 (Open).
+  verifier's behaviour, and its behaviour with no resolver, are unchanged; how existing supplied and tool documents are keyed once a resolver exists is D-210 (ruled 2026-09-25, built at V1.3 Step 3, readings D-224).
 
 ### D-141 — The five V0.4 capabilities: spelling, the agents that serve them, and what `Verification` binds to
 
@@ -4868,7 +4868,7 @@ one is not.
      "independent" means for retrieved documents must be revisited, by the owner, before any multi-query retrieval or RAG is introduced** (or anything else that lets one execution issue more than one
      distinct query); how is not decided here.
      **Revisited by D-209 (2026-09-25):** the owner has ruled the independence semantics for V1.3 knowledge evidence. V1.2 behaviour is unchanged, and how existing V1.2 supplied and tool documents are keyed
-     under a resolver is D-210 (Open).
+     under a resolver is D-210 (ruled 2026-09-25, built at V1.3 Step 3, readings D-224).
   2. **The gate lives in `eidos.agents` and the Research agent holds a `ToolAccess`, not a `ToolPort`.** Admission sits between the agent and the port, inside the gate, which is the seam D-205 ruling 4 opened
      (`eidos.agents` → `eidos.policy`). The agent cannot tell a scripted port from a real one, and names no transport.
   3. **The ledger is in memory inside the gate, and the budget is reserved under its lock before the port is called**, so a call still in flight already counts and two nodes on worker threads cannot both spend the
@@ -4903,7 +4903,7 @@ one is not.
 
 ### D-208 — V1.3 RAG / Knowledge Intelligence: scope, and a measured lexical-versus-semantic retrieval comparison (2026-09-25)
 
-- **Status:** Accepted · **Date:** 2026-09-25 · **Decided by:** human owner — the V1.3 rulings D-208 to D-220, given after two read-only readiness reports (2026-09-25); D-210 was not ruled (see it)
+- **Status:** Accepted · **Date:** 2026-09-25 · **Decided by:** human owner — the V1.3 rulings D-208 to D-220, given after two read-only readiness reports (2026-09-25); D-210 was not ruled at that point and was ruled later the same day (see it)
 - **Source:** the owner's V1.3 rulings and the accepted readiness report; handoff §24 to §26, §30, §31, §33, §50, §74; `docs/09`; D-184, D-203, D-207 reading 1; invariants 7 and 12 to 16
 - **Why:** since V1.2 the Research agent can retrieve documents through a tool, but a retrieved document enters the supplied-artifact set and the verifier's "distinct sources" is a count of distinct reference strings,
   which embed the request digest (D-207 reading 1: a known V1.2 limitation, not reachable in the current one-query path). V1.3 introduces a controlled knowledge and evidence layer: how EIDOS ingests, indexes,
@@ -4946,20 +4946,26 @@ one is not.
   **No broad semantic plagiarism or derivation detection is attempted.** The resolver must be **deterministic and pure.**
 - **What changes:** this rule changes the interpretation of the existing "distinct sources" semantics (D-145, D-146: the verifier counts distinct supplied references) and is recorded as an explicit **additive V1.3
   decision.** As ruled for Step 3, an absent resolver leaves the verifier's behaviour byte-identical. The V1.2 limitation of D-207 reading 1 is revisited by this ruling; nothing in V1.2 behaviour changes until Step 3,
-  and how existing V1.2 supplied and tool documents are keyed once a resolver is present is not ruled (D-210, Open).
+  and how existing V1.2 supplied and tool documents are keyed once a resolver is present was not ruled then (D-210, ruled later on 2026-09-25 and built at Step 3, readings D-224).
 - **Confirmation (D-221, ruled 2026-09-25):** the ruling's name and its enumerated consequences read differently against the readiness report's rules; the owner clarified them in D-221.
 - **Clarified by D-221:** the enumerated consequences govern. Different declared sources stay distinct even for identical content; `derived_from` applies to documents, not sources, is explicit only and is non-transitive. The name "S4" is the owner's label; the readiness report's S4 (a mirror counts once) and S5 (a transitive source-level relation) are not adopted as defined.
 - **Effect:** documentation only at this step.
 
-### D-210 — V1.3: how existing V1.2 supplied and tool documents are keyed for independence (OPEN, not ruled)
+### D-210 — V1.3: how existing V1.2 supplied and tool documents are keyed for independence (RULED 2026-09-25)
 
-- **Status:** Open · **Date:** 2026-09-25 · **Raised by:** Claude Code while recording D-208 to D-220: the owner's rulings give no ruling for D-210, which the readiness report listed as needed before Step 3; **not decided**
+- **Status:** Accepted · **Date:** 2026-09-25 · **Raised by:** Claude Code while recording D-208 to D-220 (the rulings of that day gave none for D-210, which the readiness report listed as needed before Step 3) · **Decided by:** human owner, 2026-09-25 (it was Open when raised)
 - **Source:** the readiness report §17; D-207 reading 1; D-209
 - **Question:** once the verifier is given a resolver (Step 3), which independence key does a document that is not knowledge evidence have: a caller-supplied artifact, and a V1.2 tool document stored as
   `tool:<tool_id>:<args_digest>:<document_id>`? The readiness report listed (a) the SHA-256 of the artifact's text (provider-independent; identical caller and tool text would count once); (b) `(tool_id, provider
   document_id)` for a tool document and the reference itself for a caller document (provider-asserted identity); (c) unchanged, the reference string.
 - **Not affected:** with no resolver the verifier is byte-identical (the owner's Step 3 requirement), so V1.2 behaviour is unchanged whatever is ruled.
-- **Blocks:** V1.3 Step 3 (the EvidenceLedger and the verifier resolver). No reading has been taken and nothing is implemented.
+- **Blocked (until the ruling below):** V1.3 Step 3 (the EvidenceLedger and its resolver). Nothing was implemented.
+- **Ruling (owner, 2026-09-25):** existing V1.2 supplied and tool documents **must receive a deterministic knowledge identity from their existing artifact/reference identity plus normalised content.** V1.2
+  behaviour is not changed and historical ids are not rewritten retroactively. The resolver **maps old evidence into the new knowledge identity without modifying historical records.**
+- **What the ruling settles:** the readiness report's options (a), (b) and (c) above are not adopted as written. The identity is derived from what the artifact already is (its reference identity) together with its
+  normalised content, and nothing already recorded is touched: a V1.2 artifact reference, a `tool_calls` fact, an artifact and the verifier's behaviour all stay exactly as they were.
+- **Not settled by the ruling (D-224, the Step 3 readings, Open):** what the "existing artifact/reference identity" of a tool document is when its reference embeds the request digest
+  (`tool:<tool_id>:<args_digest>:<document_id>`); how a source id is derived from it; and where the derived identity is held.
 
 ### D-211 — V1.3 source identity: `source_id` is mandatory (2026-09-25)
 
@@ -5103,11 +5109,11 @@ one is not.
   **not applied**, because the ruling excludes both properties.
 - **Not settled by the ruling (D-223, the Step 2 readings, Open):** the exact function that counts independent sources under points 3 and 4; how a document is referenced as a derivation target; and what an unknown
   target, a self-derivation or a derivation cycle does.
-- **D-210 stays Open.** The owner: it is a Step 3 resolver concern. No ruling was invented for it.
+- **D-210 stays Open.** The owner: it is a Step 3 resolver concern. No ruling was invented for it. *(Ruled by the owner later on 2026-09-25 with the Step 3 brief; see D-210.)*
 
 ### D-222 — V1.3 Step 1: points the rulings left open (PARTLY RULED 2026-09-25)
 
-- **Status:** Partly ruled, partly Open · **Date:** 2026-09-25 · **Raised by:** Claude Code while recording D-208 to D-220 · **Decided by:** human owner, for points 2, 3 and 4 in part (2026-09-25); the rest stay Open
+- **Status:** Partly ruled, partly Open · **Date:** 2026-09-25 · **Raised by:** Claude Code while recording D-208 to D-220 · **Decided by:** human owner, for points 2 and 3, and for point 4 (its home, then its import guard on 2026-09-25); points 1, 5, 6, 7 and 8 stay Open
 - **Source:** the rulings and the two readiness reports; CLAUDE.md §7
 - **Points** (each is a gap or an unstated detail; none was resolved):
   1. **Milestone label.** The owner named this milestone V1.3. The `progress.md` ladder, the handoff's milestone list (§50) and D-022, D-072, `docs/02` and `docs/10` use V1.3 for Frontend and V1.4 for
@@ -5139,6 +5145,10 @@ one is not.
   - **Points 5, 6, 7 and 8** (retrieval bound details, the form of the query, the benchmark rules not restated, the isolated-process mechanics): not addressed; **still Open.**
 - **Also stated by the owner (2026-09-25):** the main EIDOS runtime stays on Python 3.12; semantic embedding stays isolated to the already-verified Python 3.13 environment for V1.3; **Qdrant is not added to V1.3 core
   and remains the later MVP storage implementation behind `KnowledgePort`**; cross-encoder reranking is not introduced; the V1.2 contracts are not reopened.
+- **Update (owner, 2026-09-25, with the Step 3 rulings): point 4's import-guard part is ruled.** **`eidos.agents` may depend on the knowledge boundary only through the defined `KnowledgePort` and the
+  knowledge-facing contracts needed for retrieval. `eidos.knowledge` must never import `eidos.agents`, `eidos.policy`, MCP, LangGraph or infrastructure. The dependency direction stays one-way.** *Reading
+  taken, not confirmed (D-224):* until `KnowledgePort` exists, the pinned boundary is the set of knowledge names the evidence ledger needs, imported from the package root only; a later step adds names to that
+  set on purpose. Points 1, 5, 6, 7 and 8 stay Open.
 
 
 ### D-223 — V1.3 Step 2: readings taken where the rulings were silent (OPEN)
@@ -5178,6 +5188,54 @@ one is not.
   11. **Text, not bytes.** The Step 2 entry point takes text. Strict UTF-8 decoding of files, and refusing invalid bytes, belongs to the loader, with the fixture (Step 5).
   12. **Deferred by design.** `query_id` and the retrieval contracts (`RetrievalRequest`, `RetrievedChunk`, `RetrievalResult`, `RetrievalFailure`, `KnowledgePort`), `EvidenceRecord` and `RetrievalFacts` have no
       consumer until Steps 3 to 6 and need D-222 points 5 and 6, so they are not built. **The readiness report's per-reference `SourceKeyResolver.key_of` cannot express the ruled rule** (whether a cited document
-      counts depends on which other documents are cited), so Step 3's resolver is set-based (`independent_sources(cited)`); D-210 stays Open.
-- **Still Open, unaffected:** D-210; D-222 points 1, 4 (its import-guard part), 5, 6, 7 and 8; D-204 to D-207.
+      counts depends on which other documents are cited), so Step 3's resolver is set-based (`independent_sources(cited)`); D-210 stayed Open at Step 2 and was ruled afterwards (built at Step 3, D-224).
+- **Still Open, unaffected (as of Step 2; D-210 and D-222 point 4's import-guard part were ruled afterwards, on 2026-09-25):** D-210; D-222 points 1, 4 (its import-guard part), 5, 6, 7 and 8; D-204 to D-207.
 - **Effect:** additive only. No `eidos.contracts`, `eidos.state`, `eidos.agents`, `eidos.policy`, dependency, V1.1 or V1.2 change; `pyproject.toml` is unchanged; nothing imports `eidos.knowledge`.
+
+### D-224 — V1.3 Step 3: readings taken where the rulings were silent (OPEN)
+
+- **Status:** Open (readings taken, none blocking) · **Date:** 2026-09-25 · **Raised by:** Claude Code while implementing V1.3 Step 3 (the evidence ledger and the D-210 resolver); **not decided**
+- **Source:** D-208 to D-223 (D-209, D-210, D-212, D-219, D-221 and D-222 point 4 in particular); the accepted readiness reports (§4, the `EvidenceRecord` row of §18); CLAUDE.md §7 and invariants 8, 10, 12, 13 and 16
+- **Why recorded:** the D-210 ruling fixed that a V1.2 document receives a deterministic knowledge identity from its existing artifact/reference identity plus its normalised content, and the import-guard ruling fixed
+  the direction of the dependency. Neither said what the "existing reference identity" of a tool document is, how a source id is derived from a reference, or which knowledge names the boundary contains before a
+  `KnowledgePort` exists. Each reading below is the smallest implementation and lives in one function or constant.
+- **What Step 3 built:** in `eidos.knowledge`, `evidence.py` (pure): `EvidenceRecord`, `EvidenceRefusal`, `IndependenceResolution`, `evidence_from_snapshot`, `merge_evidence`, `resolve_independence`,
+  `legacy_supplied_record` and `legacy_tool_record`; in `eidos.agents`, `evidence_ledger.py`: `EvidenceLedger` (in memory, one lock) and `resolve_supplied_evidence`. Nothing else imports the knowledge package, the
+  verifier, the recorder, the artifact store, the tool gate and every existing contract are unchanged, and `pyproject.toml` is unchanged.
+- **Readings:**
+  1. **The identity of a tool document (D-210).** Its "existing reference identity" is the tool and the provider's own document id, `(tool_id, document_id)`; the request digest in
+     `tool:<tool_id>:<args_digest>:<document_id>` is retrieval provenance and takes no part in the identity, so the same document reached by two queries is one source. *Alternative not taken:* the whole reference
+     string, which keeps V1.2's keying and so keeps the D-207 reading 1 limitation (a repeated retrieval counts twice), which D-209 ("repeated retrieval of the same chunk = one source") exists to remove. A one-line
+     change in the resolver (`legacy_tool_record` and its call). A caller-supplied document's identity is its reference string.
+  2. **How a source id is derived.** `legacy-` and the first 32 hexadecimal digits of the SHA-256 of a canonical JSON object naming a version, the kind (`supplied` or `tool`) and the identity fields. A digest,
+     because a reference may contain characters the source-id shape excludes; the kind tag keeps a caller reference that reads like a tool reference from sharing a source with the tool document it resembles when
+     built through the pure functions. The result always matches the existing source-id shape (39 characters). **No reserved prefix is enforced:** a manifest may declare a source that starts with `legacy-`, because
+     the Step 2 contracts are not reopened; a collision would need a deliberate 128-bit match.
+  3. **One document, one chunk.** A V1.2 document becomes one chunk of its whole normalised text under the scheme id `legacy-artifact-v1` (offsets 0 to its length), identified by Step 2's `chunk_id_of` unchanged;
+     its `document_id` is the digest of the normalised content, as ruled. A V1.2 record carries no snapshot. V1.2 had no way to declare a derivation, so V1.2 documents have none.
+  4. **Which references are tool documents.** By the V1.2 convention: a reference `parse_tool_document_ref` reads is a tool document, anything else a caller document. A caller document deliberately named like a
+     tool reference is therefore read as that tool document (a limitation, the same one V1.2 has), and the parser does not check that the digest is a digest; the resolver does not use it either.
+  5. **What is refused.** A V1.2 document with no content is refused (`EMPTY_DOCUMENT`); a document of only whitespace is one chunk, as V1.2 counted it. A reference that is not a supplied artifact of the execution,
+     such as a step's produced artifact, is refused (`NOT_SUPPLIED`). The ledger refuses a different chunk under a held evidence reference (`EVIDENCE_REF_COLLISION`, possible across snapshots of one execution because
+     Step 2 only checks inside one) and the same chunk from a different snapshot (`SNAPSHOT_CONFLICT`); a refusal changes nothing. Refusals are returned, never raised; a malformed query id, a tampered record, records of
+     different references handed to `merge_evidence`, and two different chunks under one reference in the resolver's input are contract violations and raise.
+  6. **What a record holds.** `EvidenceRecord(chunk, chunking_scheme_id, snapshot_id, retrieved_by)`: the accepted readiness report's `EvidenceRecord(evidence_ref, chunk, retrieved_by)` with the scheme and the
+     snapshot made explicit, so that a record re-derives its own chunk id and cannot claim an identity its parts do not have. `retrieved_by` holds sorted, distinct query ids (the D-212 `query_id`, whose derivation
+     belongs to the retrieval contracts of a later step). **A V1.2 record carries no query provenance:** V1.2's `args_digest` digests the tool arguments, which is not the V1.3 `query_id`, and it stays in the
+     artifact reference, untouched.
+  7. **Merging the same evidence again.** One record per evidence reference: the same chunk retrieved again keeps that record and adds the query id to it (a union, order independent); recording the same chunk and
+     query again changes nothing. One chunk from two snapshots in one execution is refused rather than merged (reading 5); the alternative is a record that names every snapshot it was retrieved from.
+  8. **The ledger's scope and locking.** One object, keyed by `execution_id` as the artifact store is, in memory. One lock makes the read-merge-write of `record` atomic (the accepted design called the ledger
+     thread-safe); a test slows the merge down to prove it. No other concurrency machinery.
+  9. **Independence is resolved over a set.** `resolve_independence(cited, records, derived_from)` returns the cited references the ledger holds, those it does not (reported, never counted), the distinct
+     documents and the independent sources, delegating to Step 2's `independent_sources` unchanged. `derived_from` is a required argument: leaving the declarations out would silently over-count independence.
+  10. **The boundary.** Until a `KnowledgePort` exists, the dependency the import-guard ruling permits is one agents module, `evidence_ledger.py`, taking exactly nine names from the package root (`DocumentRef`,
+      `EvidenceRecord`, `EvidenceRefusal`, `EvidenceRefusalCode`, `IndependenceResolution`, `legacy_supplied_record`, `legacy_tool_record`, `merge_evidence`, `resolve_independence`); a guard pins the module, the names
+      and the root. A later step adds names on purpose. The agents guard's pinned set of allowed layers is extended deliberately (it now names `eidos.knowledge` beside `eidos.policy`).
+  11. **What is not wired.** The verifier, the recorder, the Research agent and the artifact store are unchanged, so no verdict changes and there is still no verifier rule that reads the ledger. The earlier ladder
+      described Step 3 as "the EvidenceLedger and the verifier resolver"; the ruling authorised the ledger and its resolvers only. How a model's `[[ref]]` citation reaches an evidence reference, and a
+      resolver-backed verification rule, wait for the steps that record citation edges (Step 4) and integrate Research.
+- **Still Open, unaffected:** D-222 points 1, 5, 6, 7 and 8 and the parts of D-222 not ruled; D-223; D-204 to D-207.
+- **Effect:** additive only. No `eidos.contracts`, `eidos.state`, `eidos.policy`, verifier, recorder, dependency, V1.1 or V1.2 change; `pyproject.toml` is unchanged. The existing source files touched are the two
+  package `__init__` files (exports); the existing tests touched are the two guard tests (revised deliberately, as they said they would be: the agents ratchet now pins two added layers, and "no other package imports
+  the knowledge package yet" became "only the evidence ledger imports it, from the package root") and the knowledge test factories (helpers added).

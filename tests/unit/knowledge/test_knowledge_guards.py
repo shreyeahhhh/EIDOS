@@ -1,8 +1,9 @@
-"""Static guards on ``eidos.knowledge`` (decisions.md D-208 to D-222, invariants 9, 10 and 15, CLAUDE.md section 8; V1.3 Step 2).
+"""Static guards on ``eidos.knowledge`` (decisions.md D-208 to D-222, invariants 9, 10 and 15, CLAUDE.md section 8; V1.3 Steps 2 and 3).
 
 The layer is deterministic and pure: no I/O, network, subprocess, clock, randomness, model call or hidden state, and it names no retrieval engine, vector
-store or embedding model. It depends only on ``eidos.contracts``; it imports no agent, adapter or backend, and no other package imports it yet. Retrieval ports
-will be added under it at a later step (D-222), and this guard is revised deliberately then, not weakened.
+store or embedding model. It depends only on ``eidos.contracts``; it imports no agent, policy, transport, workflow library or infrastructure. The dependency
+direction is one way (D-222 point 4): the only module elsewhere in the repository that imports it is ``eidos.agents.evidence_ledger``, from the package root. No
+retrieval implementation exists in it yet: retrieval ports arrive at a later step (D-222), and these guards are revised deliberately then, not weakened.
 """
 
 import ast
@@ -44,7 +45,7 @@ def imports_of(path: Path) -> list[str]:
 
 
 def test_the_package_is_exactly_the_modules_that_implement_the_pure_structures():
-    assert [module.name for module in MODULES] == ["__init__.py", "chunking.py", "contracts.py", "identity.py", "independence.py", "snapshot.py"]
+    assert [module.name for module in MODULES] == ["__init__.py", "chunking.py", "contracts.py", "evidence.py", "identity.py", "independence.py", "snapshot.py"]
 
 
 @pytest.mark.parametrize("module", MODULES, ids=lambda m: m.name)
@@ -60,6 +61,44 @@ def test_only_the_contracts_and_the_package_itself_are_depended_on(module):
         assert not name.startswith(".."), f"{module.name} reaches out of the package with {name}"
         if name.startswith("eidos"):
             assert ".".join(name.split(".")[:2]) in ALLOWED_EIDOS, f"{module.name} imports {name}"
+
+
+FORBIDDEN_LAYERS = {
+    "agents", "policy", "mcp", "a2a", "providers", "backends", "recording", "state", "runtime", "compiler", "capabilities", "validation", "planning",
+    "selectors", "replanning", "expansion", "memory", "baseline", "telemetry",
+}
+
+
+def eidos_names_imported(path: Path) -> set[str]:
+    """Every dotted ``eidos`` name a module imports, including a name taken with ``from eidos import x``."""
+    found = set()
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Import):
+            found.update(alias.name for alias in node.names if alias.name.split(".")[0] == "eidos")
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module and node.module.split(".")[0] == "eidos":
+            found.add(node.module)
+            found.update(f"{node.module}.{alias.name}" for alias in node.names)
+    return found
+
+
+@pytest.mark.parametrize("module", MODULES, ids=lambda m: m.name)
+def test_the_knowledge_package_never_imports_an_agent_the_policy_layer_a_transport_a_workflow_library_or_infrastructure(module):
+    """D-222 point 4: the direction is one way. Agents may depend on this package; this package never depends on them (nor on the layers around them)."""
+    names = eidos_names_imported(module)
+    reached = {name for name in names if len(name.split(".")) > 1 and name.split(".")[1] in FORBIDDEN_LAYERS}
+    assert reached == set(), f"{module.name} imports {sorted(reached)}"
+    assert {name for name in names if name.startswith("eidos.") and name.split(".")[1] not in {"contracts", "knowledge"}} == set()
+
+
+def defined_names(path: Path) -> set[str]:
+    return {node.name for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))) if isinstance(node, (ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef))}
+
+
+@pytest.mark.parametrize("module", MODULES, ids=lambda m: m.name)
+def test_no_retrieval_search_index_or_embedding_implementation_exists_in_the_package_yet(module):
+    for name in defined_names(module):
+        lowered = name.lower()
+        assert not any(part in lowered for part in ("retriev", "search", "embed", "vector", "index", "bm25", "rerank", "port")), f"{module.name} defines {name}"
 
 
 @pytest.mark.parametrize("module", MODULES, ids=lambda m: m.name)
@@ -94,8 +133,17 @@ def ascii_only(path: Path) -> bool:
     return all(ord(character) < 128 for character in path.read_text(encoding="utf-8"))
 
 
-@pytest.mark.parametrize("path", [*MODULES, *sorted((ROOT / "tests" / "unit" / "knowledge").glob("*.py")), ROOT / "tests" / "support" / "eidos_knowledge_factories.py"],
-                         ids=lambda p: p.name)
+@pytest.mark.parametrize(
+    "path",
+    [
+        *MODULES,
+        *sorted((ROOT / "tests" / "unit" / "knowledge").glob("*.py")),
+        ROOT / "src" / "eidos" / "agents" / "evidence_ledger.py",
+        ROOT / "tests" / "unit" / "agents" / "test_agents_evidence_ledger.py",
+        ROOT / "tests" / "support" / "eidos_knowledge_factories.py",
+    ],
+    ids=lambda p: p.name,
+)
 def test_the_package_and_its_tests_hold_only_ascii_so_no_invisible_or_normalisable_character_can_hide_in_them(path):
     assert ascii_only(path), f"{path.name} contains a non-ASCII character: build it from its code point instead"
 
@@ -114,6 +162,13 @@ def test_the_ingestion_result_and_the_refusals_are_returned_never_raised():
     assert [n for n in ast.walk(function) if isinstance(n, ast.Raise)] == []
 
 
+@pytest.mark.parametrize("name", ["evidence_from_snapshot", "legacy_supplied_record", "legacy_tool_record"])
+def test_an_evidence_that_cannot_be_made_is_a_returned_refusal_never_a_raise(name):
+    tree = ast.parse((KNOWLEDGE / "evidence.py").read_text(encoding="utf-8"))
+    (function,) = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == name]
+    assert [n for n in ast.walk(function) if isinstance(n, ast.Raise)] == []
+
+
 def other_paths():
     for entry in sorted(SRC.iterdir()):
         if entry.name in {"knowledge", "__pycache__"} or entry.name.endswith(".egg-info"):
@@ -124,10 +179,16 @@ def other_paths():
             yield entry
 
 
+BOUNDARY = SRC / "agents" / "evidence_ledger.py"
+
+
 @pytest.mark.parametrize("path", list(other_paths()), ids=lambda p: str(p.relative_to(SRC)))
-def test_no_other_package_imports_the_knowledge_package_yet(path):
-    for name in imports_of(path):
-        assert not name.startswith("eidos.knowledge"), f"{path.relative_to(SRC)} imports {name}"
+def test_only_the_evidence_ledger_imports_the_knowledge_package_and_only_from_its_root(path):
+    reached = sorted(name for name in eidos_names_imported(path) if name == "eidos.knowledge" or name.startswith("eidos.knowledge."))
+    if path == BOUNDARY:
+        assert [name for name in imports_of(path) if name.startswith("eidos.knowledge")] == ["eidos.knowledge"], "the boundary module imports from the package root, once"
+    else:
+        assert reached == [], f"{path.relative_to(SRC)} imports {reached}"
 
 
 def test_importing_the_package_loads_no_other_eidos_layer_and_no_engine_or_model_library():

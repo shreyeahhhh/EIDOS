@@ -1,6 +1,8 @@
-"""Small corpora and helpers for the knowledge-layer tests (V1.3 Step 2). Not the benchmark fixture (D-213), which is authored at Step 5."""
+"""Small corpora and helpers for the knowledge-layer tests (V1.3 Steps 2 and 3). Not the benchmark fixture (D-213), which is authored at Step 5."""
 
-from eidos.knowledge import ChunkingScheme, DocumentRef, KnowledgeDocument, document_id_of
+import hashlib
+
+from eidos.knowledge import ChunkingScheme, DocumentRef, EvidenceRecord, KnowledgeChunk, KnowledgeDocument, KnowledgeSnapshot, document_id_of, evidence_from_snapshot
 
 SCHEME = ChunkingScheme(max_words=12)
 
@@ -30,3 +32,20 @@ def small_corpus() -> tuple[KnowledgeDocument, ...]:
         doc("blog", BLOG_POST, ref_of("audit", SAFETY_AUDIT)),
         doc("mirror", OPS_MANUAL),
     )
+
+
+def query_id(name: str) -> str:
+    """A well-formed query id for a test: any SHA-256 digest will do. What a query id is derived from belongs to the retrieval contracts of a later step."""
+    return hashlib.sha256(name.encode("utf-8")).hexdigest()
+
+
+def chunk_of(snapshot: KnowledgeSnapshot, source_id: str, index: int = 0) -> KnowledgeChunk:
+    """The ``index``-th chunk (in canonical order) of a source in ``snapshot``."""
+    return [chunk for chunk in snapshot.chunks if chunk.source_id == source_id][index]
+
+
+def evidence_of(snapshot: KnowledgeSnapshot, chunk: KnowledgeChunk, query: str = "q1") -> EvidenceRecord:
+    """The evidence for ``chunk`` retrieved by the query named ``query``."""
+    record = evidence_from_snapshot(snapshot, chunk.chunk_id, query_id=query_id(query))
+    assert isinstance(record, EvidenceRecord), record
+    return record
