@@ -13,7 +13,7 @@ import threading
 
 from eidos.contracts import MissionId, StepId, TenantId
 from eidos.runtime import NodeResult
-from eidos.state import EventLog, EventProposal, IntakeResult, ModelCallFacts, NodeSettledPayload, VerificationFacts
+from eidos.state import EventLog, EventProposal, IntakeResult, ModelCallFacts, NodeSettledPayload, ToolCallFacts, VerificationFacts
 
 from .ports import Clock, IdSource
 
@@ -35,6 +35,7 @@ class Recorder:
         self._refused: list[IntakeResult] = []
         self._live: dict[StepId, NodeResult] = {}  # nodes already settled in the log, live, as their work returned
         self._observed: dict[StepId, Observation] = {}  # what was seen while a node ran, for a node settled after the run
+        self._tool_calls: dict[StepId, tuple[ToolCallFacts, ...]] = {}  # the tool calls a node made (D-203); absent for a node that made none
         self._discrepancies: list[str] = []
 
     # --- the door ---------------------------------------------------------------------------------------------------------------
@@ -74,13 +75,22 @@ class Recorder:
         with self._lock:
             self._observed[step_id] = Observation(duration_ms, model_calls)
 
+    def note_tool_calls(self, step_id: StepId, tool_calls: tuple[ToolCallFacts, ...]) -> None:
+        """Remember the tool calls a node made, in call order, so that whichever settles the node (live, or after the run) records them with it."""
+        with self._lock:
+            self._tool_calls[step_id] = tuple(tool_calls)
+
+    def tool_calls(self, step_id: StepId) -> tuple[ToolCallFacts, ...]:
+        with self._lock:
+            return self._tool_calls.get(step_id, ())
+
     def settle_live(self, plan_id, result: NodeResult, duration_ms: int, model_calls, verification: VerificationFacts | None) -> IntakeResult:
         """Record a node's settlement now, as its work returns, and remember what was recorded so the run's own result can be checked against it."""
         with self._lock:
             outcome = self._propose(
                 NodeSettledPayload(
                     plan_id=plan_id, result=result, dispatched=True, duration_ms=duration_ms,
-                    model_calls=tuple(model_calls), verification=verification,
+                    model_calls=tuple(model_calls), tool_calls=self._tool_calls.get(result.step_id, ()), verification=verification,
                 )
             )
             if outcome.applied:

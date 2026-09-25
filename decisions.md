@@ -4760,3 +4760,39 @@ one is not.
       (`agents/tool.py`) stay free of `eidos.policy`. No dependency rule was broadly relaxed. No agent module imports `eidos.policy` yet; Step 4 will.
 - **Effect:** the source Step 2 adds, including the ruling-1 change (`admit_tool_call(max_tool_calls: int | None)` and the `BUDGET_UNRESOLVED` denial) and the ruling-4 guard extension. No `eidos.contracts`,
   dependency, V1.1 or D-204-related change. The docstrings saying agents have "no tools (D-140)" are left for Step 4, when the Research agent changes (D-203).
+
+
+### D-206 — V1.2 Step 3: readings taken for the tool-call facts and their recording seam (OPEN)
+
+- **Status:** Open (readings taken, none blocking) · **Date:** 2026-09-25 · **Raised by:** Claude Code while implementing V1.2 Step 3 (tool-call facts and the recording seam); **not decided**
+- **Source:** D-203 rulings 4 and 6; D-160 (the model-call pattern this mirrors); D-204 item 2; D-205 items 3, 8 and 9; the Step 3 brief (additive facts on `NODE_SETTLED`, a reducer-derived `tool_calls_used`, replay
+  without a tool, recording, telemetry and experience additive); CLAUDE.md §7 and invariants 1, 2, 8, 15, 16
+- **Why recorded:** D-203 froze *that* a tool call is an additive fact on `NODE_SETTLED` and that `tool_calls_used` folds from admitted invocations, not the exact shape of the fact. The existing contracts allowed the
+  additive design without a new event type, so nothing blocked and none was added. Each reading below is the smallest implementation and can be changed without touching a V1.1 signature, `eidos.contracts` or D-204.
+- **What Step 3 built:** `ToolCallFacts`, `ToolCallOutcome` and `ToolDenialReason` in `eidos.state`; `NodeSettledPayload.tool_calls` (default empty, dispatched work nodes only); the reducer's `tool_calls_used` fold;
+  `StepRecord.tool_calls`; the tracker's tool collection (`ModelCallTracker.current_tool_calls`/`end_tool_calls`) and the recorder's `note_tool_calls`/`tool_calls` hand-off, passed through `RecordingAgent` and
+  `_record_settled_nodes`. No tool is invoked, no MCP, no `TOOL` step, no capability, no fourth agent, no `eidos.contracts` change; `run_with_replanning`, `record_attempt`, `record_baseline` and tracker
+  propagation are untouched (D-204 stays Open and deferred), and `TelemetryRecord` and `ExecutionExperience` are unchanged (they already carry `tool_calls_used`).
+- **Readings:**
+  1. **Fact shape.** `ToolCallFacts(tool_id, outcome, denial, args_digest, result_refs, result_bytes, elapsed_ms)`. The names are mine. `elapsed_ms` is whole milliseconds observed by the recorder's monotonic clock,
+     as `NodeSettledPayload.duration_ms` is, not seconds reported by a provider as `ModelCallFacts.elapsed_seconds` is; a `ToolResult` carries no elapsed time to report. `tool_id` is the id the caller named,
+     verbatim and unconstrained, so a call that named nothing valid is still recordable.
+  2. **Outcome vocabulary.** Eight outcomes: `result`; the five invocation failures mirroring `ToolFailureKind`; `served_stored` (a duplicate answered from a stored result); `denied`, with a `denial` reason mirroring
+     the seven `ToolDenialCode` values. `eidos.state` cannot import an agent or the policy layer, so both are mirrored by value and guard tests keep them in step (as `ModelCallOutcome` is, D-153 item 5): a new
+     failure kind or denial code needs the state enum extended.
+  3. **Denials and served duplicates are recorded as facts.** They cost nothing (below) but stay visible and typed. A denial carries no digest, because admission produces none for a refusal. A served duplicate
+     carries the digest and the stored references of the call it repeats and no elapsed time, since nothing was invoked.
+  4. **What `tool_calls_used` counts.** Every fact that reached a tool: `result` and the five failures. A served duplicate and a denial count for nothing. This follows the reading of D-205 item 3 (a failed invocation
+     counts against the budget), which is still Open; if that is ruled otherwise, the fold changes in the one property that defines an invocation. It stays the whole-mission running total (D-204 item 2); the
+     per-attempt count is read from the scoped steps' facts.
+  5. **References, sizes and messages.** `result_refs` are the artifacts the answer became, one per document in the answer's order (D-203 reading); an empty tuple with a `result` is a real "nothing matched".
+     `result_bytes` is carried only by a `result` or a `served_stored`; a failed invocation has no answer to reference or measure, and a `ToolFailure`'s message text is not recorded (the typed kind only), as a
+     model failure's is not. Whether `result_refs` and `result_bytes` are always supplied for a `result` (rather than left `None`, meaning unmeasured) is left to Step 4.
+  6. **Where the facts are collected.** The existing `ModelCallTracker` gained a parallel tool collection (its name is unchanged; renaming it is deferred) and the recorder gained `note_tool_calls`. A node's facts are
+     handed over only when it made some, so a run without tools makes exactly the recorder calls it always made and no existing recorder signature changed.
+  7. **Written form.** A newly written `NODE_SETTLED` always contains `"tool_calls": []`, so the serialised form of a new log differs from a pre-Step-3 log by that key; a pre-Step-3 log reads back unchanged.
+  8. **Telemetry and experience.** No field was added to either. They carry the counter through `tool_calls_used`. Per-outcome aggregates (denials, served duplicates, elapsed time) are not added; they can be derived from
+     `StepRecord.tool_calls` if a later step wants them.
+  9. **Producing the facts is Step 4's.** Step 3 defines no mapping from an admission decision and a `ToolPort` outcome to a fact, so what measures `elapsed_ms` and `result_bytes`, and how a served duplicate's stored
+     references are obtained, are Step 4's to establish (with the `RecordingToolPort`, D-203).
+- **Effect:** additive only. No `eidos.contracts`, dependency, V1.1 or D-204-related change; old logs replay unchanged.

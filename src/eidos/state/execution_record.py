@@ -49,6 +49,7 @@ from .payloads import (
     PlanRejectedPayload,
     PlanRejectionStage,
     RejectionReason,
+    ToolCallFacts,
     VerificationFacts,
 )
 from .records import EventRecord
@@ -68,12 +69,14 @@ class StepRecord(EidosModel):
     dispatched: bool | None = None  # whether a port was invoked for it; absent until it has settled
     duration_ms: int | None = Field(default=None, ge=0)  # the recorded duration; absent if none was observed
     model_calls: tuple[ModelCallFacts, ...] = ()
+    tool_calls: tuple[ToolCallFacts, ...] = ()  # the tool calls made while the step ran, in call order (D-203, V1.2 Step 3)
     verification: VerificationFacts | None = None  # the verifier's verdict and reason, on a ``VERIFY`` step
 
     @model_validator(mode="after")
     def _check_nothing_is_recorded_about_a_node_that_has_not_settled(self) -> "StepRecord":
         if self.result is None and (
-            self.dispatched is not None or self.duration_ms is not None or self.model_calls or self.verification is not None
+            self.dispatched is not None or self.duration_ms is not None or self.model_calls or self.tool_calls
+            or self.verification is not None
         ):
             raise ValueError("a step that has not settled carries no settlement facts")
         if self.result is not None and self.dispatched is None:
@@ -138,8 +141,10 @@ def execution_record(records: Iterable[EventRecord], *, plan_id: PlanId | None =
     ``execution_time_used_ms`` are recomputed from the scoped ``steps`` alone when ``plan_id`` is given, mirroring
     the reducer's own per-``NodeSettledPayload`` folding formula exactly, applied to a subset — ``state``'s own
     counters are whole-mission cumulative totals, not per-plan. ``tool_calls_used``/``retries_used``/
-    ``replans_used`` stay ``state``'s own mission-level totals regardless of scoping: nothing today produces a
-    per-node source for any of them to scope from (D-140, D-170). ``event_count``/``first_occurred_at``/
+    ``replans_used`` stay ``state``'s own mission-level totals regardless of scoping: ``tool_calls_used`` now has a
+    per-step source (each ``StepRecord.tool_calls``, D-203 V1.2 Step 3) but deliberately keeps the whole-mission
+    meaning V1.1 gave it (D-204 item 2), so an exact per-attempt count is read from the scoped steps, while
+    nothing produces a per-node source for ``retries_used``/``replans_used`` (D-140, D-170). ``event_count``/``first_occurred_at``/
     ``last_occurred_at`` stay the whole log's own bounds either way, exactly as already documented — a scoped
     view narrows *which plan's facts* are reported, not *which events exist*.
     """
@@ -234,6 +239,7 @@ def _step_record(step, started: NodeStartedPayload | None, settled: NodeSettledP
         dispatched=settled.dispatched if settled else None,
         duration_ms=settled.duration_ms if settled else None,
         model_calls=settled.model_calls if settled else (),
+        tool_calls=settled.tool_calls if settled else (),
         verification=settled.verification if settled else None,
     )
 

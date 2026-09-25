@@ -159,6 +159,7 @@ def _record_settled_nodes(recorder: Recorder, report: BaselineReport) -> None:
                 dispatched=was_dispatched,
                 duration_ms=seen.duration_ms if seen is not None else None,
                 model_calls=seen.model_calls if seen is not None else (),
+                tool_calls=recorder.tool_calls(result.step_id),
             )
         )
 

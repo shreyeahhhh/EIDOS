@@ -50,7 +50,10 @@ D-113), so ``NODE_STARTED``/``A2A_TASK_STARTED`` change only ``state_version`` a
   a lower bound and never an estimate;
 * ``execution_time_used_ms`` grows by the node's recorded ``duration_ms`` — accumulated accounted node execution time, **not** wall-clock
   duration; a node with no recorded duration adds nothing (D-160 item 6);
-* ``retries_used`` and ``tool_calls_used`` are never changed: nothing produces them. ``replans_used`` grows by
+* ``tool_calls_used`` grows by one for each recorded tool call that actually **invoked** a tool (D-203, V1.2 Step 3): a call that reached a
+  tool counts whether or not it produced a result, while a duplicate served from a stored result and a call admission denied reached no tool
+  and count for nothing. It stays a whole-mission running total (D-204 item 2); the per-step facts carry the per-attempt detail;
+* ``retries_used`` is never changed: nothing produces it. ``replans_used`` grows by
   exactly one per accepted ``REPLAN_TRIGGERED`` (D-199, below) — the only counter this module changes outside a
   ``NODE_SETTLED`` fold.
 
@@ -331,10 +334,12 @@ def _apply(state: MissionState, record: EventRecord) -> MissionState | _Reject:
             return problem
         calls = 1 if payload.dispatched and result.kind is PlanStepKind.AGENT else 0
         tokens = sum((call.prompt_tokens or 0) + (call.output_tokens or 0) for call in payload.model_calls)
+        tools = sum(1 for call in payload.tool_calls if call.invoked)
         return _evolved(
             state,
             record,
             agent_calls_used=state.agent_calls_used + calls,
+            tool_calls_used=state.tool_calls_used + tools,
             tokens_used=state.tokens_used + tokens,
             execution_time_used_ms=state.execution_time_used_ms + (payload.duration_ms or 0),
         )

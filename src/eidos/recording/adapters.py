@@ -29,19 +29,25 @@ from eidos.runtime import (
     WorkResult,
     WorkStatus,
 )
-from eidos.state import ModelCallFacts, ModelCallOutcome, NodeStartedPayload, VerificationFacts
+from eidos.state import ModelCallFacts, ModelCallOutcome, NodeStartedPayload, ToolCallFacts, VerificationFacts
 
 from .recorder import Recorder
 
 
 class ModelCallTracker:
-    """Collects, per thread, the model calls made while one node runs."""
+    """Collects, per thread, the model calls and the tool calls made while one node runs.
+
+    The tool collection is the additive half (D-203, V1.2 Step 3): ``begin`` opens both, ``end`` closes the model calls exactly as it always
+    did, and ``end_tool_calls`` closes the tool calls. Whatever makes a tool call adds its ``ToolCallFacts`` to ``current_tool_calls()`` on the
+    thread that is running the node; a call made outside any node is attributed to nothing, as for a model call. Nothing here makes a call.
+    """
 
     def __init__(self) -> None:
         self._local = threading.local()
 
     def begin(self) -> None:
         self._local.calls = []
+        self._local.tool_calls = []
 
     def current(self) -> list[ModelCallFacts] | None:
         return getattr(self._local, "calls", None)
@@ -49,6 +55,14 @@ class ModelCallTracker:
     def end(self) -> tuple[ModelCallFacts, ...]:
         calls = getattr(self._local, "calls", None) or []
         self._local.calls = None
+        return tuple(calls)
+
+    def current_tool_calls(self) -> list[ToolCallFacts] | None:
+        return getattr(self._local, "tool_calls", None)
+
+    def end_tool_calls(self) -> tuple[ToolCallFacts, ...]:
+        calls = getattr(self._local, "tool_calls", None) or []
+        self._local.tool_calls = None
         return tuple(calls)
 
 
@@ -119,13 +133,22 @@ class RecordingAgent:
         try:
             result = self.agent.run(context, node)
         except BaseException:
+            self._note_tool_calls(node)
             self.recorder.note_observation(node.step_id, self.recorder.duration_ms(started), self.tracker.end())
             raise
         duration_ms, calls = self.recorder.duration_ms(started), self.tracker.end()
+        self._note_tool_calls(node)
         self.recorder.note_observation(node.step_id, duration_ms, calls)
         if isinstance(result, WorkResult):
             self.recorder.settle_live(context.plan_id, node_result_of_work(node, result), duration_ms, calls, None)
         return result
+
+    def _note_tool_calls(self, node: WorkNode) -> None:
+        """Hand the node's tool calls to the recorder, before it settles the node; a node that made none says nothing, so a run without tools
+        makes exactly the recorder calls it always made."""
+        tool_calls = self.tracker.end_tool_calls()
+        if tool_calls:
+            self.recorder.note_tool_calls(node.step_id, tool_calls)
 
 
 class RecordingVerifier:

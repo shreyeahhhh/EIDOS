@@ -1,13 +1,13 @@
 # 08 — MCP Contract
 
-**Status:** DERIVED — **V1.2 (decisions.md D-203, 2026-09-24): scope frozen; Step 2 (2026-09-25) implemented only the pure, transport-free tool contracts and deterministic admission (§4a); no MCP client, server or
+**Status:** DERIVED — **V1.2 (decisions.md D-203, 2026-09-24): scope frozen; Step 2 (2026-09-25) implemented only the pure, transport-free tool contracts and deterministic admission (§4a), and (Step 3) their recording as additive facts (§4b); no MCP client, server or
 dependency exists yet.** Earlier deferred and unassigned (D-184, 2026-09-22).
 **Derived from:** handoff §27, §28, §29, §33, §50, §63
 **Authority:** This document is derived from `EIDOS_CLAUDE_CODE_HANDOFF.md` and subordinate to it.
 If this document and the handoff conflict, stop and report the conflict to the human owner.
 
 > **No MCP is implemented.** There is no `eidos.mcp` package, no MCP dependency and no tool provider; only
-> the transport-free contracts and admission of §4a exist. §50 named this V0.7 in the handoff's own original sequence; the owner has since
+> the transport-free contracts, admission (§4a) and the recording seam for tool-call facts (§4b) exist. §50 named this V0.7 in the handoff's own original sequence; the owner has since
 > redefined V0.7 as Strategy & Candidate Generation (`decisions.md` D-178 onward) and ruled, as
 > **D-184**, that MCP is not renumbered into the V0.7–V1.0 strategy-intelligence sequence — it gets a
 > milestone only when a concrete requirement or benchmark needs it. **D-203 then assigned it to V1.2**, with one pinned read-only tool, a client only and a hand-rolled
@@ -90,6 +90,16 @@ ruling 1), decided before duplicate detection so that a stored duplicate is not 
 `allowed_actions`, `autonomy_level` below 1, arguments not matching the entry's schema, an exact duplicate `(execution_id, tool_id, args_digest)` with a stored result (served with no invocation and
 no budget), and the per-plan-attempt `max_tool_calls` budget scoped `(execution_id, plan_id)`. Tool policy is call-time only; a plan never names a tool. Where D-203 was silent, the readings taken are
 recorded as **D-205** (partly ruled 2026-09-25; the rest Open).
+
+## 4b. Tool-call facts as recorded (V1.2 Step 3, D-203, D-206)
+
+A tool call is recorded without a new event type: as an additive `tool_calls` tuple of `ToolCallFacts` on the `NODE_SETTLED` of the work node that made it, in call order, exactly as model calls are (D-160).
+`MCP_TOOL_CALLED` stays an unused vocabulary slot. A fact holds the tool id as the caller named it; one of eight typed outcomes (`result`; the five invocation failures `unavailable`, `timeout`, `tool_error`,
+`malformed_result` and `result_too_large`; `served_stored`, a duplicate answered from a stored result; and `denied`, with one of the seven admission denial reasons); the request digest; the artifact references the
+answer became; the answer's size in bytes; and the elapsed milliseconds. Each kind carries only what can be true of it. The reducer folds `tool_calls_used` from the calls that reached a tool (the result and the five
+failures) and nothing else, so a served duplicate and a denial cost nothing; it stays the whole-mission running total (D-204 item 2), and each step's own facts give the per-attempt detail. Replay reproduces the facts
+and the counter from the log alone, with no tool and no transport; a log written before the field existed reads back unchanged. Nothing here invokes a tool: the facts reach the recorder through the tracker's tool
+collection, and producing them from admission decisions and tool results is Step 4.
 
 ## 5. Telemetry
 

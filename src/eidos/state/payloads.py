@@ -7,8 +7,9 @@ package emits; a type with no class here cannot form an ``EventRecord``, and not
 deliberately absent: ``NODE_SETTLED`` carries the verdict, so emitting it would record one fact twice (D-160 item 2). No other reserved-but-unbuilt
 event type gains a payload here: ``A2A_TASK_STARTED``/``A2A_TASK_COMPLETED`` are the only two of the vocabulary's remote-subsystem types this
 package builds (D-090), and D-174 uses exactly those two — no ``A2A_TASK_FAILED`` or the like, and no producer-assigned sequence field on either
-(D-172). The tool-call and evidence-search types stay exactly as V0.5 left them: named in the vocabulary, no payload class, because those
-subsystems do not exist yet. ``REPLAN_TRIGGERED`` (D-199, V1.1 Step 3) finally gives that long-declared V0.1 vocabulary slot its own real
+(D-172). The tool-call and evidence-search event types stay exactly as V0.5 left them: named in the vocabulary, no payload class. Tool calls are
+recorded without a new event type, as additive ``ToolCallFacts`` on ``NODE_SETTLED`` (D-203, V1.2 Step 3), exactly as model calls are (D-160).
+``REPLAN_TRIGGERED`` (D-199, V1.1 Step 3) finally gives that long-declared V0.1 vocabulary slot its own real
 shape: recorded only when an accepted within-mission replan is about to try a different plan, it deliberately never touches
 ``MissionState.status`` — see its own class docstring and ``reducer.py`` for why no new terminal-state escape hatch is needed.
 
@@ -94,6 +95,90 @@ class ModelCallFacts(EidosModel):
         return self
 
 
+class ToolCallOutcome(StrEnum):
+    """What one tool call came to (D-203, V1.2 Step 3). The five failure values mirror ``eidos.agents.ToolFailureKind`` and a guard test keeps
+    the two in step (the same arrangement as ``ModelCallOutcome``, D-153 item 5, so that ``eidos.state`` never imports an agent).
+
+    Only the first six reached a tool: ``RESULT`` and the five failures are **invocations**. ``SERVED_STORED`` is a duplicate answered from a
+    result already stored, so nothing was invoked and nothing is charged; ``DENIED`` is a call admission refused before any tool was reached.
+    """
+
+    RESULT = "result"
+    UNAVAILABLE = "unavailable"
+    TIMEOUT = "timeout"
+    TOOL_ERROR = "tool_error"
+    MALFORMED_RESULT = "malformed_result"
+    RESULT_TOO_LARGE = "result_too_large"
+    SERVED_STORED = "served_stored"
+    DENIED = "denied"
+
+
+class ToolDenialReason(StrEnum):
+    """Why admission refused a call. Mirrors ``eidos.policy.ToolDenialCode`` value for value; a guard test keeps the two in step."""
+
+    UNKNOWN_TOOL = "unknown_tool"
+    NOT_READ_ONLY = "not_read_only"
+    ACTION_NOT_ALLOWED = "action_not_allowed"
+    AUTONOMY_TOO_LOW = "autonomy_too_low"
+    INVALID_ARGUMENTS = "invalid_arguments"
+    BUDGET_EXHAUSTED = "budget_exhausted"
+    BUDGET_UNRESOLVED = "budget_unresolved"
+
+
+_INVOKED = frozenset({
+    ToolCallOutcome.RESULT, ToolCallOutcome.UNAVAILABLE, ToolCallOutcome.TIMEOUT, ToolCallOutcome.TOOL_ERROR,
+    ToolCallOutcome.MALFORMED_RESULT, ToolCallOutcome.RESULT_TOO_LARGE,
+})
+_SHA256_HEX = r"^[0-9a-f]{64}$"
+
+
+class ToolCallFacts(EidosModel):
+    """What was recorded about one tool call (D-203, V1.2 Step 3). ``None`` and an empty tuple mean nobody recorded it; neither is a guess.
+
+    ``tool_id`` is the id the caller named, verbatim, so it is unconstrained: a call refused because it named nothing valid must still be
+    recordable. ``args_digest`` identifies the request (a canonical SHA-256 of its validated arguments) and is present for every call that passed
+    argument validation: an invocation or a served duplicate. A denial has none, because admission produces none for a refusal. ``result_refs`` are
+    the artifacts the answer became, one per document and in the answer's order, so provenance is preserved in the reference and in this fact
+    (D-203 ruling 6); an empty tuple with a ``RESULT`` is a real "nothing matched". ``result_bytes`` is the answer's size and ``elapsed_ms`` the
+    time the invocation took, whole milliseconds by the recorder's monotonic clock, the same way ``NodeSettledPayload.duration_ms`` is observed.
+
+    A call that reached no tool (``SERVED_STORED`` or ``DENIED``) has no elapsed time, and a failed invocation has no answer to reference or
+    measure: each kind carries exactly what can be true of it, so a mislabelled fact is unconstructible.
+    """
+
+    tool_id: str
+    outcome: ToolCallOutcome
+    denial: ToolDenialReason | None = None
+    args_digest: str | None = Field(default=None, pattern=_SHA256_HEX)
+    result_refs: tuple[ArtifactRef, ...] = ()
+    result_bytes: int | None = Field(default=None, ge=0)
+    elapsed_ms: int | None = Field(default=None, ge=0)
+
+    @property
+    def invoked(self) -> bool:
+        """Whether a tool was actually reached: the only calls ``tool_calls_used`` counts. A served duplicate and a denial are not."""
+        return self.outcome in _INVOKED
+
+    @model_validator(mode="after")
+    def _check_the_fields_belong_to_the_outcome(self) -> "ToolCallFacts":
+        if (self.outcome is ToolCallOutcome.DENIED) != (self.denial is not None):
+            raise ValueError("exactly a denied call carries the reason it was denied")
+        if self.outcome is ToolCallOutcome.DENIED:
+            if self.args_digest is not None or self.result_refs or self.result_bytes is not None or self.elapsed_ms is not None:
+                raise ValueError("a denied call reached no tool: it carries its reason and nothing else")
+            return self
+        if self.args_digest is None:
+            raise ValueError("a call that passed admission's argument check carries its request digest")
+        if len(set(self.result_refs)) != len(self.result_refs):
+            raise ValueError("a call lists each artifact it produced at most once")
+        if self.outcome is ToolCallOutcome.SERVED_STORED:
+            if self.elapsed_ms is not None:
+                raise ValueError("a served duplicate invoked nothing, so it has no elapsed time")
+        elif self.outcome is not ToolCallOutcome.RESULT and (self.result_refs or self.result_bytes is not None):
+            raise ValueError(f"a {self.outcome.value} call has no answer to reference or measure")
+        return self
+
+
 class VerificationFacts(EidosModel):
     """What the ``Verifier`` port returned for a ``VERIFY`` node: a verdict and its reason text, and no typed per-rule outcomes (D-158 item 7)."""
 
@@ -172,7 +257,9 @@ class NodeSettledPayload(EidosModel):
     ``dispatched`` is stated, not inferred: a node carried over from prior outcomes is ``SUCCEEDED`` without having been dispatched in this
     run (D-120), and it must not be counted as an agent call. ``duration_ms`` is an **observed fact** from the recorder's monotonic clock and
     is absent when the node was not dispatched or nobody observed it (D-160 item 6). ``model_calls`` are the calls made while the node ran,
-    in call order, and belong to a work node.
+    in call order, and belong to a work node. ``tool_calls`` (D-203, V1.2 Step 3) are the tool calls made while the node ran, in call order,
+    and likewise belong to a dispatched work node. The field is additive: it defaults to empty, so a log written before it existed reads back
+    exactly as it was written, and no new event type is involved.
     """
 
     event_type: Literal[MissionEventType.NODE_SETTLED] = MissionEventType.NODE_SETTLED
@@ -181,16 +268,21 @@ class NodeSettledPayload(EidosModel):
     dispatched: bool
     duration_ms: int | None = Field(default=None, ge=0)
     model_calls: tuple[ModelCallFacts, ...] = ()
+    tool_calls: tuple[ToolCallFacts, ...] = ()
     verification: VerificationFacts | None = None
 
     @model_validator(mode="after")
     def _check_observations_belong_to_a_dispatched_node_of_the_right_kind(self) -> "NodeSettledPayload":
-        if not self.dispatched and (self.duration_ms is not None or self.model_calls or self.verification is not None):
+        if not self.dispatched and (
+            self.duration_ms is not None or self.model_calls or self.tool_calls or self.verification is not None
+        ):
             raise ValueError("a node that was not dispatched has no observations")
         if self.result.status in (NodeStatus.SKIPPED, NodeStatus.NOT_REACHED) and self.dispatched:
             raise ValueError(f"a {self.result.status.value} node was not dispatched")
         if self.model_calls and self.result.kind is not PlanStepKind.AGENT:
             raise ValueError("only a work node makes model calls")
+        if self.tool_calls and self.result.kind is not PlanStepKind.AGENT:
+            raise ValueError("only a work node makes tool calls")
         if self.verification is not None and self.result.kind is not PlanStepKind.VERIFY:
             raise ValueError("only a VERIFY node carries a verdict")
         return self

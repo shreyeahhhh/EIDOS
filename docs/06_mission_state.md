@@ -212,7 +212,7 @@ to `recorded_at` for EIDOS-internal events, set at acceptance. The reducer never
 - **Timestamps** are timezone-aware **UTC**; naive values are **rejected** (**D-083**).
 - **`MissionEventType`** is **exactly the thirteen types in §33** (**D-090**) — including A2A, MCP and
   RAG types that cannot occur in V0.1. This differs from D-052's exclusion of unreachable *states*;
-  recorded so the difference is visible. **V0.5 (D-154, built):** three local-execution types are added — `NODE_STARTED`, `NODE_SETTLED` and `MISSION_PAUSED` — so there are sixteen.
+  recorded so the difference is visible. **V0.5 (D-154, built):** three local-execution types are added — `NODE_STARTED`, `NODE_SETTLED` and `MISSION_PAUSED` — so there are sixteen. **V1.2 Step 3 (D-203, built):** no type is added: a tool call is recorded as an additive `tool_calls` fact on `NODE_SETTLED`, as a model call is, and `MCP_TOOL_CALLED` stays an unused vocabulary slot.
 - **`sequence` starts at 1**; **`state_version`** is a non-negative integer equal to the latest applied
   mission sequence (**D-097**). Reducer and checkpoint semantics are decided for V0.5 by D-155 and D-157 (built).
 

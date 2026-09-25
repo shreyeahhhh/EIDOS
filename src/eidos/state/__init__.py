@@ -13,6 +13,7 @@ Step 6 — ``ExecutionRecord``, the derived read-only projection of a log (D-159
 V0.6 Step 2 — the ``AgentTask`` status mapping and the D-176 fold primitive (``agent_tasks``).
 V0.6 Step 4 — ``A2A_TASK_STARTED``/``A2A_TASK_COMPLETED`` wired into the reducer, the log's intake and replay (D-166, D-172, D-176).
 V0.6 D-177 — explicit resume: ``EventLog.accept_resumed`` and ``reduce_resumed``, narrow additions beside ``accept``/``reduce``.
+V1.2 Step 3 — additive ``ToolCallFacts`` on ``NODE_SETTLED``, the reducer's ``tool_calls_used`` fold and ``StepRecord.tool_calls`` (D-203).
 """
 
 from .agent_tasks import AmbiguousAgentTaskCorrelation, fold_agent_task, node_status_for
@@ -36,6 +37,9 @@ from .payloads import (
     PlanRejectionStage,
     RejectionReason,
     ReplanTriggeredPayload,
+    ToolCallFacts,
+    ToolCallOutcome,
+    ToolDenialReason,
     VerificationFacts,
 )
 from .execution_record import ExecutionRecord, StepRecord, execution_record
@@ -92,6 +96,9 @@ __all__ = [
     "ReplayRejectionCode",
     "ReplayResult",
     "StepRecord",
+    "ToolCallFacts",
+    "ToolCallOutcome",
+    "ToolDenialReason",
     "VerificationFacts",
     "checkpoint_at",
     "dump_jsonl",
