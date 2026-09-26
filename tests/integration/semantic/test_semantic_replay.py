@@ -10,7 +10,6 @@ library, unimportable; and a worker that fails is recorded as the typed outcome 
 import json
 import socket
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -34,6 +33,7 @@ from eidos.state import CitationKind, RetrievalOutcome, audit_evidence, dump_jso
 
 from eidos_knowledge_factories import SCHEME, small_corpus
 from eidos_recording_factories import FixedClock, baseline_mission, new_rig, record
+from eidos_replay_story import replay_in_fresh_process
 from eidos_semantic_process_factories import FAST, fake_command, make_fake_model
 from eidos_v04_registry import ANALYSIS_AGENT_ID, RESEARCH_AGENT_ID
 
@@ -132,39 +132,10 @@ def test_replay_and_the_audit_start_no_process_open_no_socket_and_never_ask_the_
     assert embedder.requests == calls_before  # the worker was not asked
 
 
-REPLAY_STORY = """
-import json, sys
-sys.path.insert(0, 'src')
-BLOCKED = %r
-
-class Blocker:
-    def find_spec(self, name, path=None, target=None):
-        if name in BLOCKED or any(name.startswith(prefix + '.') for prefix in BLOCKED):
-            raise ImportError('blocked: ' + name)
-        return None
-
-sys.meta_path.insert(0, Blocker())
-from eidos.state import audit_evidence, execution_record, load_jsonl, replay_jsonl
-
-text = sys.stdin.read()
-replayed = replay_jsonl(text)
-audit = audit_evidence(execution_record(load_jsonl(text).records))
-loaded = sorted(m for m in sys.modules if m in BLOCKED or any(m.startswith(prefix + '.') for prefix in BLOCKED))
-print(json.dumps({"audit": json.loads(audit.model_dump_json()), "loaded": loaded, "status": str(replayed.state.status)}, sort_keys=True))
-""" % (
-    (
-        "eidos.knowledge", "eidos.agents", "eidos.recording", "eidos.policy", "eidos.mcp", "eidos.baseline", "eidos.providers", "eidos.backends", "eidos.a2a",
-        "langgraph", "langchain", "torch", "sentence_transformers", "transformers", "tokenizers", "numpy", "safetensors", "huggingface_hub", "qdrant_client", "faiss", "requests", "httpx",
-    ),
-)
-
-
 def test_a_fresh_process_replays_a_semantic_log_with_the_retrieval_stack_and_every_model_library_unimportable(semantic):
     run = recorded(semantic)
     text = dump_jsonl(run.log.records)
-    completed = subprocess.run([sys.executable, "-c", REPLAY_STORY], input=text, capture_output=True, text=True, cwd=ROOT)
-    assert completed.returncode == 0, completed.stderr
-    story = json.loads(completed.stdout.strip().splitlines()[-1])
+    story = replay_in_fresh_process(text, ROOT)
     assert story["loaded"] == []
     assert story["audit"] == json.loads(audit_evidence(execution_record(run.log.records)).model_dump_json())
     assert [t["kind"] for t in story["audit"]["traces"]].count(CitationKind.RESOLVED.value) == 4

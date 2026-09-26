@@ -13,8 +13,9 @@ Constraints (the repository rules, §8; D-135, D-140):
 - No I/O, no network, no clock, no randomness. Agents are read-only (D-140). The tool seam (``ToolPort`` and its typed request, result and
   failure, D-203) exists from V1.2 Step 2; from Step 4 the Research agent may be given tool access through ``ToolAccess``, whose implementation
   ``ToolGate`` admits a call before any port is reached (D-203, D-207). No agent knows how a port reaches its tool.
-- The knowledge boundary (V1.3, D-222): ``evidence_ledger`` is the one module here that depends on ``eidos.knowledge``, through the package root only; ``eidos.knowledge``
-  never imports this package.
+- The knowledge boundary (V1.3, D-222, D-228): ``evidence_ledger`` and ``knowledge_gate`` are the two modules here that depend on ``eidos.knowledge``, through the package root
+  only, each by a pinned set of names; from Step 7 the Research agent may be given knowledge access through ``KnowledgeAccess``, whose implementation ``KnowledgeGate`` builds the request
+  from the knowledge base's own bounds and turns an answer into ledger records and citable artifacts. ``eidos.knowledge`` never imports this package.
 - Core layers (contracts, validation, compiler, runtime, backends) never import this package.
 """
 
@@ -22,6 +23,7 @@ from .analysis import AnalysisAgent
 from .artifacts import Artifact, ArtifactConflict, ArtifactStore, InMemoryArtifactStore
 from .base import STEP_ID_REUSED, SUPPORTED_CONTENT_TYPES, WorkAgent, artifact_ref_for, cited_refs, refuse_a_reused_step
 from .evidence_ledger import ArtifactEvidence, EvidenceLedger, resolve_supplied_evidence
+from .knowledge_gate import EVIDENCE_CONTENT_TYPE, KnowledgeAccess, KnowledgeBaseDescriptor, KnowledgeGate, KnowledgeGateKind, KnowledgeGateOutcome
 from .model import (
     GenerationParameters,
     MeasuredFacts,
@@ -69,9 +71,15 @@ __all__ = [
     "ArtifactConflict",
     "ArtifactEvidence",
     "ArtifactStore",
+    "EVIDENCE_CONTENT_TYPE",
     "EvidenceLedger",
     "GenerationParameters",
     "InMemoryArtifactStore",
+    "KnowledgeAccess",
+    "KnowledgeBaseDescriptor",
+    "KnowledgeGate",
+    "KnowledgeGateKind",
+    "KnowledgeGateOutcome",
     "MeasuredFacts",
     "ModelFailure",
     "ModelFailureKind",

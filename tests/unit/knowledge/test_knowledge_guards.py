@@ -240,8 +240,11 @@ def ascii_only(path: Path) -> bool:
         *MODULES,
         *sorted((ROOT / "tests" / "unit" / "knowledge").glob("*.py")),
         ROOT / "src" / "eidos" / "agents" / "evidence_ledger.py",
+        ROOT / "src" / "eidos" / "agents" / "knowledge_gate.py",
         ROOT / "src" / "eidos" / "state" / "evidence_audit.py",
         ROOT / "tests" / "unit" / "agents" / "test_agents_evidence_ledger.py",
+        ROOT / "tests" / "unit" / "agents" / "test_agents_knowledge_gate.py",
+        ROOT / "tests" / "unit" / "agents" / "test_agents_research_knowledge.py",
         ROOT / "tests" / "unit" / "state" / "test_state_retrieval_facts.py",
         ROOT / "tests" / "unit" / "state" / "test_state_evidence_audit.py",
         ROOT / "tests" / "unit" / "recording" / "test_recording_retrieval.py",
@@ -251,9 +254,14 @@ def ascii_only(path: Path) -> bool:
         ROOT / "tests" / "support" / "eidos_retrieval_fixture.py",
         ROOT / "tests" / "support" / "eidos_retrieval_benchmark.py",
         ROOT / "tests" / "scenarios" / "test_retrieval_benchmark_lexical.py",
+        ROOT / "tests" / "scenarios" / "test_rag_mission.py",
+        ROOT / "tests" / "scenarios" / "test_rag_mission_real_model.py",
         ROOT / "tests" / "protocol" / "test_semantic_worker_protocol.py",
         *sorted((ROOT / "tests" / "integration" / "semantic").glob("*.py")),
         ROOT / "tests" / "support" / "eidos_semantic_process_factories.py",
+        ROOT / "tests" / "support" / "eidos_knowledge_gate_fixture.py",
+        ROOT / "tests" / "support" / "eidos_rag_rig.py",
+        ROOT / "tests" / "support" / "eidos_replay_story.py",
         ROOT / "tests" / "support" / "fake_semantic_worker.py",
         ROOT / "tests" / "support" / "misbehaving_semantic_worker.py",
     ],
@@ -294,11 +302,11 @@ def other_paths():
             yield entry
 
 
-BOUNDARIES = {SRC / "agents" / "evidence_ledger.py", SRC / "recording" / "adapters.py"}
+BOUNDARIES = {SRC / "agents" / "evidence_ledger.py", SRC / "agents" / "knowledge_gate.py", SRC / "recording" / "adapters.py"}
 
 
 @pytest.mark.parametrize("path", list(other_paths()), ids=lambda p: str(p.relative_to(SRC)))
-def test_only_the_evidence_ledger_and_the_retrieval_adapter_import_the_knowledge_package_and_only_from_its_root(path):
+def test_only_the_evidence_ledger_the_knowledge_gate_and_the_retrieval_adapter_import_the_knowledge_package_and_only_from_its_root(path):
     reached = sorted(name for name in eidos_names_imported(path) if name == "eidos.knowledge" or name.startswith("eidos.knowledge."))
     if path in BOUNDARIES:
         assert [name for name in imports_of(path) if name.startswith("eidos.knowledge")] == ["eidos.knowledge"], "a boundary module imports from the package root, once"

@@ -3,8 +3,8 @@
 The agents package is vendor-free, does no I/O beyond its ports, never reaches a provider, and no core layer
 ever imports it. These are checks on the source, so they hold however the agents are later implemented.
 
-The package may depend on ``eidos.policy`` (the tool-admission seam, D-205) and, since V1.3 Step 3, on the knowledge boundary (D-222): one module, a fixed set of
-names, taken from the package root, one way only.
+The package may depend on ``eidos.policy`` (the tool-admission seam, D-205) and, since V1.3 Step 3, on the knowledge boundary (D-222): two modules since Step 7 (D-228), each
+with a fixed set of names, taken from the package root, one way only.
 """
 
 import ast
@@ -32,18 +32,36 @@ ALLOWED_EIDOS = {"eidos.contracts", "eidos.runtime", "eidos.compiler", "eidos.ca
 PRE_ADMISSION_ALLOWED_EIDOS = {"eidos.contracts", "eidos.runtime", "eidos.compiler", "eidos.capabilities", "eidos.agents"}
 # D-222 point 4 (the owner's import-guard ruling, 2026-09-25): the second deliberate extension, for the eidos.agents -> eidos.knowledge boundary. Only the
 # evidence ledger module depends on it, only on these names and only from the package root; eidos.knowledge never imports eidos.agents (its own guard test).
-# Until a KnowledgePort exists (a later step) this set is the boundary; a later step adds names to it on purpose (decisions.md D-224).
-KNOWLEDGE_BOUNDARY_MODULE = "evidence_ledger.py"
+# Step 7 (D-228, the deliberate revision D-224 reading 10 said a later step would make): the knowledge gate is the second boundary module, with its own pinned names, and the
+# Research agent and every other module still import nothing of eidos.knowledge: Research depends on the gate's protocol, not on the port or on any retriever.
+KNOWLEDGE_BOUNDARY_MODULES = {"evidence_ledger.py", "knowledge_gate.py"}
 APPROVED_KNOWLEDGE_NAMES = {
-    "DocumentRef",
-    "EvidenceRecord",
-    "EvidenceRefusal",
-    "EvidenceRefusalCode",
-    "IndependenceResolution",
-    "legacy_supplied_record",
-    "legacy_tool_record",
-    "merge_evidence",
-    "resolve_independence",
+    "evidence_ledger.py": {
+        "DocumentRef",
+        "EvidenceRecord",
+        "EvidenceRefusal",
+        "EvidenceRefusalCode",
+        "IndependenceResolution",
+        "legacy_supplied_record",
+        "legacy_tool_record",
+        "merge_evidence",
+        "resolve_independence",
+    },
+    "knowledge_gate.py": {
+        "KB_ID_PATTERN",
+        "EvidenceRecord",
+        "EvidenceRefusal",
+        "KnowledgePort",
+        "KnowledgeSnapshot",
+        "RetrievalFailure",
+        "RetrievalFailureKind",
+        "RetrievalRequest",
+        "RetrievalResult",
+        "canonical_query_text",
+        "evidence_from_snapshot",
+        "merge_evidence",
+        "result_problem",
+    },
 }
 
 VENDOR_NAMES = {
@@ -96,13 +114,14 @@ def eidos_names_imported(path: Path) -> set[str]:
 
 
 @pytest.mark.parametrize("module", MODULES, ids=lambda m: m.name)
-def test_only_the_evidence_ledger_module_depends_on_the_knowledge_package(module):
+def test_only_the_two_boundary_modules_depend_on_the_knowledge_package(module):
     depends = {name for name in eidos_names_imported(module) if name == "eidos.knowledge" or name.startswith("eidos.knowledge.")}
-    assert bool(depends) == (module.name == KNOWLEDGE_BOUNDARY_MODULE), f"{module.name} imports {sorted(depends)}"
+    assert bool(depends) == (module.name in KNOWLEDGE_BOUNDARY_MODULES), f"{module.name} imports {sorted(depends)}"
 
 
-def test_the_evidence_ledger_takes_exactly_the_approved_knowledge_names_from_the_package_root_and_nothing_else():
-    tree = ast.parse((AGENTS / KNOWLEDGE_BOUNDARY_MODULE).read_text(encoding="utf-8"))
+@pytest.mark.parametrize("module_name", sorted(KNOWLEDGE_BOUNDARY_MODULES))
+def test_each_boundary_module_takes_exactly_its_approved_knowledge_names_from_the_package_root_and_nothing_else(module_name):
+    tree = ast.parse((AGENTS / module_name).read_text(encoding="utf-8"))
     knowledge_imports = [
         node for node in ast.walk(tree)
         if (isinstance(node, ast.ImportFrom) and node.level == 0 and (node.module or "").startswith("eidos.knowledge"))
@@ -110,8 +129,15 @@ def test_the_evidence_ledger_takes_exactly_the_approved_knowledge_names_from_the
     ]
     (statement,) = knowledge_imports
     assert isinstance(statement, ast.ImportFrom) and statement.module == "eidos.knowledge"
-    assert {alias.name for alias in statement.names} == APPROVED_KNOWLEDGE_NAMES
+    assert {alias.name for alias in statement.names} == APPROVED_KNOWLEDGE_NAMES[module_name]
     assert all(alias.asname is None for alias in statement.names)
+
+
+def test_the_research_agent_reaches_knowledge_only_through_the_gates_protocol_and_names_no_retriever_implementation_or_process():
+    assert not [name for name in eidos_names_imported(AGENTS / "research.py") if name.startswith("eidos.knowledge")]
+    words = set(re.findall(r"[a-z0-9]+", (AGENTS / "research.py").read_text(encoding="utf-8").lower()))
+    assert words & {"semanticknowledgeport", "lexicalknowledgeport", "isolatedembedder", "embedder", "subprocess", "worker", "torch", "transformers"} == set()
+    assert "knowledgeaccess" in words  # what it does depend on
 
 
 @pytest.mark.parametrize("module", sorted((SRC / "policy").glob("*.py")), ids=lambda m: m.name)
