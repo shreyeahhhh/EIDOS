@@ -148,6 +148,8 @@ V0.2 and are tuned from measurement, and a provisional bound is never presented 
 the Agentic RAG reformulation loop (§24) still has no stated bound at all, and is the one loop in the
 handoff without one.
 
+> **V1.3 status (2026-09-26):** a knowledge retrieval is bounded per query by the knowledge base's `top_k` and `max_result_bytes` and, for the semantic retriever, by the worker's own time limits; the Research path forms one query per run, so one execution makes at most one distinct retrieval. There is no query ceiling, no knowledge budget and no denial vocabulary: they are deferred until a second distinct query can exist (D-228.4, D-222 point 5). A retrieval is not a tool call and does not touch `max_tool_calls`.
+
 ## 8. Events are idempotent
 
 **Source:** §10
@@ -250,6 +252,8 @@ satisfy the reliability contract" over "I will confidently guess."
 **Verified by:** scenario tests asserting a contract-unsatisfied outcome rather than a
 confident-looking result.
 
+> **V1.3 status (2026-09-26):** the verification's `minimum_distinct_sources` rule counts distinct stored references, and a retrieved chunk is one, so for retrieved knowledge it can be satisfied by fewer independent sources than `min_independent_evidence` names (D-209's resolver counts them; no verdict reads it). Accepted as a known V1.3 limitation and left unchanged (D-228.1); the verdict's own reason already says it is not a claim that the reliability contract is satisfied.
+
 ## 14. Governance is deterministic
 
 **Source:** §28, §29
@@ -287,6 +291,8 @@ no agent invoked.
 > vocabulary cannot represent local node lifecycle events (D-126, Open). Nothing in V0.3 verifies this
 > invariant, and no V0.3 document may claim replayability from events.
 
+> **V1.3 status (2026-09-26):** a retrieval and the references an artifact cited are recorded as additive facts on `NODE_SETTLED` (D-218). A port that raises instead of returning a typed failure records no retrieval fact; supported ports return typed failures, and this is accepted and left as it is (D-228.3).
+
 ## 16. Conclusions are traceable
 
 **Source:** §74
@@ -297,6 +303,8 @@ Conclusion → evidence → source → retrieval query → agent → tool → ve
 
 **Verified by:** V0.8 tests that retrieval queries are retained on evidence rather than discarded
 after use; scenario tests walking a conclusion back to its sources.
+
+> **V1.3 status (2026-09-26):** exercised for retrieved knowledge: from the log alone, `audit_evidence` traces each cited evidence reference to the chunk, document, source, query, snapshot, rank and step that retrieved it, and reports a reference nothing retrieved as `unresolved`; replay needs no retriever. Verification does not check this: `citation_coverage` looks only at the artifacts it is handed, so an unresolvable citation in an upstream artifact can pass it and only the audit names it. Accepted as a known limitation (D-228.2); `audit_evidence` is the current traceability check.
 
 ## 17. Estimates are labelled as estimates
 

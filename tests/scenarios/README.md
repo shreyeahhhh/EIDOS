@@ -20,7 +20,7 @@ tests that prove the *product* behaves as specified, not just that the parts wor
 | Policy violation | Invariant 14 — deterministic refusal, not a prompt-level refusal (§29) | V1.2 |
 | Bad retrieval / conflicting evidence | §63; evidence rejected rather than used | V0.8 |
 | Replay from recorded events | Invariant 15 — the mission timeline reconstructs with **no agent invoked** (§73) | V0.5 (built) |
-| Evidence lineage | Invariant 16 — conclusion walks back to source and retrieval query (§74) | V0.8 |
+| Evidence lineage | Invariant 16 — conclusion walks back to source and retrieval query (§74) | V0.8 (built at V1.3, `test_rag_mission.py`) |
 
 ## Rules
 
@@ -76,3 +76,16 @@ a model timeout, an empty response, a plan refused at each of the three gates, a
 
 **Not exercised by the V0.5 scenarios, by scope:** evidence lineage (invariant 16: no evidence, source or retrieval query is recorded until V0.8), estimates and prediction error (invariant 17), a real model (recording it is an opt-in test the owner has not asked for), a mission driver, a replan loop, `AgentTask` mirroring and A2A events, and any budget
 enforced against the counters.
+
+### V1.3 scenarios (built)
+
+The retrieval-augmented mission and the frozen retrieval benchmark (D-208 to D-228). The mission scenario runs the real knowledge gate, ledger, recording wrappers, verification and replay over a scripted model and either the semantic retriever behind the real process boundary (the real worker program over a stub model) or the exact lexical retriever; no number in it is a measurement. The benchmarks pin what was measured on the frozen fixture and judge nothing.
+
+| File | Scenarios | Invariants and decisions exercised |
+|---|---|---|
+| `test_rag_mission.py` | Mission, Research, the knowledge gate, a retriever, the evidence ledger, a cited result, Analysis and the existing verification, recorded and replayed: completion, the retrieval recorded as the port answered it, no evidence text in the log, every citation traced from the log alone to the retrieved chunk, byte-for-byte determinism, replay with a process, a socket, the retriever, the gate and the worker made impossible and in a fresh interpreter with the retrieval stack and every model library unimportable; the failure paths (each retrieval failure, an empty or wrong answer, a raising port, a worker that is gone, a citation nobody retrieved); a duplicate query served from storage; and two named known-limitation tests (D-228.1, D-228.2) | Invariants 1, 12, 15, 16; D-217, D-218, D-225, D-226, D-228 |
+| `test_rag_mission_real_model.py` (`-m real_model`) | The same mission with the real pinned model behind the process boundary on the frozen fixture for one development query; asserts the path and judges nothing about retrieval | D-226, D-227, D-228 |
+| `test_retrieval_benchmark_lexical.py` | The frozen fixture and the lexical baseline, pinned | D-208, D-213, D-225 |
+| `test_retrieval_benchmark_semantic.py` (`-m real_model`) | The semantic measurement on the same frozen fixture, pinned; declares no winner | D-208, D-213, D-226, D-227 |
+
+**Not exercised by the V1.3 scenarios, by scope:** a query ceiling and any knowledge budget (invariant 7, deferred, D-228.4), a verdict that counts independent sources (invariant 13, a known limitation, D-228.1), and the recording of a port that raises (D-228.3).
