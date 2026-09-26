@@ -5534,3 +5534,88 @@ one is not.
 - **Effect:** additive. Steps 2 to 4 (behaviour), `eidos.agents`, `eidos.state`, `eidos.recording`, the verifier, every V1.2 contract, the frozen fixture and benchmark and `pyproject.toml` are unchanged; the package root gained ten
   exports and the knowledge guards were revised deliberately (three retrieval modules, three semantic modules with narrower rules for the two that are not pure, and new guards for the boundary); the three semantic modules,
   their tests, the semantic measurement harness and the sensitivity experiment are new. Status of the readings: **still Open, none decided.**
+
+### D-227 — V1.3 Step 6: lexical versus semantic comparison, and the human architecture decision (OPEN: the analysis is done, the decision is the owner's)
+
+- **Status:** Open · **Date:** 2026-09-26 · **Decided by:** nobody yet. The comparison below is Claude Code's analysis of already recorded artifacts; **the choice is the human owner's and is not made, ranked or hinted at here.**
+- **Source:** D-208, D-213 to D-215, D-220, D-222 (points 1 and 7), D-225, D-226 (ruling 1: no numeric pass/fail threshold, no automatic verdict); CLAUDE.md sections 0 and 7 and invariants 9, 13, 14 and 17.
+- **Evidence used, and nothing else.** The lexical report of Step 4 (digest `f10840ecaf76...822ff`) and the semantic report of Step 5 (digest `7dbab19fddd7...2bf0`), both over the frozen fixture (digest
+  `93db0b1f14c7c444073f86c763e891f1ccab92e5259f62351305b374db57df6b`, snapshot `b76e15e080ad...`, 53 chunks, 36 queries: 30 test and 6 development), and the cost and determinism measurements recorded in D-225 and D-226. The two saved
+  reports were re-hashed and match the recorded digests. **Nothing was re-run, rebuilt, tuned or changed**: no fixture, gold label, query, chunking, model, parameter or code.
+- **Measured fact 1: the results** (test queries, macro-averaged, each cell lexical / semantic; SC = source-coverage; exact fractions are in D-225 and D-226; no significance test exists and none is claimed):
+
+| Test queries | n | R@1 | R@3 | R@5 | MRR | SC@1 | SC@3 | SC@5 |
+|---|---|---|---|---|---|---|---|---|
+| **all test queries** | 30 | 0.4386 / 0.6622 | 0.4700 / 0.7922 | 0.5186 / 0.8322 | 0.6344 / 0.8625 | 0.4056 / 0.6056 | 0.5000 / 0.7944 | 0.5500 / 0.8389 |
+| lexical overlap | 8 | 1.0000 / 0.8750 | 1.0000 / 1.0000 | 1.0000 / 1.0000 | 1.0000 / 0.9375 | 0.9375 / 0.8125 | 1.0000 / 1.0000 | 1.0000 / 1.0000 |
+| paraphrase | 10 | 0.0000 / 0.6500 | 0.0000 / 0.7500 | 0.1000 / 0.7500 | 0.0782 / 0.7750 | 0.0000 / 0.6000 | 0.0000 / 0.7500 | 0.1000 / 0.7500 |
+| multi-source | 6 | 0.1931 / 0.1444 | 0.3500 / 0.3778 | 0.4264 / 0.5778 | 1.0000 / 0.7708 | 0.2778 / 0.1944 | 0.5000 / 0.3889 | 0.5833 / 0.6111 |
+| distractor bait | 6 | 0.6667 / 0.9167 | 0.6667 / 1.0000 | 0.6667 / 1.0000 | 0.7083 / 1.0000 | 0.5000 / 0.7500 | 0.6667 / 1.0000 | 0.6667 / 1.0000 |
+
+  The 6 development queries (debugging only) are in D-225 and D-226 and are not used here.
+- **Measured fact 2: per query** (test queries; first-ranked gold group, lexical / semantic; a lower rank is earlier): L01 1 / 1; L02 1 / 1; L03 1 / 2; L04 1 / 1; L05 1 / 1; L06 1 / 1; L07 1 / 1; L08 1 / 1; P01 11 / 8; P02 23 / 1; P03 12 / 1; P04 47 / 1; P05 23 / 8; P06 5 / 1; P07 38 / 1; P08 17 / 2; P09 7 / 1; P10 14 / 1; M01 1 / 2; M02 1 / 1; M03 1 / 1; M04 1 / 1; M05 1 / 1; M06 1 / 8; B01 1 / 1; B02 1 / 1; B03 6 / 1; B04 12 / 1; B05 1 / 1; B06 1 / 1. Counting the 30 test queries: a gold group is ranked first by the lexical retriever
+  for 18 and by the semantic retriever for 24; by both for 15, by the lexical only for 3 (L03, M01, M06), by the semantic only for 9 (P02, P03, P04, P06, P07, P09, P10, B03, B04) and by neither for 3 (P01, P05, P08: all paraphrase queries); the
+  first gold group is ranked earlier by the lexical for 3 (L03, M01, M06), earlier by the semantic for 12 (10 paraphrase, 2 distractor bait) and at the same rank for 15. In the multi-source stratum the lexical
+  retriever ranks a gold group first for all 6 queries and its per-query Recall@5 is higher for M01 (2/3 against 1/3) and M06 (3/8 against 0); the semantic one has the higher Recall@5 for M02, M03 (5/6 against 1/6) and M05 (1 against 1/4).
+  For M06 ("Which documents describe the duty engineer's tasks?", 8 gold groups) the semantic retriever ranks the gold groups at 8, 9, 17, 18, 22, 29, 34 and 42. Its two clear wins outside the paraphrase stratum are the distractor-bait queries B03 and B04, where the lexical
+  retriever's first gold group is at rank 6 and 12.
+- **Measured fact 3: cost, dependencies and determinism** (one machine, Windows 11, AMD64, Intel64 Family 6 Model 154; the lexical figures are Step 4's, the semantic ones are two full harness runs that differ by about 3 times, the first on an idle machine and the final with the machine at about 42 percent load from
+  other programs, so read every semantic cost as an order of magnitude):
+
+| | Lexical (`lexical-bm25-v1`) | Semantic (`semantic-cosine-v1`, MiniLM, 384 dimensions) |
+|---|---|---|
+| Runs in | the main Python 3.12 process | a separate isolated Python 3.13.1 worker process, minimal environment, bounded, typed failures |
+| Third-party dependencies | pydantic only (already required) | torch 2.9.0+cpu, sentence-transformers 5.1.1, transformers 4.57.1, tokenizers 0.22.1, numpy 2.2.1 in the isolated interpreter (about 0.8 GB of packages), not declared in `pyproject.toml`; a cached model of 479,729,010 bytes in 10 files |
+| Start | interpreter and imports about 750 to 790 ms cold; the index builds in about 2 to 3 ms | worker start 11.0 s idle and 30.4 s under load (library import 9.5 s, digest verification 0.5 s, model load 0.8 s, idle run); embedding the 53 chunks 2.6 s idle |
+| Warm query (full ranking of 53 chunks) | median 2.2 ms, p95 3.1 ms, max 6.6 ms | median 29.9 ms idle (p95 38.2) and 99.3 ms under load: about 14 to 46 times the lexical median |
+| Memory | Python allocations peaked at 280,749 bytes | the worker's peak working set about 770 MB; this process's allocations about 830 kB |
+| What a query returns | only chunks that share a term with the query; an empty result is possible and is a real result | every chunk, ranked: always a full ranking, never empty; a score is a cosine, not a confidence |
+| Determinism measured | exact decimal arithmetic; the report was identical under four hash seeds and any document order (Step 4); independent of the platform's math library by construction; not measured across machines | the same 89 texts gave bit-identical vectors, scores and reports across repeated runs and two worker processes on this machine, with the execution configuration fixed (one thread, each text alone); other thread counts or batch shapes moved vector bits by up to about 3.4e-7 and no report; the smallest non-zero gap between adjacent scores is 6.2e-06; not measured across machines |
+
+- **Interpretation (mine: an interpretation is not a decision rule, and none exists).**
+  1. On this fixture the difference between the two is concentrated in the paraphrase stratum, where the lexical retriever ranks no gold group first (0 of 10; its first gold group is at ranks 5 to 47) and the semantic retriever ranks one first for 7 of 10; 10 of the 12 test queries where the
+     semantic retriever is ahead are paraphrase queries. In the lexical-overlap stratum the two agree on 7 of 8 queries. In the multi-source and distractor strata the results are mixed and depend on the metric: the lexical retriever has the higher Recall@1 and MRR for multi-source and the semantic
+     one the higher Recall@3 and Recall@5, and for distractor bait the semantic retriever is ahead on every metric shown. Each of these strata holds 6 to 8 queries, so one query moves a stratum's Recall@1 by up to 0.125 to 0.167.
+  2. The two retrievers fail on different queries: for 27 of the 30 test queries at least one of them ranks a gold group first, and the 3 where neither does are all paraphrase queries. This is an observation about the queries, not a measurement of any combination of the two, and no
+     combination was built or measured.
+  3. The lexical retriever's visible failure is vocabulary mismatch (the paraphrase stratum, and the two distractor-bait queries B03 and B04 where other passages share the query's words). The semantic retriever's visible shortfalls are three queries: L03 (a lexical-overlap query for a
+     vendor and a lead time, gold group at rank 2) and the multi-source queries M01 and M06, about a named role (the shift supervisor, the duty engineer), where it ranks a gold group second and eighth. A reading that this benchmark does not establish is that queries built on specific terms
+     that many passages contain are where exact-term matching helps.
+  4. The semantic retriever's costs are an order of magnitude or more above the lexical retriever's in start-up, latency, memory and dependencies, and it needs a second interpreter and a process boundary. That boundary is bounded and typed, but it required narrowing one V1.2 guard (only `eidos.mcp`
+     may start a process) that the owner has not yet confirmed (D-226 Built 8).
+  5. Invariant 13 (never manufacture confidence) bears on the two behaviours in the table: a lexical retriever can say that nothing shares a term, and a semantic ranking never does. **The benchmark contains no query whose answer is absent from the corpus, so neither behaviour is measured.**
+- **Unresolved questions (not answered by this benchmark).** (a) How each behaves on a query with no answer in the corpus. (b) Whether a hybrid or fallback rule would keep the lexical retriever's strengths and the semantic retriever's, and which rule: no rule was designed, and the 6 development queries are too few to
+  tune one. (c) How a stemmed, stop-listed or otherwise tuned lexical retriever, or a different or larger embedding model, would compare: only one untuned lexical scheme and one small model were measured. (d) Whether the paraphrase stratum represents real paraphrase: its 10 queries and
+  their gold labels were authored by Claude Code, and **the owner's review of them (D-222 point 7 (c)) is still owed** (listed below). (e) Whether retrieval quality on this fixture predicts answer quality, verification outcome or evidence sufficiency downstream: nothing here measures those.
+- **What this benchmark does NOT establish.** Universal superiority of either retriever; performance on a real or larger corpus, on other domains or languages (the fixture is English, fictional, 12 documents, 53 chunks of at most 60 words, 30 test queries); production latency, throughput or cost;
+  cross-machine or cross-version bit identity (measured on one machine only); any statistical significance (no test was run, strata hold 6 to 10 queries); robustness to adversarial or malformed queries; retrieval of chunks longer than the model's 128-piece window; the behaviour of any other model,
+  parameter setting, fusion rule or reranker; anything about Research integration, the verifier or the reliability contract.
+- **The choices (unranked; the order is only A, B, C).**
+  - **A. Lexical only.** *Evidence for:* the higher results in the lexical-overlap stratum (Recall@1/3/5 and MRR all 1.0; one query, L03, ranked first that the semantic ranks second) and the higher MRR in the multi-source stratum (1.0 against 0.7708); the lower cost (more than an order of magnitude on warm latency and on start-up), no third-party dependency
+     beyond pydantic, in process; exact decimal arithmetic, so its scores do not depend on the platform's math library; an empty result when nothing matches. *Evidence against:* Recall@1 0.0 and Recall@5 0.1 in the paraphrase stratum, and lower Recall on the distractor-bait stratum (Recall@1 0.6667
+     against 0.9167); overall Recall@1/3/5 and MRR below the semantic numbers. *Cost and complexity:* already built. *Determinism:* exact and platform independent by construction; measured invariant under hash seeds and document order; not measured across machines. *Dependencies:* none new. *Failure modes visible here:* a query in other words than the
+     passage (P01 to P10; B03 and B04 where bait passages share the query's words).
+  - **B. Semantic only.** *Evidence for:* higher overall Recall@1/3/5, MRR and source-coverage on the 30 test queries, concentrated in the paraphrase and distractor-bait strata (Recall@1 0.6500 in the paraphrase stratum). *Evidence against:* lower Recall@1 and MRR than the lexical
+     in the multi-source stratum, one lexical-overlap query ranked second (L03), the M06 result (Recall@5 0), no measurement of an absent-answer query, and always a full ranking. *Cost and complexity:* built, but it needs the isolated 3.13 interpreter and model outside the declared dependencies, a process boundary, a subprocess-guard revision
+     awaiting confirmation, a production answer for where the interpreter and model live and who owns the embedder's lifetime (D-226, Step 7), and a decision on rebuilding the index at every open. *Determinism:* repeatable on this machine in a fixed configuration, sensitive to thread and batch settings at about 3e-7 in the
+     vectors, unmeasured across machines. *Dependencies:* the heaviest. *Failure modes visible here:* L03, M01 and M06 (see interpretation 3), and a full ranking for every query.
+  - **C. Hybrid or fallback** (any rule that uses both). *Evidence for:* the two retrievers rank a gold group first on different queries (27 of 30 covered by at least one; the 3 misses all paraphrase). *Evidence against:* nothing measured supports any particular rule: no fusion or fallback rule exists, none was measured, the
+     development set is too small to choose one and the test set may not be used to tune. *Cost and complexity:* all of B's costs and dependencies plus a rule to design, justify and measure, on a fixture that would need to be extended for the purpose. *Determinism:* the lexical part is exact, the semantic part as in B, and the
+     rule adds its own; the whole is only as reproducible as its least reproducible part. *Dependencies:* those of B. *Failure modes visible here:* none can be read from this benchmark, because no combination was measured; the failures of each part are listed above.
+- **The 10 paraphrase test queries, for the owner's review under D-222 point 7 (c)** (P01 to P08 and P10 each have one gold passage in the frozen fixture; P09 has two, the passage and its restatement under a source that declares nothing; the passages are in `tests/support/eidos_retrieval_fixture.py`):
+  - P01: Which paperwork must the person on watch fill in for each machine housing prior to bringing the plant back into service?
+  - P02: During a severe weather closure, which comes earlier, sealing the sea wall openings or halting the power generators, and how long does each opening take?
+  - P03: How much warning must the plant give the electricity network company ahead of returning a generator onto the wires after a stoppage?
+  - P04: Which standby luminaires beside the steps by the water did not survive the long battery trial, and what was fitted afterwards?
+  - P05: How long can a broached barrel of transmission lubricant stay in use before it is thrown away, and where are the barrels kept?
+  - P06: Which outside worker walked into a machine chamber lacking authorisation and was led away, and whose sign-off is required to go in?
+  - P07: After a severe weather alarm, where do employees who are not vital gather, and who tells the port authority to halt boat traffic?
+  - P08: What limits how much electricity may be sent out before a second manager endorses the log after several machines are running?
+  - P09: When are the stoppages for maintenance arranged to coincide with the gentlest current, and how early is the programme made public?
+  - P10: What is the highest amount of power the site can send to the network, and how quickly must it stop sending when told to by the network company?
+- **The human decision required (Step 7 does not start until it is made).**
+  1. **Choose the architecture:** A, B, C, or another option, and say which evidence carries the weight. Nothing here should be read as a recommendation.
+  2. **Review the paraphrase queries** above and say whether they are acceptable as the paraphrase evidence, or what is to be changed (a change is a new frozen fixture and a new run, not an edit of this one).
+  3. **If B or C:** confirm or reject the narrowed subprocess guard (D-226 Built 8); if C, say what "hybrid or fallback" is to mean (for example which retriever is asked first and what triggers the other, or a fusion of both rankings) and what measurement would be accepted for it, since no rule exists yet.
+  4. **If A:** say whether the semantic modules, worker and harness stay in the repository as an unused, tested capability or are removed (they are built, tested and committed at Step 5).
+- **Effect:** none yet. This entry is documentation only: no code, test, fixture, benchmark or dependency changed at Step 6, no retrieval, model or benchmark was run, and no architecture is chosen or implemented. Status of the analysis: **Open until the owner decides.**
