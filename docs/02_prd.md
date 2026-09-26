@@ -59,7 +59,7 @@ are implementation details (§42).
 
 ## 4. Frontend views
 
-Required views (§41), all deferred to V1.3:
+Required views (§41), all deferred to the Frontend milestone (the handoff's label V1.3; unassigned, D-229):
 
 | View | Purpose |
 |---|---|

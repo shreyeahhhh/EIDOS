@@ -432,7 +432,7 @@ or:
 Failure -> Recovery budget exceeded -> Human review
 ```
 
-Deferred to V1.3 with the rest of the frontend. The *mechanisms* it exercises are V1.2 and earlier,
+Deferred with the rest of the frontend (the handoff's V1.3 label; unassigned, D-229). The *mechanisms* it exercises are V1.2 and earlier,
 and must be testable without a UI.
 
 ---
@@ -448,7 +448,7 @@ and must be testable without a UI.
 | D-057 | How either risk value is determined — model-asserted or rule-derived | V0.2 policy validation |
 | D-031 | Is `evidence_requirements` a threshold or a description? | V0.1, one field |
 | D-074 | Is §30's approval wording exactly `autonomy_level >= 3`? §30 scopes to actions, §29 to the mission | V1.2 |
-| D-072 | Must "omitted" stay distinguishable from "explicitly at the ceiling"? | V0.9, V1.3 |
+| D-072 | Must "omitted" stay distinguishable from "explicitly at the ceiling"? | V0.9, Frontend (the handoff's V1.3 label; D-229) |
 | D-069 | Is §30's `High-risk actions: require human approval` a contract field, or a V1.2 policy rule? | **V0.1, field existence** |
 | D-045 | What applies when no ReliabilityContract is supplied | V0.1, one flag |
 | D-043 | Declared plan limits vs actual execution counters | **V0.3** (V0.2 checks declared steps only — D-105) |

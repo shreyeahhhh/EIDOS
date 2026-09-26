@@ -278,7 +278,7 @@ Everything runs locally (§77):
 ```
 
 Future cloud architecture is sketched in §78: web frontend → EIDOS API → control/planner → local
-worker and A2A workers → agents → MCP → Qdrant/PostgreSQL/tools. **Do not prematurely build it.**
+worker and A2A workers → agents → MCP → Qdrant/PostgreSQL/tools. **Do not prematurely build it.** The V1.4 product backend (FastAPI, an application service, Supabase PostgreSQL) is specified in `13_product_backend.md`; containers, a cloud environment and separate workers remain unbuilt and unassigned (D-229).
 
 ## 11. Package boundaries
 
@@ -309,7 +309,9 @@ the architectural map; `progress.md` tracks which of these exist.
 | `eidos.evaluation` | Evaluation harness, experiments | Unassigned: the handoff's V1.1 (Adaptive Learning) items are deferred, D-202 | no |
 | `eidos.mcp` | MCP tool boundary: a minimal hand-rolled stdlib stdio client implementing the agents' `ToolPort`; transport only, imported by no core layer (D-203) | V1.2 (D-203; Step 5 of its order) | **yes** — `StdioMcpToolPort`, `McpServerLaunch` and `protocol.py` (V1.2 Steps 4 and 5, D-207): revision `2026-07-28` only, stdio, a local trusted server, standard library only, no SDK; the only package that starts a process |
 | `eidos.knowledge` | The V1.3 knowledge/evidence layer: pure contracts, identity, normalisation, chunking, snapshot and the independence resolver; independent of Qdrant and of any model library: the pure modules import none, and only the isolated worker program names one (D-219, D-226). It replaces the earlier reserved name `eidos.rag` | V1.3 (D-208 to D-220, D-226; Steps 2 to 5 of its order) | **yes, Steps 2 to 5** — the pure structures (`identity.py`, `contracts.py`, `chunking.py`, `snapshot.py`, `independence.py`; D-223), the pure evidence records and set-based resolution (`evidence.py`; D-224), the retrieval contracts, `query_id` and `KnowledgePort` (`retrieval.py`) and the exact lexical retriever, in memory and standard library only (`lexical.py`; D-225); and (Step 5, D-226) the pure semantic port, pinned model identity and exact cosine (`semantic.py`), the one adapter that starts the isolated worker process (`semantic_process.py`, the only file outside `eidos.mcp` that imports `subprocess`) and the worker program (`semantic_worker.py`, the only file in `src` that names the model library, imports no `eidos`, and is imported by nothing). It imports only `eidos.contracts`; only `eidos.agents.evidence_ledger`, `eidos.agents.knowledge_gate` and the retrieval adapter in `eidos.recording` import it, each from the package root, which exports no process code (D-222 point 4); retrieval vocabulary stays in three modules and embedding names in the three semantic ones. The agentic loop, reranking and the evidence judge stay deferred and unassigned (D-184) |
-| `eidos.api` | FastAPI surface | later | no |
+| `eidos.api` | FastAPI surface: routers, the Supabase-JWT auth dependency, error mapping, settings; the only importer of FastAPI and the JWT library; reads response types only and never mutates `MissionState` | V1.4 (D-229, D-234) | no — contracts frozen in `13_product_backend.md`, not built |
+| `eidos.service` | The V1.4 application service: `MissionService`, `RunManager` (a bounded in-process worker pool), the per-run composition, the repository Protocols and in-memory implementations; imports the core and no FastAPI, JWT library or database driver | V1.4 (D-234) | no |
+| `eidos.persistence` | PostgreSQL (Supabase) adapters for the service Protocols and the existing `ArtifactStore`, and the plain-SQL migrations; the only importer of psycopg; the event log stays the authority and no table holds `MissionState` (D-230) | V1.4 (D-230) | no |
 
 ### Contract representation rules
 
@@ -358,7 +360,7 @@ counts**; conversion to minutes or seconds happens at the API or UI boundary, ne
 (**D-078**). Timestamps are **timezone-aware UTC**, and naive values are **rejected** (**D-083**).
 
 **Tenant.** `tenant_id` is always present on root models; in single-tenant V0.1 the value is supplied by
-the single-tenant context rather than by each caller, and it carries **no security meaning** (**D-079**).
+the single-tenant context rather than by each caller, and it carries **no security meaning** (**D-079**). From V1.4 real tenants exist (D-233): the nil UUID stays a reserved sentinel for tests and in-memory contexts (**D-032**), and a real mission's tenant comes from the authenticated context.
 
 ### Dependency rules
 
