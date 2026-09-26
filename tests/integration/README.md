@@ -15,7 +15,8 @@ and from `tests/scenarios/`, which tests whole missions.
 | The local-runtime provider adapter against a local fake runtime over real sockets; real-model tests are an explicit opt-in (`-m real_model`), deselected by default and never skipped | V0.4 — `tests/integration/providers/` (Step 8) |
 | Local agents wired into the runtime end-to-end | V0.4 — with a scripted model in `tests/scenarios/`; with a real model in `tests/integration/providers/test_ollama_real.py` (opt-in; the committed configuration, run once, finished with a verifier PASS: progress.md, D-149 and D-150) |
 | Checkpointing and replay against real state storage | V0.5 |
-| Qdrant retrieval, embeddings, reranking | V0.8 |
+| Semantic retrieval behind the process boundary: the real pinned model in the isolated Python 3.13 interpreter (`-m real_model`, deselected by default, never skipped, fail loudly), and, with a stub model and no model library, the boundary as an isolation guarantee and a semantic mission recorded and replayed with the worker gone | V1.3 Step 5 (D-226) — `tests/integration/semantic/` |
+| Qdrant retrieval, reranking | deferred (D-222, D-226 ruling 3): not built, not assigned |
 | Database/storage layer, once persistence exists | open — decision D-017 |
 
 ## Rules

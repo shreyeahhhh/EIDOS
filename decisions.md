@@ -5113,7 +5113,7 @@ one is not.
 
 ### D-222 — V1.3 Step 1: points the rulings left open (PARTLY RULED 2026-09-25)
 
-- **Status:** Partly ruled, partly Open · **Date:** 2026-09-25 · **Raised by:** Claude Code while recording D-208 to D-220 · **Decided by:** human owner, for points 2 and 3, and for point 4 (its home, then its import guard on 2026-09-25); points 5 and 6, and point 7 (a) by direction to resolve them from the accepted reports (readings in D-225); points 1, 7 (b and c) and 8, and the admission part of point 5, stay Open
+- **Status:** Partly ruled, partly Open · **Date:** 2026-09-25 · **Raised by:** Claude Code while recording D-208 to D-220 · **Decided by:** human owner, for points 2 and 3, and for point 4 (its home, then its import guard on 2026-09-25); points 5 and 6, and point 7 (a) by direction to resolve them from the accepted reports (readings in D-225); point 2 (2026-09-26: the exact recorded revision and digest) and point 7 (b) (2026-09-26: no numeric decision rule); points 1 and 7 (c), and the admission part of point 5, stay Open; point 8 is answered by readings in D-226
 - **Source:** the rulings and the two readiness reports; CLAUDE.md §7
 - **Points** (each is a gap or an unstated detail; none was resolved):
   1. **Milestone label.** The owner named this milestone V1.3. The `progress.md` ladder, the handoff's milestone list (§50) and D-022, D-072, `docs/02` and `docs/10` use V1.3 for Frontend and V1.4 for
@@ -5150,7 +5150,8 @@ one is not.
   taken, not confirmed (D-224):* until `KnowledgePort` exists, the pinned boundary is the set of knowledge names the evidence ledger needs, imported from the package root only; a later step adds names to that
   set on purpose. Points 1, 5, 6, 7 and 8 stay Open.
 - **Update (owner, 2026-09-25, with the Step 4 brief): points 5 and 6 are to be resolved before coding, from the readiness reports and the accepted decisions, with no further architecture invented; the combined benchmark listing names content-equivalence groups (point 7 a).** Resolved as readings in **D-225** (readings 1 to 4 and 10): the retrieval contract, the query form (the goal, canonicalised), `query_id`, the bounds (`top_k` and `max_result_bytes`, in bytes), and the gold labels over content-equivalence groups. **Still Open:** point 1; point 7 (b), no numeric decision rule, and (c), the owner's review of the paraphrase queries; point 8; and, for Step 7, the admission part of point 5 (queries per execution, the denial vocabulary).
-
+- **Update (owner, 2026-09-26, with the Step 5 brief):** **point 2 is confirmed** (the exact previously verified cached revision and digest are used) and **point 7 (b) is ruled: no numeric pass/fail threshold or margin is
+  imposed** before the comparison, and the owner decides at Step 6. Point 8 (the isolated benchmark process) is answered by readings 6 to 8 of **D-226**. Points 1 and 7 (c) stay Open.
 
 ### D-223 — V1.3 Step 2: readings taken where the rulings were silent (OPEN)
 
@@ -5371,3 +5372,165 @@ one is not.
   readings 2 to 6 and 8 to 11; D-204 to D-207.
 - **Effect:** additive. `eidos.contracts`, the reducer, the verifier, `eidos.agents`, `eidos.policy`, `eidos.mcp`, every V1.2 contract and `pyproject.toml` are unchanged; Steps 2 and 3 behave exactly as before. Existing source
   edited: the `__init__` exports of `eidos.knowledge`, `eidos.state` and `eidos.recording`, and additively `state/payloads.py`, `state/execution_record.py`, `recording/adapters.py`, `recording/recorder.py` and `recording/run.py`.
+
+### D-226 — V1.3 Step 5: semantic retrieval behind `KnowledgePort` (owner rulings; the environment measured; the readings taken are OPEN)
+
+- **Status:** Partly ruled, partly Open · **Date:** 2026-09-26 · **Decided by:** human owner (the rulings below, given with the Step 5 brief); the readings are Claude Code's, **not decided**
+- **Built and measured:** 2026-09-26 (V1.3 Step 5, committed locally, not pushed); see "Built" and "Measured" below
+- **Source:** D-208, D-213 to D-215, D-219, D-220, D-222, D-225; the two accepted readiness reports (§3, §8 to §10, §14, §15); CLAUDE.md §7 and invariants 9, 10, 13 and 15
+- **Owner rulings (2026-09-26):**
+  1. **No numeric pass/fail threshold** is imposed before the lexical-versus-semantic comparison (this rules D-222 point 7 (b): no decision rule or margin is pre-registered). The frozen benchmark measures both
+     approaches; the owner reviews the results and decides which becomes the baseline. Nothing is to be declared better, best, sufficient or rejected on a pre-set number, and Step 5 produces only the semantic
+     measurement and the comparable results, not the decision (that is Step 6).
+  2. **Runtime environment.** The main EIDOS runtime stays on Python 3.12. Sentence Transformer retrieval runs in the already verified isolated Python 3.13.1 environment. No Python 3.13 ML dependency is added to the
+     main environment and `pyproject.toml` is not modified to support semantic retrieval. The process boundary must be deterministic, bounded, replaceable and isolated. The model library never leaks into the core knowledge
+     contracts.
+  3. **Qdrant stays deferred** (later, an MVP storage implementation behind `KnowledgePort`). No cross-encoder. Steps 2 to 4 are not reopened unless a genuine contradiction is found.
+  4. **The model** is the cached `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`, at **the exact previously verified cached revision and digest the project recorded** (this confirms the reading of D-222 point 2:
+     revision `e8f8c211226b894fcb81acc59f3b34ba3efd5f42`, weights SHA-256 `eaa086f0ffee582aeb45b36e34cdd1fe2d6de2bef61f8a559a1bbc9bd955917b`). No model is downloaded, no package installed, no other model or the
+     cross-encoder used, and no Hugging Face network access is made. Its 128 word-piece window is respected: the ruled chunk bound is enforced mechanically at the semantic boundary, **a chunk over it gets a typed,
+     deterministic failure and is never silently truncated**.
+  5. **Semantic retrieval requirements:** snapshot- and model-pinned; deterministic query normalisation and embedding invocation; exact cosine similarity, never ANN; deterministic score ordering with `chunk_id` ties; bounded
+     `top_k` and result bytes; no network, no Qdrant, no external vector database. The embedding environment is treated honestly: a fixed execution configuration, the environment and model identity recorded, determinism
+     tested across repeated runs, and **no claim of cross-machine bit identity unless demonstrated**.
+  6. **The benchmark is the exact frozen Step 4 benchmark**, unmodified (corpus, gold labels, query text, groups, strata, digest), with the same metrics; semantic-specific facts are reported as well (embedding dimension,
+     model revision and digest, model load time, embedding and retrieval latency, environment identity, token-piece rejection count). **No tuning against the test set:** any parameter tuned is tuned on the development queries
+     only, recorded and frozen before the 30 test queries are evaluated, and nothing is tuned until the benchmark design requires it.
+- **The environment, measured (2026-09-26, read-only: no package installed and no model downloaded; the network is refused before any library is imported; the cache held 65 files before and after):**
+  the interpreter is `C:\Users\shrey\AppData\Local\Programs\Python\Python313\python.exe` (CPython 3.13.1, MSC v.1942 64 bit); the stack is in its system site-packages: torch 2.9.0+cpu (CPU only, 12 threads by default, no CUDA), sentence-transformers
+  5.1.1, transformers 4.57.1, tokenizers 0.22.1, numpy 2.2.1. The model directory
+  `~/.cache/huggingface/hub/models--sentence-transformers--paraphrase-multilingual-MiniLM-L12-v2/snapshots/e8f8c211226b894fcb81acc59f3b34ba3efd5f42` (also what `refs/main` names) holds:
+    `1_Pooling/config.json` 190 bytes, SHA-256 `4be450dde3b0273bb9787637cfbd28fe04a7ba6ab9d36ac48e92b11e350ffc23`
+    `README.md` 3,888 bytes, SHA-256 `1e98ea05b0de579fcaad3d625b62ea55647142ed674d5f5ebf1440e4bbbb6f23`
+    `config.json` 645 bytes, SHA-256 `6300193cb75e01cf80c96decef7187dfb33094d97cc1490b7ead6ff134476e4e`
+    `config_sentence_transformers.json` 122 bytes, SHA-256 `b8c64b5cece00d8424b4896ea75b512b6008576088497609dfeb6bd63e6d36b8`
+    `model.safetensors` 470,641,600 bytes, SHA-256 `eaa086f0ffee582aeb45b36e34cdd1fe2d6de2bef61f8a559a1bbc9bd955917b`
+    `modules.json` 229 bytes, SHA-256 `8f4b264b80206c830bebbdcae377e137925650a433b689343a63bdc9b3145460`
+    `sentence_bert_config.json` 53 bytes, SHA-256 `70f4448f31320443fe3557cacea5abf2dcc4915dda8c80646bec9f3bb0aa5a1f`
+    `special_tokens_map.json` 239 bytes, SHA-256 `378eb3bf733eb16e65792d7e3fda5b8a4631387ca04d2015199c4d4f22ae554d`
+    `tokenizer.json` 9,081,518 bytes, SHA-256 `2c3387be76557bd40970cec13153b3bbf80407865484b209e655e5e4729076b8`
+    `tokenizer_config.json` 526 bytes, SHA-256 `5036ea374ffedd706e3bef33e2e0d6953cb868ef8a490e76e32ba0faa37a6b9b`
+  Modules `Transformer` and `Pooling`, dimension 384, `max_seq_length` 128, tokenizer `PreTrainedTokenizerFast` with `<s>` and `</s>` as its special tokens. The first
+  import of the stack took 35 s (a cold disk cache) and loading the model 0.78 s. **The fixture fits the window:** counting the two special tokens, the 53 chunks are
+  53 to 82 word pieces and the 36 queries 11 to 36, none over 128. Repeating the encoding of five chunks with batch size 1 and one thread gave identical vectors.
+- **Readings taken (Open, none blocking):**
+  1. **Three modules, one boundary.** `eidos.knowledge.semantic` (pure): the `Embedder` protocol, the pinned model identity, `SemanticKnowledgePort`, exact cosine and the mapping of every embedder outcome to a typed retrieval
+     outcome. `eidos.knowledge.semantic_process` (the one adapter that spawns a process): `IsolatedEmbedder`, a client of the worker. `eidos.knowledge.semantic_worker` (a program, not a module: nothing imports it): run by the
+     3.13 interpreter, the only file that names the library, and it imports no `eidos` and no `pydantic`. The worker embeds and counts word pieces (only it has the tokenizer); the port, in the main runtime, computes cosine,
+     ordering, ties, `top_k`, the byte bound and the mismatch checks, so the contract's logic is tested without any model.
+  2. **The model identity is pinned by revision and digests, never by name.** The worker loads from the local snapshot directory, never from a name that could resolve `main`, refuses the network (the socket layer is made to
+     fail before the library is imported, and the offline flags are set), recomputes the SHA-256 of every file of the directory and refuses (`identity_mismatch`) unless the weights digest equals the pinned one and the directory's
+     own digest equals the recorded one. The environment (interpreter, library versions, threads, device, precision) is recorded and reported, not pinned: a different version is a different environment, honestly named.
+  3. **A fixed execution configuration:** CPU, float32, one torch thread, batch size 1 (each text encoded alone), evaluation mode, no normalisation by the model (cosine is scale-free), no query prefix; chunk texts embedded
+     in canonical chunk order. Nothing is tuned: these are fixed a priori and no parameter is tuned at all in this step.
+  4. **Cosine and ranking.** `math.fsum` for the dot product and the squared norms, one division, no rounding of the score; hits ordered by score descending and then `chunk_id` ascending; every chunk is a candidate, so a query
+     always returns `min(top_k, chunks)` hits (unlike the lexical retriever, which returns only chunks that share a term). `score_kind` is `semantic-cosine-v1`, and the scheme id names the model and its revision, the
+     dimension and the piece bound, so a different model is a different scheme and a different `query_id`.
+  5. **Over-window inputs are refused, never truncated.** A chunk over the window makes the index unbuildable: `SemanticKnowledgePort.open` returns a typed `RetrievalFailure` of kind `unavailable` naming the first such chunk
+     (canonical order) and its count; a query over the window gets kind `request_mismatch`. **A gap, raised and not resolved:** Step 4's four failure kinds have no kind for "an input over the port's own window", so
+     these two are readings that leave Step 4's contract and its mirror in `eidos.state` unchanged; the alternative is a dedicated additive kind and mirror, the owner's to decide.
+  6. **The process boundary.** Line-delimited JSON over the worker's stdin and stdout (stdout reserved for the protocol; the library's own prints go to stderr); the interpreter runs isolated (`-I`) with a minimal explicit
+     environment; every bound is explicit: a ready timeout (model load), a per-request timeout, a maximum of texts and of characters per request, a maximum reply size, an idle timeout and a total lifetime enforced inside the
+     worker, and a kill on close or on any timeout. A crash, a timeout, a malformed or oversize reply, an identity mismatch, a missing model, a missing interpreter and a worker that refuses each become a typed embedder
+     failure and then a typed retrieval failure; nothing escapes as an exception. The handshake returns the identity and the environment.
+  7. **Replaceable and isolated.** The port depends on the `Embedder` protocol alone; a fake worker speaking the same protocol under the main interpreter lets the whole boundary be tested by default with no ML stack, and a
+     different model is a different identity. The main environment imports none of the library (a subprocess test proves it), replay starts no worker (the semantic modules are not imported by replay and a test forbids the
+     spawn), and the package `__init__` exports only the pure names, so importing `eidos.knowledge` loads no process code.
+  8. **The tests that need the real model are an explicit opt-in** under `tests/integration/semantic/`, marked with the existing `real_model` marker (D-136; the mechanics D-222 point 8 left open), so `pyproject.toml` is not
+     touched: they are deselected by default, selected with `-m real_model`, and fail loudly, never skip, when the 3.13 interpreter or the pinned snapshot is missing. They also run under Python 3.13.1.
+  9. **What a semantic report adds** (measured from actual runs, never asserted): the dimension, the pinned revision and digests, the worker's start and model-load times, the time to embed the corpus and per query, warm and cold
+     query latency through the boundary, the worker's peak working set, the environment identity, the token-piece rejection count, repeated-run identity, the smallest gap between adjacent scores (how much vector jitter the
+     ranking could absorb) and, as a stated experiment, how a change of thread count or batch size moves vectors and scores on this machine. It is reported beside the lexical numbers and judges nothing.
+- **Built (2026-09-26, Step 5), as read above; what building it settled and what it raised (all of it Open with the readings, none of it silent):**
+  1. **Three modules and their tests.** `eidos.knowledge.semantic` (pure; the pinned `PINNED_MODEL`, `SemanticModelIdentity`, `semantic_scheme_id`, the `Embedder` protocol with `EmbeddedText` and the typed
+     `EmbedderFailure`, exact `cosine_similarity` by `math.fsum` clamped to [-1, 1], and `SemanticKnowledgePort`, opened once over a snapshot); `eidos.knowledge.semantic_process` (`IsolatedEmbedder`, `WorkerLimits`,
+     `WorkerEnvironment`, `WorkerReady`, `semantic_worker_command`, `hub_model_directory`); and `eidos/knowledge/semantic_worker.py`, a program that imports no `eidos` and no `pydantic`. The package root exports the
+     pure names only (ten new ones); the process client and the worker are imported by nothing in `src` (a guard proves it). Nothing else changed: no Step 2 to 4 module, no `eidos.agents`, `eidos.state`,
+     `eidos.recording`, verifier or V1.2 file, no `pyproject.toml`.
+  2. **The identity is pinned once and checked twice.** `PINNED_MODEL` is the only place the revision `e8f8c211226b894fcb81acc59f3b34ba3efd5f42`, the weights digest and the directory digest
+     (`e99a362c5cdf060fe3dec4f42b61f3f847d80ce8881a8c716b3468bdf7ef03dc`, the SHA-256 over `"<path>\n<file sha256>\n"` for the ten files of the snapshot, paths relative with `/`, sorted as strings) are written. The
+     client passes them to the worker as arguments; the worker recomputes both digests and the directory's name before it imports the library and ends with `identity_mismatch` on any difference, and the client compares
+     the five things the worker measured (revision, both digests, dimension, window) with what it expected and stops the worker on any difference. The worker holds no copy of the identity. The dimension and the window
+     are measured by the worker from the loaded model, not asserted.
+  3. **The fixed execution configuration is read off the calls.** With a recording stand-in for the library the tests show: one torch thread; the model loaded from its local directory, on the CPU, offline, without remote
+     code; put in evaluation mode (and reported as `evaluation_mode`, a field added to `WorkerEnvironment` while building, so it is measured and not assumed); each text tokenized with its special pieces and no truncation
+     and encoded alone (batch size 1, no normalisation, no progress bar). The port batches at most sixteen texts per request over the boundary; the worker still encodes each one on its own, so a request's batch changes
+     nothing the model sees. The sensitivity experiment below is why the model's own batch is one.
+  4. **The process boundary, as built.** Line-delimited ASCII JSON; the interpreter is started as `python -I <script>` with the names of `INHERITED_ENVIRONMENT` only (what an interpreter needs to start, and no
+     credential, no `PYTHON*` and no `HF_*` variable), so the caller's environment never reaches it; the worker sets the offline flags and one thread for the library, and refuses every outgoing connection (the socket layer
+     fails before the library is imported; a stub worker that tries to connect to a listening local port is refused and the listener sees nothing). `WorkerLimits`, fixed a priori and not tuned: a start (interpreter, digests,
+     import, model load) may take 300 s; a request 120 s; a worker that is not asked for 600 s ends by itself; its lifetime is 3600 s from its start; a request holds at
+     most 64 texts of at most 20,000 characters; a reply is read with a limit of 4,194,304 bytes. Idle time and lifetime must exceed the start time, and none of them may be infinite
+     or not a number (a validator; a lifetime that never ends is not a bound). A timeout, a crash (with its exit code and its last words), an oversize, malformed, short, long or out-of-step reply, a reply to another
+     request, a worker's own error report and a wrong identity each stop the worker, kill it if it does not end, reap it and close its pipes (proved by recording every process a failing scenario started), and the embedder
+     then answers `unavailable` and never restarts. A worker that refuses a request (too many texts, a text too long) is a refusal and stays up. A clean `close` ends the worker with exit code 0; one that ignores it is killed
+     after two seconds.
+  5. **How the six embedder failures map to Step 4's four retrieval failures** (Step 4's contract and its mirror in `eidos.state` are unchanged, and a test proves every embedder kind has a mapping):
+     `unavailable`, `timeout`, `crashed` and `identity_mismatch` become `unavailable`; `malformed_reply` becomes `malformed_result`; `request_refused` becomes `request_mismatch`. A vector that is not of the model's
+     dimension, not finite, of no usable length (outside 1e-100 to 1e100), a text within the window that came back without a vector, a text over the window that came back with one, and an answer that is not one embedded
+     text for each text asked are `malformed_result`. **The gap raised in reading 5 is still open:** a chunk over the 128-piece window makes `open` return `unavailable` naming the first such chunk (canonical order),
+     and a query over it is a `request_mismatch`; neither is truncated. A dedicated additive failure kind and its mirror in `eidos.state` remains the owner's alternative to decide.
+  6. **The tests that need the real model** are `tests/integration/semantic/test_semantic_real_model.py` and `tests/scenarios/test_retrieval_benchmark_semantic.py`, marked `real_model` (no `pyproject.toml` change): deselected by
+     default, selected with `-m real_model`, failing loudly and never skipping. The isolated interpreter is found as `EIDOS_SEMANTIC_PYTHON` or `py -3.13`, and the model directory as `EIDOS_SEMANTIC_MODEL_DIR` or the model
+     library's local cache; both live only in `tests/support/eidos_semantic_benchmark.py`, and **no source file reads either**. Where production code finds them, and who owns the embedder's lifetime, is Open for Step 7.
+  7. **Found by a test, not by reading.** The idle clock of a worker ran from the start of its process, so a worker that was slow to load could end before it was ready; it is now reset when the worker is ready, its
+     limit must exceed the start time (the client validates that), and a test with a three-second load and a four-second idle time proves it. A test also caught a boolean posing as an integer id in a refusal.
+     A benchmark helper that keyed embeddings by text collapsed the five mirrored chunks and miscounted the token pieces (min 15, 31 queries) in a first run; the count was corrected before anything was recorded from it
+     (chunks 53 to 82 pieces, queries 11 to 36, all 89 texts counted).
+  8. **An existing V1.2 guard had to be revised, for the owner to confirm.** `tests/unit/mcp/test_mcp_guards.py::test_the_mcp_package_is_the_only_place_that_starts_a_process` said that no file outside
+     `eidos.mcp` may import `subprocess`. The ruled process boundary (ruling 2) needs a client that starts the worker, and the port and the worker cannot do it, so `eidos/knowledge/semantic_process.py` is now named in
+     that guard as the one other place (`PROCESS_STARTERS`), and the test asserts the set of files that import `subprocess` outside `eidos.mcp` is exactly that one file, so a third place still fails it. The same
+     file has its own, narrower guards in the knowledge guards (no model library, no socket, no clock, no state, no retrieval names). This is the only existing guard that was changed; the rest were extended, and
+     the change is a narrowing of "only" to "exactly these two", not a removal. Whether a second process-starting place is acceptable is the owner's to confirm; if not, the adapter moves out of `src`.
+  9. **Two assertions of mine were environment-dependent and were corrected when the tests were run under Python 3.13.1:** that importing `eidos.knowledge` loads no `subprocess` (Python 3.13's own libraries load
+     it; the guard now asserts that no EIDOS process module is loaded, which is the claim) and that every EIDOS module imports with the model libraries blocked (the workflow and HTTP extras are not installed in 3.13,
+     so a module that needs one is tolerated, and a blocked model library is still a failure).
+- **Measured (2026-09-26; one machine, one day; the frozen fixture `93db0b1f14c7c444073f86c763e891f1ccab92e5259f62351305b374db57df6b`, unchanged; no parameter tuned; nothing judged):**
+  - **Environment.** Main interpreter CPython 3.12.10 on Windows-11-10.0.26200-SP0 (Intel64 Family 6 Model 154 Stepping 3, GenuineIntel). The isolated interpreter `C:\Users\shrey\AppData\Local\Programs\Python\Python313\python.exe` is CPython
+    3.13.1: torch 2.9.0+cpu, sentence-transformers 5.1.1, transformers 4.57.1, tokenizers 0.22.1, numpy 2.2.1; CPU, float32, one thread, evaluation mode. Model `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`, revision `e8f8c211226b894fcb81acc59f3b34ba3efd5f42`, weights SHA-256
+    `eaa086f0ffee582aeb45b36e34cdd1fe2d6de2bef61f8a559a1bbc9bd955917b`, directory SHA-256 `e99a362c5cdf060fe3dec4f42b61f3f847d80ce8881a8c716b3468bdf7ef03dc`; dimension 384, window 128 word pieces.
+    Scheme id `semantic-cosine-v1/model=paraphrase-multilingual-MiniLM-L12-v2/rev=e8f8c211/dim=384/pieces=128`.
+  - **Retrieval results (semantic; the same runner, metrics and gold labels as the lexical baseline).** Report digest `7dbab19fddd7f8a2c93751f5150214bf8d6cc9275e96ec33b68979a5996f2bf0` (the lexical report's is `f10840ecaf7642f1ffbb098e031ae165a2ae017f913577495766965214a822ff`). Test queries (30), macro-averaged
+    and exact: Recall@1 149/225 = 0.6622, Recall@3 713/900 = 0.7922, Recall@5 749/900 = 0.8322, MRR 69/80 = 0.8625,
+    source-coverage@1/3/5 109/180, 143/180, 151/180 = 0.6056, 0.7944, 0.8389; no query without a gold group in its ranking, and every query is
+    ranked over all 53 chunks (every chunk is a candidate). Development queries (6, debugging only): Recall@1/3/5 7/10, 7/10, 11/15; MRR 61/72. Strata of the test queries (Recall@1, Recall@3, Recall@5, MRR):
+    lexical overlap (8) 0.8750, 1.0000, 1.0000, 0.9375;
+    paraphrase (10) 0.6500, 0.7500, 0.7500, 0.7750;
+    multi-source (6) 0.1444, 0.3778, 0.5778, 0.7708;
+    distractor bait (6) 0.9167, 1.0000, 1.0000, 1.0000.
+    The lexical baseline it is set beside is unchanged (Step 4: Recall@1/3/5 0.4386, 0.4700, 0.5186; MRR 0.6344). **No retriever is called better, best, sufficient or rejected here; there is no threshold, margin or
+    decision rule; the strata hold 6 to 10 queries each; the comparison and the decision are the owner's, at Step 6.**
+  - **Semantic-specific facts.** The window: the 53 chunks are 53 to 82 word pieces and the 36 queries 11 to 36 (the two special pieces counted), so the token-piece rejection count on the fixture is
+    0; on the real tokenizer a text of 400 words is 402 pieces and refused, a text of exactly 128 pieces (126 words) is embedded, and one of 129 is refused, none
+    truncated. Worker start 30.4 s wall (library import 27.4 s of it, digest verification 0.60 s, model load 1.80 s); embedding the 53 chunks through the boundary
+    8.39 s wall (8.33 s inside the worker, 157.2 ms a chunk). First query after the corpus 101.8 ms (of which 75.9 ms embedding, through the boundary). Warm full
+    ranking over 53 chunks (180 samples): median 99.3 ms, p95 128.4 ms, max 158.4 ms; the embedding through the boundary median 72.9 ms (p95 101.7 ms),
+    of which inside the worker median 71.4 ms; the port's own computation (cosine over 53 vectors, ordering, validation of the result) median 25.0 ms (p95 36.7 ms). The worker's peak
+    working set 771 MB (728 MB after the model load), its peak page file 1331 MB; this process's Python allocations for the index and one pass of queries peaked at 830 kB. The model
+    directory is 10 files, 479,729,010 bytes; the index is 20,352 numbers in memory and nothing on disk. The Hugging Face cache held 65 files before and 65 after: nothing was
+    downloaded or written. **Two full harness runs are recorded and they differ:** the first, on an otherwise idle machine, gave a worker start of 11.0 s, corpus embedding 2.61 s, a first query of 32.2 ms and a warm median of 29.9 ms (p95 38.2 ms), peak working set 770 MB; the figures above are from the final run, made with the machine at about 42 percent load from other programs. Read the cost as an order of magnitude, not a measurement to two figures; the results, the ranks and the digests were identical in both. For scale, the lexical retriever's warm query median was about 2.2 ms and it loaded no third-party library (Step 4).
+  - **Determinism, measured and no further.** In this environment the same 89 texts embedded twice in one worker, and once more in a second worker process, gave the same vectors bit for bit (0 and
+    0 of 34,176 components differ), the same scores and the same ranking for every query, and the same report digest. The adjacent-score gaps of the 1872 adjacent pairs in the 36 full
+    rankings: 180 are exact ties (the five mirrored chunks share a text, hence a vector, and are ordered by `chunk_id`), the smallest non-zero gap is 6.25e-06, 0 pairs are closer than 1e-6 and 21 closer than 1e-4.
+    **Nothing is claimed for another machine, another library version or another CPU.**
+  - **The thread and batch sensitivity experiment** (`tests/support/semantic_sensitivity_experiment.py`, run by hand in the isolated interpreter; the library's own default here is one thread because the worker's offline setup
+    exports `OMP_NUM_THREADS=1`; this machine has 16 logical processors). Against the fixed configuration (1 thread, each text alone): repeating it, 89 of 89 texts bit-identical, 0 of 34,176 components differ, largest vector difference 0, largest score difference 0, 0 of 36 queries with a different chunk order, report digest identical; 1 thread and batches of 16, 7 of 89 texts bit-identical, 28,283 of 34,176 components differ, largest vector difference 3.4e-07, largest score difference 1.1e-07, 20 of 36 queries with a different chunk order, report digest identical;
+    4 threads, 36 of 89 texts bit-identical, 18,372 of 34,176 components differ, largest vector difference 2.7e-07, largest score difference 1.2e-07, 0 of 36 queries with a different chunk order, report digest identical; 16 threads, 0 of 89 texts bit-identical, 30,683 of 34,176 components differ, largest vector difference 3e-07, largest score difference 1.5e-07, 0 of 36 queries with a different chunk order, report digest identical; 16 threads and batches of 16, 10 of 89 texts bit-identical, 27,245 of 34,176 components differ, largest vector difference 3.4e-07, largest score difference 1.5e-07, 20 of 36 queries with a different chunk order, report digest identical. So on this machine a change of thread count or batch shape moves vector bits
+    by up to about 3.4e-7 and scores by up to about 1.5e-7, which is far below the smallest non-zero adjacent gap, and no configuration changed the report; a batch of 16 does change the chunk order of 20 queries, because
+    the mirrored chunks land at different positions in a batch, get vectors that differ in the last bits and stop being exact ties: that, and only that, is why the model's batch is fixed at one.
+  - **Tests and checks.** Default suite 6,704 passed and 31 deselected under `PYTHONHASHSEED=20260926` (was 6,278 at Step 4): 426 new tests (118 pure port, 77 worker,
+    53 process client, 108 protocol against real worker processes, 11 integration: boundary and replay, 27 more guard cases). 29 `real_model` tests (worker start, identity,
+    window, determinism, timeout, benchmark, cost) pass under Python 3.13.1 (29 passed) and passed under the main interpreter (27 in a first run, whose 28th test was my own mistake and was corrected into two, which then passed); the default semantic tests under 3.13.1: 642 passed, after two environment-dependent assertions of mine were corrected. The guards catch
+    26 of 26 deliberate violations applied to an isolated copy (a model-library or process import in a pure module, a top-level library import in the worker, an `eidos` or `pydantic` import in the worker, the process client
+    exported or imported, Qdrant or a cross-encoder named, a model dependency added to `pyproject.toml`, a module-level mutable, a wall-clock read, a retrieval or semantic name in the wrong module, a non-ASCII character, an
+    unlisted module, a raise where a return is required). Mutation testing (an AST engine, isolated copies, only a failing assertion counts as a kill): the campaign was stopped at the owner's request and is NOT complete. First pass over the three new modules, 625 mutants: 595 were killed by a failing assertion; 9 more broke the module at import (killed at collection); 5 could not be classified by the harness's rule, because each crashed or hung the test run instead of failing an assertion (two negate the worker's `__main__` guard, one makes the worker's watchdog thread non-daemon, and two make the process client's `stop` skip its kill); 16 survived. Pure port (`semantic.py`, 138): 131 killed by assertion, 7 at import, 0 survivors. Worker program (259): 255 killed by assertion, 3 not classified, 1 survivor (the program name in its usage message), closed by a tightened test and re-verified killed. Process client (228): 209 killed by assertion, 4 not classified (two at import, two hangs), 15 survivors: 9 equivalent or unobservable (a validator's return value that pydantic ignores; an infinity check that the cross-field check already makes; a queue put after the pipe is closed; a falsy return; the read chunk size, two mutants; a constant that is only used where the platform lacks the attribute; a redundant `and` in `stop`, since simplified; and one timing-only race guard, the join of the stderr reader, which no test can make deterministic) and 6 closed by tests added afterwards, of which 2 were re-verified killed by a partial re-run and 4 were not re-run. Nothing else was re-run: the exact-message and non-ASCII tests that close the last four were written and pass, but were not proved against their mutants.
+- **Still Open:** D-222 point 1 (the milestone label) and 7 (c) (the owner's review of the paraphrase queries); the admission part of D-222 point 5 (Step 7); D-223; D-224 readings 2 to 6 and 8 to 11; D-225 readings 12 to 16;
+  D-204 to D-207. **D-222 point 7 (b) and point 8 are answered here** (ruling 1; readings 6 and 8). **Raised by Step 5, for the owner:** (a) the additive failure kind for "an input over the port's own window" (built as
+  `unavailable` for a chunk and `request_mismatch` for a query; see Built 5); (b) where production code finds the isolated interpreter and the model directory, and who owns the embedder's lifetime (Step 7; Built 6);
+  (c) the `WorkerLimits` defaults and the `INHERITED_ENVIRONMENT` names are fixed a priori and not tuned (Built 4), and are the owner's to change; (d) whether the worker's environment (interpreter, library versions, threads,
+  precision) is to be recorded on a mission's log at Step 7, since only the scheme id (model, revision, dimension, window) is in a recorded retrieval fact today; (e) the index is derived, rebuilt at every `open` (about
+  8.39 s after a 30.4 s worker start on this machine) and never persisted, per D-220; whether that is acceptable for a mission is a Step 6 and 7 question; (f) `trust_remote_code=False` and `local_files_only=True` are
+  postures no test can observe on this complete, offline snapshot: they are read off the recorded calls only; (g) the revised V1.2 subprocess guard (Built 8).
+- **Effect:** additive. Steps 2 to 4 (behaviour), `eidos.agents`, `eidos.state`, `eidos.recording`, the verifier, every V1.2 contract, the frozen fixture and benchmark and `pyproject.toml` are unchanged; the package root gained ten
+  exports and the knowledge guards were revised deliberately (three retrieval modules, three semantic modules with narrower rules for the two that are not pure, and new guards for the boundary); the three semantic modules,
+  their tests, the semantic measurement harness and the sensitivity experiment are new. Status of the readings: **still Open, none decided.**

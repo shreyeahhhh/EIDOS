@@ -22,6 +22,12 @@ Plus, from §63: out-of-order event.
 Each must assert that MissionState remains authoritative, that the remote agent never mutates it,
 and that `task_id` and `context_id` are preserved.
 
+### The semantic worker process boundary — V1.3 Step 5 (D-226)
+
+`tests/protocol/test_semantic_worker_protocol.py` runs the client (`IsolatedEmbedder`) against a running worker: the real `semantic_worker.py` with a stub model, so the protocol loop, digest verification, network
+refusal and watchdog are the real ones and no model library is needed, plus a worker that breaks the protocol in one scripted way. It covers start, identity mismatch, timeout, crash, oversize and malformed
+replies, refusal, close, idle time, lifetime, the minimal environment and the refused network. Each failure is a typed outcome and never an exception.
+
 ### MCP — V0.7 (§50)
 
 ```text

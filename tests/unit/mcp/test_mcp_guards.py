@@ -1,7 +1,7 @@
 """Static guards on ``eidos.mcp`` (decisions.md D-203, D-207, invariants 9 and 14, CLAUDE.md §3 and §8; V1.2 Step 5).
 
-The MCP package is transport and nothing else: hand-rolled, standard library only, no SDK, no admission policy, no state, no recorder, and the only place
-in EIDOS that starts a process. No other package imports it. These are checks on the source, so they hold however the client is later extended.
+The MCP package is transport and nothing else: hand-rolled, standard library only, no SDK, no admission policy, no state, no recorder, and, with the one adapter of
+the isolated semantic worker (D-226, V1.3 Step 5, revised deliberately: see PROCESS_STARTERS), one of the only two places in EIDOS that start a process. No other package imports it. These are checks on the source, so they hold however the client is later extended.
 """
 
 import ast
@@ -17,6 +17,9 @@ ROOT = Path(__file__).resolve().parents[3]
 SRC = ROOT / "src" / "eidos"
 MCP = SRC / "mcp"
 MODULES = sorted(MCP.glob("*.py"))
+# V1.3 Step 5 (D-226): the owner ruled that semantic retrieval runs in an isolated interpreter behind a process boundary. The client of that boundary is the one file outside eidos.mcp that
+# may import subprocess; it has its own, narrower guards (tests/unit/knowledge/test_knowledge_guards.py). Every other file still may not. Recorded in D-226 for the owner to confirm.
+PROCESS_STARTERS = {SRC / "knowledge" / "semantic_process.py"}
 
 FORBIDDEN_IMPORTS = {
     "asyncio", "concurrent", "datetime", "http", "importlib", "logging", "multiprocessing", "os", "pathlib", "pickle", "random", "requests", "secrets",
@@ -144,12 +147,15 @@ def test_no_module_level_mutable_state(module):
                 assert getattr(targets[0], "id", "") in {"CLIENT_INFO", "_META"}, module.name
 
 
-def test_the_mcp_package_is_the_only_place_that_starts_a_process():
+def test_the_mcp_package_and_the_one_semantic_adapter_are_the_only_places_that_start_a_process():
+    starters = set()
     for path in sorted(SRC.rglob("*.py")):
         if MCP in path.parents:
             continue
         imported = {name.split(".")[0] for name in imports_of(path) if not name.startswith(".")}
-        assert "subprocess" not in imported, f"{path.relative_to(SRC)} imports subprocess"
+        if "subprocess" in imported:
+            starters.add(path)
+    assert starters == PROCESS_STARTERS, sorted(str(path.relative_to(SRC)) for path in starters ^ PROCESS_STARTERS)
 
 
 def test_no_other_package_imports_the_mcp_package():

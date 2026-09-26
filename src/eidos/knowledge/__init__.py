@@ -7,9 +7,11 @@
     LexicalKnowledgePort(snapshot, kb_id=...).retrieve(RetrievalRequest(...)) # a RetrievalResult, or a RetrievalFailure
 
 Contracts, identity, normalisation, chunking, the snapshot, the independence count, and (Step 3) evidence records with their set-based resolution and the mapping of
-existing V1.2 documents into the same identity; and (Step 4) the retrieval contracts with their deterministic ``query_id``, the ``KnowledgePort`` protocol and the one retriever,
-the exact in-process lexical one, in the standard library alone. Pure: no I/O, no clock, no randomness, no model call and no hidden state, and nothing here names a vector store, an embedding
-model or a third-party engine. Other retrievers arrive in later steps (D-222).
+existing V1.2 documents into the same identity; and (Step 4) the retrieval contracts with their deterministic ``query_id``, the ``KnowledgePort`` protocol and the exact in-process
+lexical retriever, in the standard library alone; and (Step 5) the pure half of semantic retrieval: the pinned model identity, the ``Embedder`` protocol and ``SemanticKnowledgePort``, which
+ranks by exact cosine and maps every embedder outcome to a typed retrieval outcome. Pure: no I/O, no clock, no randomness, no model call and no hidden state. What embeds is not here and is not
+exported: ``semantic_process`` (the one adapter that starts a process) and ``semantic_worker`` (a program for the isolated interpreter, the only file that names the model library) are
+imported only by the code that assembles a semantic retriever, so importing this package loads no process code and no model library. Nothing here names a vector store (D-222).
 """
 
 from .chunking import ChunkingScheme, chunk_document, chunk_spans
@@ -49,6 +51,18 @@ from .retrieval import (
     query_id_of,
     result_problem,
 )
+from .semantic import (
+    PINNED_MODEL,
+    SEMANTIC_SCORE_KIND,
+    EmbeddedText,
+    Embedder,
+    EmbedderFailure,
+    EmbedderFailureKind,
+    SemanticKnowledgePort,
+    SemanticModelIdentity,
+    cosine_similarity,
+    semantic_scheme_id,
+)
 from .snapshot import build_snapshot
 
 __all__ = [
@@ -56,9 +70,15 @@ __all__ = [
     "LEGACY_SCHEME_ID",
     "LEXICAL_SCHEME_ID",
     "LEXICAL_SCORE_KIND",
+    "PINNED_MODEL",
+    "SEMANTIC_SCORE_KIND",
     "ChunkingScheme",
     "Derivation",
     "DocumentRef",
+    "EmbeddedText",
+    "Embedder",
+    "EmbedderFailure",
+    "EmbedderFailureKind",
     "EvidenceRecord",
     "EvidenceRefusal",
     "EvidenceRefusalCode",
@@ -75,11 +95,14 @@ __all__ = [
     "RetrievalRequest",
     "RetrievalResult",
     "RetrievedChunk",
+    "SemanticKnowledgePort",
+    "SemanticModelIdentity",
     "build_snapshot",
     "canonical_query_text",
     "chunk_document",
     "chunk_id_of",
     "chunk_spans",
+    "cosine_similarity",
     "document_id_of",
     "evidence_from_snapshot",
     "evidence_ref_of",
@@ -93,5 +116,6 @@ __all__ = [
     "query_id_of",
     "result_problem",
     "resolve_independence",
+    "semantic_scheme_id",
     "snapshot_id_of",
 ]
