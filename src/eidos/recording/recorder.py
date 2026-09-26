@@ -11,9 +11,9 @@ ordering there is, and it can differ between two live runs of a plan with parall
 
 import threading
 
-from eidos.contracts import MissionId, StepId, TenantId
+from eidos.contracts import ArtifactRef, MissionId, StepId, TenantId
 from eidos.runtime import NodeResult
-from eidos.state import EventLog, EventProposal, IntakeResult, ModelCallFacts, NodeSettledPayload, ToolCallFacts, VerificationFacts
+from eidos.state import EventLog, EventProposal, IntakeResult, ModelCallFacts, NodeSettledPayload, RetrievalFacts, ToolCallFacts, VerificationFacts
 
 from .ports import Clock, IdSource
 
@@ -36,6 +36,8 @@ class Recorder:
         self._live: dict[StepId, NodeResult] = {}  # nodes already settled in the log, live, as their work returned
         self._observed: dict[StepId, Observation] = {}  # what was seen while a node ran, for a node settled after the run
         self._tool_calls: dict[StepId, tuple[ToolCallFacts, ...]] = {}  # the tool calls a node made (D-203); absent for a node that made none
+        self._retrievals: dict[StepId, tuple[RetrievalFacts, ...]] = {}  # the knowledge retrievals a node made (D-218); absent for a node that made none
+        self._citations: dict[StepId, tuple[ArtifactRef, ...]] = {}  # the references a node's artifact cited (D-218); absent for a node that cited none
         self._discrepancies: list[str] = []
 
     # --- the door ---------------------------------------------------------------------------------------------------------------
@@ -84,13 +86,32 @@ class Recorder:
         with self._lock:
             return self._tool_calls.get(step_id, ())
 
+    def note_retrievals(self, step_id: StepId, retrievals: tuple[RetrievalFacts, ...]) -> None:
+        """Remember the knowledge retrievals a node made, in call order, so that whichever settles the node (live, or after the run) records them with it (D-218, V1.3 Step 4)."""
+        with self._lock:
+            self._retrievals[step_id] = tuple(retrievals)
+
+    def retrievals(self, step_id: StepId) -> tuple[RetrievalFacts, ...]:
+        with self._lock:
+            return self._retrievals.get(step_id, ())
+
+    def note_citations(self, step_id: StepId, citations: tuple[ArtifactRef, ...]) -> None:
+        """Remember the references a node's artifact cited, verbatim, so that whichever settles the node records them with it."""
+        with self._lock:
+            self._citations[step_id] = tuple(citations)
+
+    def citations(self, step_id: StepId) -> tuple[ArtifactRef, ...]:
+        with self._lock:
+            return self._citations.get(step_id, ())
+
     def settle_live(self, plan_id, result: NodeResult, duration_ms: int, model_calls, verification: VerificationFacts | None) -> IntakeResult:
         """Record a node's settlement now, as its work returns, and remember what was recorded so the run's own result can be checked against it."""
         with self._lock:
             outcome = self._propose(
                 NodeSettledPayload(
                     plan_id=plan_id, result=result, dispatched=True, duration_ms=duration_ms,
-                    model_calls=tuple(model_calls), tool_calls=self._tool_calls.get(result.step_id, ()), verification=verification,
+                    model_calls=tuple(model_calls), tool_calls=self._tool_calls.get(result.step_id, ()), retrievals=self._retrievals.get(result.step_id, ()),
+                    citations=self._citations.get(result.step_id, ()), verification=verification,
                 )
             )
             if outcome.applied:

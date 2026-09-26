@@ -29,9 +29,17 @@ FORBIDDEN_IMPORTS = {
 }
 ALLOWED_ROOTS = {"__future__", "collections", "dataclasses", "datetime", "enum", "threading", "time", "types", "typing", "uuid", "eidos"}
 ALLOWED_EIDOS = {
+    "eidos.a2a", "eidos.agents", "eidos.baseline", "eidos.capabilities", "eidos.compiler", "eidos.contracts", "eidos.knowledge", "eidos.recording",
+    "eidos.runtime", "eidos.state", "eidos.validation",
+}
+# V1.3 Step 4 (decisions.md D-218, D-225): the one deliberate extension, for the retrieval adapter. One module, a fixed set of names, from the knowledge package root, one way: eidos.knowledge
+# never imports this package (its own guard), and eidos.state still imports no knowledge at all. Pinned below so a further layer cannot be added without changing this on purpose.
+PRE_RETRIEVAL_ALLOWED_EIDOS = {
     "eidos.a2a", "eidos.agents", "eidos.baseline", "eidos.capabilities", "eidos.compiler", "eidos.contracts", "eidos.recording",
     "eidos.runtime", "eidos.state", "eidos.validation",
 }
+KNOWLEDGE_BOUNDARY_MODULE = "adapters.py"
+APPROVED_KNOWLEDGE_NAMES = {"KnowledgePort", "RetrievalFailure", "RetrievalRequest", "RetrievalResult", "result_problem"}
 # Every vendor name this guard forbids, minus "a2a" itself (the protocol a2a.py exists to speak) — mirroring exactly
 # how eidos.state and eidos.a2a itself already carve "a2a" out of their own vendor-name sets.
 VENDOR_NAMES = {
@@ -63,6 +71,33 @@ def test_only_the_layers_the_recorder_composes_are_imported_never_a_provider_or_
         if name.startswith("eidos"):
             assert ".".join(name.split(".")[:2]) in ALLOWED_EIDOS, f"{module.name} imports {name}"
             assert "providers" not in name and "backends" not in name, f"{module.name} imports {name}"
+
+
+def test_the_only_layer_added_to_what_the_recorder_composes_is_the_knowledge_boundary():
+    assert ALLOWED_EIDOS - PRE_RETRIEVAL_ALLOWED_EIDOS == {"eidos.knowledge"}
+    assert PRE_RETRIEVAL_ALLOWED_EIDOS <= ALLOWED_EIDOS
+
+
+def knowledge_imports(module: Path) -> list[ast.AST]:
+    return [
+        node
+        for node in ast.walk(ast.parse(module.read_text(encoding="utf-8")))
+        if (isinstance(node, ast.ImportFrom) and node.level == 0 and (node.module or "").split(".")[:2] == ["eidos", "knowledge"])
+        or (isinstance(node, ast.Import) and any(alias.name.split(".")[:2] == ["eidos", "knowledge"] for alias in node.names))
+        or (isinstance(node, ast.ImportFrom) and node.level == 0 and node.module == "eidos" and any(alias.name == "knowledge" for alias in node.names))
+    ]
+
+
+@pytest.mark.parametrize("module", MODULES, ids=lambda m: m.name)
+def test_only_the_retrieval_adapter_depends_on_the_knowledge_package(module):
+    assert bool(knowledge_imports(module)) == (module.name == KNOWLEDGE_BOUNDARY_MODULE), module.name
+
+
+def test_the_retrieval_adapter_takes_exactly_the_approved_knowledge_names_from_the_package_root_and_nothing_else():
+    (statement,) = knowledge_imports(RECORDING / KNOWLEDGE_BOUNDARY_MODULE)
+    assert isinstance(statement, ast.ImportFrom) and statement.module == "eidos.knowledge"
+    assert {alias.name for alias in statement.names} == APPROVED_KNOWLEDGE_NAMES
+    assert all(alias.asname is None for alias in statement.names)
 
 
 @pytest.mark.parametrize("module", MODULES, ids=lambda m: m.name)

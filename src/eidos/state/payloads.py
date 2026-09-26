@@ -8,7 +8,9 @@ deliberately absent: ``NODE_SETTLED`` carries the verdict, so emitting it would 
 event type gains a payload here: ``A2A_TASK_STARTED``/``A2A_TASK_COMPLETED`` are the only two of the vocabulary's remote-subsystem types this
 package builds (D-090), and D-174 uses exactly those two — no ``A2A_TASK_FAILED`` or the like, and no producer-assigned sequence field on either
 (D-172). The tool-call and evidence-search event types stay exactly as V0.5 left them: named in the vocabulary, no payload class. Tool calls are
-recorded without a new event type, as additive ``ToolCallFacts`` on ``NODE_SETTLED`` (D-203, V1.2 Step 3), exactly as model calls are (D-160).
+recorded without a new event type, as additive ``ToolCallFacts`` on ``NODE_SETTLED`` (D-203, V1.2 Step 3), exactly as model calls are (D-160). Knowledge retrievals and the
+references a work artifact cited are recorded the same way (D-218, D-225, V1.3 Step 4): additive ``RetrievalFacts`` and ``citations`` on ``NODE_SETTLED``, no new event type. They
+hold identifiers and digests and never a chunk's text or the query's (D-076), so replay reproduces them from the log alone.
 ``REPLAN_TRIGGERED`` (D-199, V1.1 Step 3) finally gives that long-declared V0.1 vocabulary slot its own real
 shape: recorded only when an accepted within-mission replan is about to try a different plan, it deliberately never touches
 ``MissionState.status`` — see its own class docstring and ``reducer.py`` for why no new terminal-state escape hatch is needed.
@@ -179,6 +181,92 @@ class ToolCallFacts(EidosModel):
         return self
 
 
+class RetrievalOutcome(StrEnum):
+    """What one knowledge retrieval came to (D-218, D-225, V1.3 Step 4). The four failure values mirror ``eidos.knowledge.RetrievalFailureKind`` value for value, and a guard test keeps the
+    two in step (the same arrangement as ``ToolCallOutcome``, D-153 item 5, so that ``eidos.state`` never imports the knowledge package). ``RESULT`` is an answer, and an answer with no
+    hits is a real answer."""
+
+    RESULT = "result"
+    UNAVAILABLE = "unavailable"
+    REQUEST_MISMATCH = "request_mismatch"
+    RESULT_TOO_LARGE = "result_too_large"
+    MALFORMED_RESULT = "malformed_result"
+
+
+# The shapes of the knowledge identifiers, mirrored as constrained strings (as ``ToolCallFacts`` mirrors a digest): ``eidos.state`` imports no knowledge module. A guard test keeps each
+# equal to the definition in ``eidos.knowledge``, and ``evidence_ref_of_chunk_id`` equal to ``eidos.knowledge.evidence_ref_of``.
+_SOURCE_ID = r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+_SCHEME_ID = r"^[A-Za-z0-9][A-Za-z0-9._=/-]{0,127}$"
+EVIDENCE_REF_PREFIX = "evidence:"
+EVIDENCE_REF_HEX_LENGTH = 16
+
+
+def evidence_ref_of_chunk_id(chunk_id: str) -> str:
+    """The evidence reference of a chunk: ``evidence:`` and the first sixteen hexadecimal digits of its id (D-212), restated here so that a recorded hit can be matched to a citation."""
+    return EVIDENCE_REF_PREFIX + chunk_id[:EVIDENCE_REF_HEX_LENGTH]
+
+
+class RetrievalHitFacts(EidosModel):
+    """One recorded hit: where it ranked and which chunk it was, by identity. No text is recorded, only the digest of it; ``score`` is present only where the scheme provided one."""
+
+    rank: int = Field(ge=1)
+    chunk_id: str = Field(pattern=_SHA256_HEX)
+    document_id: str = Field(pattern=_SHA256_HEX)
+    source_id: str = Field(pattern=_SOURCE_ID)
+    content_digest: str = Field(pattern=_SHA256_HEX)
+    score: float | None = Field(default=None, allow_inf_nan=False)
+
+    @property
+    def evidence_ref(self) -> str:
+        return evidence_ref_of_chunk_id(self.chunk_id)
+
+
+class RetrievalFacts(EidosModel):
+    """What was recorded about one knowledge retrieval (D-218, D-225, V1.3 Step 4). ``None`` and an empty tuple mean nobody recorded it; neither is a guess.
+
+    The identity fields say what was asked: the knowledge base, the pinned snapshot, the retrieval scheme and the query's own digest, and ``top_k`` the bound it was asked under. ``hits`` are
+    the answer, in rank order, each chunk once and at most ``top_k`` of them; they are ordered by score descending and then chunk id ascending when the scheme scored them, and ``score_kind`` names
+    what a score is exactly when they are scored. ``result_bytes`` is the UTF-8 size of the hits' text and belongs to an answer; ``elapsed_ms`` is what the recorder's monotonic clock measured
+    around the call, as for a tool call. A failure carries no hits and nothing measured about an answer: each outcome carries exactly what can be true of it, so a mislabelled or tampered fact is
+    unconstructible.
+    """
+
+    kb_id: str = Field(pattern=_SOURCE_ID)
+    snapshot_id: str = Field(pattern=_SHA256_HEX)
+    scheme_id: str = Field(pattern=_SCHEME_ID)
+    query_id: str = Field(pattern=_SHA256_HEX)
+    top_k: int = Field(ge=1)
+    outcome: RetrievalOutcome
+    score_kind: str | None = Field(default=None, pattern=_SCHEME_ID)
+    hits: tuple[RetrievalHitFacts, ...] = ()
+    result_bytes: int | None = Field(default=None, ge=0)
+    elapsed_ms: int | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def _check_the_fields_belong_to_the_outcome(self) -> "RetrievalFacts":
+        if self.outcome is not RetrievalOutcome.RESULT:
+            if self.hits or self.result_bytes is not None or self.score_kind is not None:
+                raise ValueError(f"a {self.outcome.value} retrieval has no answer to carry")
+            return self
+        if self.result_bytes is None:
+            raise ValueError("an answer says how large it was")
+        if [hit.rank for hit in self.hits] != list(range(1, len(self.hits) + 1)):
+            raise ValueError("hits are ranked 1 to n, in order")
+        if len(self.hits) > self.top_k:
+            raise ValueError("an answer has at most top_k hits")
+        if len({hit.chunk_id for hit in self.hits}) != len(self.hits):
+            raise ValueError("a chunk is a hit at most once")
+        if self.score_kind is None and any(hit.score is not None for hit in self.hits):
+            raise ValueError("a score is labelled: scored hits name what a score is")
+        if self.score_kind is not None and any(hit.score is None for hit in self.hits):
+            raise ValueError("a scheme that names what a score is scores every hit")
+        if self.score_kind is not None:
+            keys = [(-hit.score, hit.chunk_id) for hit in self.hits]
+            if keys != sorted(keys) or len(set(keys)) != len(keys):
+                raise ValueError("scored hits are ordered by score descending and then chunk id ascending")
+        return self
+
+
 class VerificationFacts(EidosModel):
     """What the ``Verifier`` port returned for a ``VERIFY`` node: a verdict and its reason text, and no typed per-rule outcomes (D-158 item 7)."""
 
@@ -259,7 +347,8 @@ class NodeSettledPayload(EidosModel):
     is absent when the node was not dispatched or nobody observed it (D-160 item 6). ``model_calls`` are the calls made while the node ran,
     in call order, and belong to a work node. ``tool_calls`` (D-203, V1.2 Step 3) are the tool calls made while the node ran, in call order,
     and likewise belong to a dispatched work node. The field is additive: it defaults to empty, so a log written before it existed reads back
-    exactly as it was written, and no new event type is involved.
+    exactly as it was written, and no new event type is involved. ``retrievals`` (D-218, V1.3 Step 4) are the knowledge retrievals made while the node ran, in call order, and
+    ``citations`` the references its artifact cited (its ``source_refs``, verbatim, each once); both belong to a dispatched work node and are additive in the same way.
     """
 
     event_type: Literal[MissionEventType.NODE_SETTLED] = MissionEventType.NODE_SETTLED
@@ -269,12 +358,14 @@ class NodeSettledPayload(EidosModel):
     duration_ms: int | None = Field(default=None, ge=0)
     model_calls: tuple[ModelCallFacts, ...] = ()
     tool_calls: tuple[ToolCallFacts, ...] = ()
+    retrievals: tuple[RetrievalFacts, ...] = ()
+    citations: tuple[ArtifactRef, ...] = ()
     verification: VerificationFacts | None = None
 
     @model_validator(mode="after")
     def _check_observations_belong_to_a_dispatched_node_of_the_right_kind(self) -> "NodeSettledPayload":
         if not self.dispatched and (
-            self.duration_ms is not None or self.model_calls or self.tool_calls or self.verification is not None
+            self.duration_ms is not None or self.model_calls or self.tool_calls or self.retrievals or self.citations or self.verification is not None
         ):
             raise ValueError("a node that was not dispatched has no observations")
         if self.result.status in (NodeStatus.SKIPPED, NodeStatus.NOT_REACHED) and self.dispatched:
@@ -283,6 +374,12 @@ class NodeSettledPayload(EidosModel):
             raise ValueError("only a work node makes model calls")
         if self.tool_calls and self.result.kind is not PlanStepKind.AGENT:
             raise ValueError("only a work node makes tool calls")
+        if self.retrievals and self.result.kind is not PlanStepKind.AGENT:
+            raise ValueError("only a work node retrieves knowledge")
+        if self.citations and self.result.kind is not PlanStepKind.AGENT:
+            raise ValueError("only a work node cites")
+        if any(not ref for ref in self.citations) or len(set(self.citations)) != len(self.citations):
+            raise ValueError("a node lists each reference it cited once, and none is blank")
         if self.verification is not None and self.result.kind is not PlanStepKind.VERIFY:
             raise ValueError("only a VERIFY node carries a verdict")
         return self

@@ -11,7 +11,18 @@ The one entry point for a single-attempt pass is ``record_baseline``. V1.1 Step 
 pieces ``record_baseline`` itself is built from, reused rather than duplicated by within-mission replanning.
 """
 
-from .adapters import ModelCallTracker, RecordingAgent, RecordingModel, RecordingToolAccess, RecordingVerifier, facts_of, tool_facts_of
+from .adapters import (
+    ModelCallTracker,
+    RecordingAgent,
+    RecordingCitations,
+    RecordingKnowledgePort,
+    RecordingModel,
+    RecordingToolAccess,
+    RecordingVerifier,
+    facts_of,
+    retrieval_facts_of,
+    tool_facts_of,
+)
 from .ports import Clock, IdSource, SystemClock, UuidEventIds, UuidPlanIds, UuidStrategyIds
 from .recorder import Recorder
 from .run import RecordedRun, record_attempt, record_baseline, terminal_payload_for
@@ -23,6 +34,8 @@ __all__ = [
     "RecordedRun",
     "Recorder",
     "RecordingAgent",
+    "RecordingCitations",
+    "RecordingKnowledgePort",
     "RecordingModel",
     "RecordingToolAccess",
     "RecordingVerifier",
@@ -33,6 +46,7 @@ __all__ = [
     "facts_of",
     "record_attempt",
     "record_baseline",
+    "retrieval_facts_of",
     "terminal_payload_for",
     "tool_facts_of",
 ]

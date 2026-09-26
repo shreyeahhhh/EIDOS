@@ -1,11 +1,11 @@
 # 09 — Agentic RAG Architecture
 
-**Status:** DERIVED — **V1.3 (decisions.md D-208 to D-220, 2026-09-25) assigns the knowledge/evidence layer only (§9); only the pure structures and the evidence ledger are implemented (Steps 2 and 3: identity, chunking, the snapshot, the independent-source count, evidence records, the ledger and the mapping of V1.2 documents). The agentic loop, reranking, the evidence judge and Qdrant stay deferred and unassigned (D-184).**
+**Status:** DERIVED — **V1.3 (decisions.md D-208 to D-220, 2026-09-25) assigns the knowledge/evidence layer only (§9); the pure structures, the evidence ledger, the retrieval contracts, recorded retrieval and citation facts with replay and an audit, and one retriever (the exact in-process lexical one) with its frozen benchmark are implemented (Steps 2 to 4). The agentic loop, reranking, the evidence judge and Qdrant stay deferred and unassigned (D-184).**
 **Derived from:** handoff §24, §25, §26, §31, §33, §50, §51, §63, §74, §76
 **Authority:** This document is derived from `EIDOS_CLAUDE_CODE_HANDOFF.md` and subordinate to it.
 If this document and the handoff conflict, stop and report the conflict to the human owner.
 
-> **Only the pure structures and the evidence ledger of §9 are implemented** (`eidos.knowledge`, V1.3 Steps 2 and 3); nothing else in this document is. There is no retrieval, no Qdrant, no
+> **The structures, the evidence ledger, the retrieval contracts, replay and the lexical retriever of §9 are implemented** (`eidos.knowledge`, `eidos.state`, `eidos.recording`, V1.3 Steps 2 to 4); nothing else in this document is. There is no retrieval, no Qdrant, no
 > embedding model, no reranker and no dependency for any of them. §50 named this V0.8 in the
 > handoff's own original sequence; the owner has since redefined V0.8 as the Strategy Selector
 > (`decisions.md` D-178 onward, V0.7 Step 1's own naming) and ruled, as **D-184**, that RAG is not
@@ -127,9 +127,9 @@ successful verification, is the flagship demo path (§43) and belongs in `tests/
 | How evidence sufficiency is judged | `decisions.md` D-015 |
 | Collection schemas | explicitly deferred by §25; V1.3 uses a pinned snapshot with a manifest instead of Qdrant collections (D-220) |
 
-## 9. V1.3 — the knowledge/evidence layer (ruled 2026-09-25; the pure structures and the evidence ledger are implemented, nothing else)
+## 9. V1.3 — the knowledge/evidence layer (ruled 2026-09-25; implemented through the lexical retriever and its benchmark, Step 4)
 
-Decisions D-208 to D-220 (`decisions.md`). This section describes what V1.3 will build; **only the pure structures and the evidence ledger exist** (Steps 1 to 3 are done: identity, chunking, the snapshot and the independent-source count in `eidos.knowledge`, evidence records and set-based resolution there, and the ledger and the V1.2 resolver in `eidos.agents.evidence_ledger`). Sections 1 to 8 remain the handoff-derived
+Decisions D-208 to D-220 (`decisions.md`). This section describes what V1.3 will build; **Steps 1 to 4 are done, and nothing after them exists** (the semantic retriever, the comparison, the gate, admission and Research integration are Steps 5 to 7); what exists is (Steps 1 to 3: identity, chunking, the snapshot and the independent-source count in `eidos.knowledge`, evidence records and set-based resolution there, and the ledger and the V1.2 resolver in `eidos.agents.evidence_ledger`). Sections 1 to 8 remain the handoff-derived
 specification of the full agentic design, of which V1.3 builds a staged subset.
 
 **Scope (D-208).** Local documents only: ingestion, document and chunk identity, indexing, retrieval, source and provenance tracking, retrieval-query identity, evidence references, duplicate-source handling,
@@ -142,7 +142,7 @@ reformulate-and-retrieve-again loop of §2, reranking and an evidence judge, Qdr
 ResearchAgent                            (integration begins only after the retrieval comparison is reviewed)
    -> KnowledgeAccess / KnowledgeGate    admission, duplicate service, bounds, the evidence ledger
         -> KnowledgePort                 retrieve(request) -> result | failure
-             |- LexicalKnowledgePort
+             |- LexicalKnowledgePort      (built, Step 4: exact, in memory, standard library only)
              '- SemanticKnowledgePort -> Embedder (the Sentence Transformer adapter lives only here)
                                        -> a derived vector index -> exact cosine search
    (later, only if a measured need justifies it: QdrantKnowledgePort)
@@ -172,12 +172,14 @@ semantic plagiarism detection is attempted. The resolver is pure and determinist
 distinct even for identical content, and `derived_from` applies to documents, is explicit only and is non-transitive. Step 2 implements it in `independent_sources` (D-223, reading 1): a cited document that
 directly declares an origin which is also cited is set aside, and the distinct declared sources of the rest are counted. D-210 (ruled 2026-09-25): an existing V1.2 supplied or tool document receives a deterministic knowledge identity from its reference identity and normalised content, and the resolver maps old evidence into it without modifying any historical record. Step 3 implements it (`resolve_supplied_evidence`, D-224): a caller document's source is derived from its reference, a tool document's from the tool and the provider's own document id (the request digest takes no part), the document id is the digest of the normalised content, and the whole document is one chunk under the scheme `legacy-artifact-v1`. Independence is resolved over the set of cited evidence, not key by key, and the verifier is not changed.
 
+**The retrieval contract (D-225, Step 4).** `RetrievalRequest(kb_id, snapshot_id, scheme_id, text, top_k, max_result_bytes)` states everything and defaults nothing; `text` is the goal, unchanged, in its canonical form (NFC, LF line endings, the fixed whitespace stripped from both ends), so one query has one identity: `query_id` is the SHA-256 of the canonical JSON of `{version, kb_id, snapshot_id, scheme_id, text, top_k}` and depends on nothing else (not the byte bound, which is knowledge-base configuration). A `RetrievalResult` carries the same identifiers, an optional `score_kind` and hits ranked from 1, ordered by score descending and then `chunk_id` ascending; a `RetrievalFailure` is one of `unavailable`, `request_mismatch`, `result_too_large` (never a truncation) and `malformed_result`; an empty result is a real result. `KnowledgePort.retrieve` is synchronous, thread-safe, total and read-only. The lexical scheme is `lexical-bm25-v1/k1=1.2/b=0.75/tokens=word-v1` in exact decimal arithmetic (the logarithm is correctly rounded, so no platform library plays a part), scores rounded to 1e-9, a chunk that shares no term with the query is not a hit.
+
 **Bounds and the query (D-216, D-217).** Retrieval is bounded by per-knowledge-base configuration (`top_k`, a maximum result count, a maximum returned size); there is no new global retrieval budget. The Research
 agent forms one deterministic query from the mission goal: no LLM query planning and no autonomous decomposition. This answers the loop question below for V1.3 only (D-029 stays Open).
 
 **Recording and replay (D-218).** Additive fields on the existing `NODE_SETTLED` facts record `scheme_id`, `snapshot_id`, `query_id`, the outcome, the ordered hits (`chunk_id`, `document_id`, `source_id`, rank,
 content digest, an optional score and its kind), the sizes and the elapsed time, plus the citation edges as a tuple. There is no new event; `RAG_SEARCH` and `EVIDENCE_REJECTED` stay unused. The existing replay
-architecture stays authoritative: replay folds the recorded log and needs no store, index, embedder or knowledge package. As with tool facts, they are captured through `record_baseline` only (D-204 is unchanged).
+architecture stays authoritative: replay folds the recorded log and needs no store, index, embedder or knowledge package. As with tool facts, they are captured through `record_baseline` only (D-204 is unchanged). **Built at Step 4:** `RetrievalFacts` (identity, `top_k`, outcome, ordered hit facts with a content digest, size, elapsed time; no chunk or query text) and `citations` on `NODE_SETTLED`, self-validating, so a tampered log is refused when it is loaded; `audit_evidence` in `eidos.state` traces each citation to the recorded chunk, document, source, query, snapshot and rank without touching a retriever, an index, a model, the network or a snapshot (proved with every retrieval library made unimportable). Independent sources are counted by a caller that holds the snapshot's derivations from the audit's list of cited documents; the comparison with the verifier waits for the verifier wiring (Step 7).
 
 **Retrieval technology and the benchmark (D-208, D-213 to D-215, D-220).** The retrieval method is chosen by measurement, not in advance. One frozen, English-only, gold-query fixture (a fictional facility: about 12
 documents, 6 sources, 48 to 60 chunks, about 36 queries of which about 30 are frozen test queries) is run against lexical retrieval and Sentence Transformer semantic retrieval behind the same port. It includes
@@ -186,6 +188,19 @@ tuned against the test set. Measures: Recall@1, Recall@3, Recall@5, MRR and sour
 locally cached `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`, pinned by revision and weight digest and run only in an isolated process in the existing Python 3.13 environment; it is not a runtime
 dependency, and EIDOS stays on Python 3.12 (D-214). Its 128-token window is a hard bound: chunks are checked against the tokenizer's word-piece count and never silently truncated (D-215). The vector index is
 derived from the pinned snapshot, rebuildable and not replay authority; Qdrant and approximate search are not part of the first slice (D-220). The cross-encoder is excluded.
+
+**The frozen fixture and the lexical baseline (D-225, Step 4).** The fixture is a fictional tidal power station: 12 documents in 6 sources, 53 chunks (one paragraph each, at most 60 words), a byte-identical mirror under a second source, a source that restates another's facts in other words and declares nothing, and three distractor documents; 36 English queries, 30 frozen test and 6 development, in four strata defined by construction and checked mechanically (lexical overlap, paraphrase, multi-source, distractor bait). Gold labels are over content-equivalence groups. It was frozen (digest `93db0b1f14c7c444073f86c763e891f1ccab92e5259f62351305b374db57df6b`) before the first retrieval run and has not been touched since. Metrics: Recall@1/3/5 and MRR over the group-deduplicated ranking, source-coverage@k over the chunk ranking, macro-averaged, exact. The measured baseline of the lexical retriever, from the first run (every later run reproduced it byte for byte):
+
+| Queries | n | Recall@1 | Recall@3 | Recall@5 | MRR | Source-cov.@1 | @3 | @5 |
+|---|---|---|---|---|---|---|---|---|
+| **test, all 30** | 30 | 0.4386 | 0.4700 | 0.5186 | 0.6344 | 0.4056 | 0.5000 | 0.5500 |
+| test: lexical overlap | 8 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0.9375 | 1.0000 | 1.0000 |
+| test: paraphrase | 10 | 0.0000 | 0.0000 | 0.1000 | 0.0782 | 0.0000 | 0.0000 | 0.1000 |
+| test: multi-source | 6 | 0.1931 | 0.3500 | 0.4264 | 1.0000 | 0.2778 | 0.5000 | 0.5833 |
+| test: distractor bait | 6 | 0.6667 | 0.6667 | 0.6667 | 0.7083 | 0.5000 | 0.6667 | 0.6667 |
+| development, all 6 (debugging only) | 6 | 0.5333 | 0.5667 | 0.6000 | 0.6944 | 0.5417 | 0.5833 | 0.6250 |
+
+No retriever is called better, best or sufficient on this evidence: each stratum has 6 to 10 queries, a gap below about 0.2 is not distinguishable from noise, no decision rule or margin exists, and the owner's review of the paraphrase queries is still owed. The cost, measured on one machine, one day (Windows-11-10.0.26200-SP0, CPython 3.12.10, AMD64, Intel64 Family 6 Model 154 Stepping 3, GenuineIntel), is in D-225. The semantic run and the comparison are Steps 5 and 6.
 
 **Determinism (D-220).** Deterministic: identifiers, normalisation, chunking, filtering, ordering and tie-breaking, and the replay of recorded retrieval. Potentially environment-dependent: embedding generation and
 floating-point similarity (an informal probe saw vector bits move by about 3e-7 with the thread count and the batch shape on one machine). Bit-identical semantic retrieval across machines is not promised.

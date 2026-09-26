@@ -14,6 +14,7 @@ V0.6 Step 2 — the ``AgentTask`` status mapping and the D-176 fold primitive (`
 V0.6 Step 4 — ``A2A_TASK_STARTED``/``A2A_TASK_COMPLETED`` wired into the reducer, the log's intake and replay (D-166, D-172, D-176).
 V0.6 D-177 — explicit resume: ``EventLog.accept_resumed`` and ``reduce_resumed``, narrow additions beside ``accept``/``reduce``.
 V1.2 Step 3 — additive ``ToolCallFacts`` on ``NODE_SETTLED``, the reducer's ``tool_calls_used`` fold and ``StepRecord.tool_calls`` (D-203).
+V1.3 Step 4 — additive ``RetrievalFacts`` and ``citations`` on ``NODE_SETTLED``, their ``StepRecord`` fields, and the derived ``audit_evidence`` projection (D-218, D-225).
 """
 
 from .agent_tasks import AmbiguousAgentTaskCorrelation, fold_agent_task, node_status_for
@@ -37,11 +38,16 @@ from .payloads import (
     PlanRejectionStage,
     RejectionReason,
     ReplanTriggeredPayload,
+    RetrievalFacts,
+    RetrievalHitFacts,
+    RetrievalOutcome,
     ToolCallFacts,
     ToolCallOutcome,
     ToolDenialReason,
     VerificationFacts,
+    evidence_ref_of_chunk_id,
 )
+from .evidence_audit import CitationKind, CitationTrace, CitedDocument, EvidenceAudit, RetrievedBy, audit_evidence
 from .execution_record import ExecutionRecord, StepRecord, execution_record
 from .log import EventLog, EventProposal, IntakeResult
 from .records import EventRecord, Payload
@@ -67,10 +73,14 @@ __all__ = [
     "A2ATaskStartedPayload",
     "AmbiguousAgentTaskCorrelation",
     "Checkpoint",
+    "CitationKind",
+    "CitationTrace",
+    "CitedDocument",
     "EmittedPayload",
     "EventLog",
     "EventProposal",
     "EventRecord",
+    "EvidenceAudit",
     "ExecutionRecord",
     "IntakeResult",
     "LoadResult",
@@ -95,13 +105,19 @@ __all__ = [
     "ReplayRejection",
     "ReplayRejectionCode",
     "ReplayResult",
+    "RetrievalFacts",
+    "RetrievalHitFacts",
+    "RetrievalOutcome",
+    "RetrievedBy",
     "StepRecord",
     "ToolCallFacts",
     "ToolCallOutcome",
     "ToolDenialReason",
     "VerificationFacts",
+    "audit_evidence",
     "checkpoint_at",
     "dump_jsonl",
+    "evidence_ref_of_chunk_id",
     "execution_record",
     "fold_agent_task",
     "load_jsonl",

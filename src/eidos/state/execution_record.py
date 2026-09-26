@@ -24,6 +24,7 @@ from pydantic import Field, model_validator
 
 from eidos.contracts import (
     AgentId,
+    ArtifactRef,
     CapabilityId,
     EidosModel,
     ExecutionId,
@@ -49,6 +50,7 @@ from .payloads import (
     PlanRejectedPayload,
     PlanRejectionStage,
     RejectionReason,
+    RetrievalFacts,
     ToolCallFacts,
     VerificationFacts,
 )
@@ -70,13 +72,15 @@ class StepRecord(EidosModel):
     duration_ms: int | None = Field(default=None, ge=0)  # the recorded duration; absent if none was observed
     model_calls: tuple[ModelCallFacts, ...] = ()
     tool_calls: tuple[ToolCallFacts, ...] = ()  # the tool calls made while the step ran, in call order (D-203, V1.2 Step 3)
+    retrievals: tuple[RetrievalFacts, ...] = ()  # the knowledge retrievals made while the step ran, in call order (D-218, V1.3 Step 4)
+    citations: tuple[ArtifactRef, ...] = ()  # the references the step's artifact cited, verbatim (D-218, V1.3 Step 4)
     verification: VerificationFacts | None = None  # the verifier's verdict and reason, on a ``VERIFY`` step
 
     @model_validator(mode="after")
     def _check_nothing_is_recorded_about_a_node_that_has_not_settled(self) -> "StepRecord":
         if self.result is None and (
             self.dispatched is not None or self.duration_ms is not None or self.model_calls or self.tool_calls
-            or self.verification is not None
+            or self.retrievals or self.citations or self.verification is not None
         ):
             raise ValueError("a step that has not settled carries no settlement facts")
         if self.result is not None and self.dispatched is None:
@@ -240,6 +244,8 @@ def _step_record(step, started: NodeStartedPayload | None, settled: NodeSettledP
         duration_ms=settled.duration_ms if settled else None,
         model_calls=settled.model_calls if settled else (),
         tool_calls=settled.tool_calls if settled else (),
+        retrievals=settled.retrievals if settled else (),
+        citations=settled.citations if settled else (),
         verification=settled.verification if settled else None,
     )
 

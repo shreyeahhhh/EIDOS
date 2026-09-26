@@ -5113,7 +5113,7 @@ one is not.
 
 ### D-222 — V1.3 Step 1: points the rulings left open (PARTLY RULED 2026-09-25)
 
-- **Status:** Partly ruled, partly Open · **Date:** 2026-09-25 · **Raised by:** Claude Code while recording D-208 to D-220 · **Decided by:** human owner, for points 2 and 3, and for point 4 (its home, then its import guard on 2026-09-25); points 1, 5, 6, 7 and 8 stay Open
+- **Status:** Partly ruled, partly Open · **Date:** 2026-09-25 · **Raised by:** Claude Code while recording D-208 to D-220 · **Decided by:** human owner, for points 2 and 3, and for point 4 (its home, then its import guard on 2026-09-25); points 5 and 6, and point 7 (a) by direction to resolve them from the accepted reports (readings in D-225); points 1, 7 (b and c) and 8, and the admission part of point 5, stay Open
 - **Source:** the rulings and the two readiness reports; CLAUDE.md §7
 - **Points** (each is a gap or an unstated detail; none was resolved):
   1. **Milestone label.** The owner named this milestone V1.3. The `progress.md` ladder, the handoff's milestone list (§50) and D-022, D-072, `docs/02` and `docs/10` use V1.3 for Frontend and V1.4 for
@@ -5149,6 +5149,7 @@ one is not.
   knowledge-facing contracts needed for retrieval. `eidos.knowledge` must never import `eidos.agents`, `eidos.policy`, MCP, LangGraph or infrastructure. The dependency direction stays one-way.** *Reading
   taken, not confirmed (D-224):* until `KnowledgePort` exists, the pinned boundary is the set of knowledge names the evidence ledger needs, imported from the package root only; a later step adds names to that
   set on purpose. Points 1, 5, 6, 7 and 8 stay Open.
+- **Update (owner, 2026-09-25, with the Step 4 brief): points 5 and 6 are to be resolved before coding, from the readiness reports and the accepted decisions, with no further architecture invented; the combined benchmark listing names content-equivalence groups (point 7 a).** Resolved as readings in **D-225** (readings 1 to 4 and 10): the retrieval contract, the query form (the goal, canonicalised), `query_id`, the bounds (`top_k` and `max_result_bytes`, in bytes), and the gold labels over content-equivalence groups. **Still Open:** point 1; point 7 (b), no numeric decision rule, and (c), the owner's review of the paraphrase queries; point 8; and, for Step 7, the admission part of point 5 (queries per execution, the denial vocabulary).
 
 
 ### D-223 — V1.3 Step 2: readings taken where the rulings were silent (OPEN)
@@ -5192,9 +5193,9 @@ one is not.
 - **Still Open, unaffected (as of Step 2; D-210 and D-222 point 4's import-guard part were ruled afterwards, on 2026-09-25):** D-210; D-222 points 1, 4 (its import-guard part), 5, 6, 7 and 8; D-204 to D-207.
 - **Effect:** additive only. No `eidos.contracts`, `eidos.state`, `eidos.agents`, `eidos.policy`, dependency, V1.1 or V1.2 change; `pyproject.toml` is unchanged; nothing imports `eidos.knowledge`.
 
-### D-224 — V1.3 Step 3: readings taken where the rulings were silent (OPEN)
+### D-224 — V1.3 Step 3: readings taken where the rulings were silent (PARTLY RULED 2026-09-25)
 
-- **Status:** Open (readings taken, none blocking) · **Date:** 2026-09-25 · **Raised by:** Claude Code while implementing V1.3 Step 3 (the evidence ledger and the D-210 resolver); **not decided**
+- **Status:** Partly ruled, partly Open · **Date:** 2026-09-25 · **Raised by:** Claude Code while implementing V1.3 Step 3 (the evidence ledger and the D-210 resolver); **readings 1 and 7 ruled by the human owner on 2026-09-25 (below); the others not decided**
 - **Source:** D-208 to D-223 (D-209, D-210, D-212, D-219, D-221 and D-222 point 4 in particular); the accepted readiness reports (§4, the `EvidenceRecord` row of §18); CLAUDE.md §7 and invariants 8, 10, 12, 13 and 16
 - **Why recorded:** the D-210 ruling fixed that a V1.2 document receives a deterministic knowledge identity from its existing artifact/reference identity plus its normalised content, and the import-guard ruling fixed
   the direction of the dependency. Neither said what the "existing reference identity" of a tool document is, how a source id is derived from a reference, or which knowledge names the boundary contains before a
@@ -5239,3 +5240,134 @@ one is not.
 - **Effect:** additive only. No `eidos.contracts`, `eidos.state`, `eidos.policy`, verifier, recorder, dependency, V1.1 or V1.2 change; `pyproject.toml` is unchanged. The existing source files touched are the two
   package `__init__` files (exports); the existing tests touched are the two guard tests (revised deliberately, as they said they would be: the agents ratchet now pins two added layers, and "no other package imports
   the knowledge package yet" became "only the evidence ledger imports it, from the package root") and the knowledge test factories (helpers added).
+- **Rulings (owner, 2026-09-25, with the Step 4 brief):** **reading 1 is ruled as read** (a tool document is identified by the tool and the provider's document id; the request digest is not part of the identity, so the same provider document reached through different queries is one knowledge document and source), and **reading 7 is ruled as read** (a single evidence reference or chunk is never merged across snapshots; the conflict is refused and no multi-snapshot record is made). Readings 2 to 6 and 8 to 11 stay Open. Recorded with D-225.
+
+### D-225 — V1.3 Step 4: retrieval contracts, replay, the lexical retriever and the frozen benchmark (rulings; the readings taken are OPEN)
+
+- **Status:** Partly ruled, partly Open · **Date:** 2026-09-25 · **Decided by:** human owner (the rulings below, given with the Step 4 brief on 2026-09-25); the readings are Claude Code's, **not decided**
+- **Source:** D-208 to D-224; the two accepted readiness reports (the `KnowledgePort` boundary, the typed contracts, the id table, the retrieval-result and replay designs, the determinism table, the benchmark design and
+  the metrics, all of which this record takes as its source of truth); CLAUDE.md §7 and invariants 8, 12, 13, 15, 16 and 17
+- **Owner rulings (2026-09-25):**
+  1. **Tool-document identity (D-224 reading 1): ruled as read.** A tool document is identified by the tool/provider identity plus the provider's document id; the request digest is not part of the identity, so the
+     same provider document retrieved through different queries resolves to the same knowledge document and source.
+  2. **Evidence from different snapshots (D-224 reading 7): ruled as read.** A single evidence reference or chunk cannot be merged across snapshots; the conflict is refused, and no multi-snapshot record is made.
+  3. **The milestone is reshaped.** The former Steps 4 and 5 are ONE milestone, **Step 4 = retrieval contracts + replay + deterministic lexical retrieval + the frozen benchmark**, with internal phases (A contracts and
+     replay, B the lexical retriever, C the benchmark) and one local commit. The steps after it are **Step 5 semantic retrieval, Step 6 the lexical-versus-semantic comparison and the human decision, Step 7
+     Research integration and the end-to-end scenario, Step 8 the V1.3 close-out.**
+  4. **The remaining D-222 retrieval decisions (bounds, the form of the query, `query_id`) are to be resolved before coding, from the readiness reports and the accepted decisions, with no further architecture
+     invented.** They are resolved below as readings (1 to 4); what the sources do not settle is left Open and named.
+  5. **Scope.** The minimum retrieval contracts (`RetrievalRequest`, `RetrievedChunk`, `RetrievalResult`, `RetrievalFailure`, a deterministic `query_id`), retrieval facts, citation facts and the retrieval metadata
+     replay needs; replay that uses only recorded facts and can never call a retriever, load a model or an embedding, reach Qdrant or a vector index, use the network or the file system, or recompute retrieval;
+     a deterministic exact in-process lexical retriever behind `KnowledgePort`; the approved small benchmark, frozen before any result is observed, with the approved metrics, reported without calling any retriever
+     better, best or sufficient. Not built: Qdrant, Sentence Transformers, a cross-encoder, embeddings, ANN, external search, a RAG framework, Research integration, any V1.2 execution or verifier change, a
+     frontend, FastAPI, Supabase, Docker or deployment. The dependency direction stays agents to the knowledge boundary; `eidos.knowledge` never imports agents, policy, MCP, LangGraph or infrastructure.
+- **Readings taken (Open, none blocking):**
+  1. **The contract.** All are `EidosModel` types in `eidos.knowledge.retrieval`, identifiers plain constrained strings. `RetrievalRequest(kb_id, snapshot_id, scheme_id, text, top_k, max_result_bytes)`, no defaults: the
+     caller pins the knowledge base, the snapshot and the retrieval scheme it means, and states both bounds. `RetrievedChunk(rank, chunk, score)`: `chunk` is the Step 2 `KnowledgeChunk`, `rank` an integer from 1,
+     `score` present only if the scheme provides one. `RetrievalResult(query_id, kb_id, snapshot_id, scheme_id, score_kind, hits)`: the hits are ranked 1 to n in order, ordered by score descending and then `chunk_id`
+     ascending when scored, each chunk at most once; `score_kind` names what a score is (a label, never a confidence) and is present exactly when the hits carry scores. `RetrievalFailure(kind, message)`, with
+     four kinds: `UNAVAILABLE`, `REQUEST_MISMATCH` (the request names a knowledge base, snapshot or scheme the port does not serve), `RESULT_TOO_LARGE` (the hits' text exceeds `max_result_bytes`; never truncated) and
+     `MALFORMED_RESULT` (a result that does not answer its request). `KnowledgePort.retrieve(request) -> RetrievalResult | RetrievalFailure`: synchronous, thread-safe, total (a failure is returned, never raised) and
+     read-only. An empty result is a real result. A hit is not evidence and not an independent source. The readiness report's `RetrievalQuery`, `EvidenceReference` and `KnowledgeSource` stay deleted; the gate,
+     `KnowledgeBaseDescriptor` and admission are Step 7.
+  2. **The form of the query (D-222 point 6, D-217).** The query is the mission goal, unchanged, taken as V1.2 takes it (`goal.strip()`, D-207 reading 7) and not transformed; no rewriting, expansion or decomposition
+     exists. Its canonical form is Unicode NFC, CRLF and CR read as LF, and the ends stripped of the fixed whitespace set of Step 2's chunker (so the result does not depend on the interpreter's Unicode tables; it
+     differs from `str.strip()` only for the four control characters U+001C to U+001F). A `RetrievalRequest` accepts only text that is already canonical and non-empty, so one query has one identity. There is no
+     maximum query length in the contract.
+  3. **`query_id`.** The SHA-256 of the canonical JSON (sorted keys, ASCII escapes, compact separators) of `{"version": "query-v1", "kb_id", "snapshot_id", "scheme_id", "text", "top_k"}`: the accepted formula
+     (`{kb_id, normalised text, top_k, scheme_id, snapshot_id}`) with a version tag, like every other id. It depends on nothing else: not the plan, the execution, the caller, the clock or the hash seed. **The
+     byte bound is not part of it**: it is per-knowledge-base configuration (D-216), not query identity, so the same query under a changed bound keeps its id (the gate at Step 7 decides whether a stored answer
+     may be served across a changed bound).
+  4. **Bounds (D-216, D-222 point 5).** Retrieval is bounded by `top_k` (at least 1) and `max_result_bytes` (at least 1), both carried by the request and neither defaulted; bytes, not tokens, measured as the UTF-8
+     size of the returned chunk texts, as tool results are (V1.2). A result over the byte bound is the typed failure `RESULT_TOO_LARGE`, never a truncation. The contract sets no ceiling on either number: a
+     ceiling is per-knowledge-base configuration checked at admission (Step 7). **Not resolved here, and left Open for Step 7:** the maximum number of queries per execution or plan attempt, the denial vocabulary,
+     and whether an exhausted bound returns a typed denial; they are gate and admission concerns, and the readiness reports name no vocabulary for them.
+  5. **Ordering, ties and scores.** Every port orders hits by score descending and then `chunk_id` ascending, with integer ranks from 1; a scheme with no score orders by its own rule and says so in its scheme
+     id. A score is a labelled measurement and is never read by verification (D-015, D-016, invariant 17).
+  6. **The lexical scheme (D-208 item 2, readiness §12).** `lexical-bm25-v1/k1=1.2/b=0.75/tokens=word-v1`, in the standard library only: tokens are the runs of word characters of the NFC text, lower-cased (the
+     interpreter's Unicode tables, the same class as NFC); no stop list, no stemming. Score is Okapi weighting with `idf = ln(1 + (N - df + 0.5) / (df + 0.5))` over the snapshot's chunks and each distinct query
+     term once; `k1` and `b` are the customary values, fixed before any run and never tuned. **It is computed in exact decimal arithmetic**, whose logarithm is correctly rounded and so does not depend on the
+     platform's math library (the readiness report's `log` and libm concern), and each score is rounded to 1e-9, so ties are real ties and are broken by `chunk_id`. A chunk that shares no term with the query is not
+     a hit, so an empty result is possible. The index is built in memory from the pinned snapshot when the port is made; nothing is written and nothing persists. **Boundary reading (D-219, D-222 point 4, the rule
+     it left Open):** the package keeps its core modules free of any engine or model name; the one module that implements a retriever, `lexical.py`, is standard library only and may name the scheme; the guards are
+     revised to say exactly that, and any third-party engine, vector store, embedding or model name stays forbidden in every module.
+  7. **Retrieval and citation facts (D-218).** Additive fields on `NODE_SETTLED`, no new event. `RetrievalFacts(kb_id, snapshot_id, scheme_id, query_id, top_k, outcome, score_kind, hits, result_bytes, elapsed_ms)`
+     with `RetrievalHitFacts(rank, chunk_id, document_id, source_id, content_digest, score)`; the outcome is `result` or one of the four failure kinds (mirrored, and a guard keeps them in step); `denied` and
+     `served_stored` join it when the gate exists. **No chunk text and no query text is recorded** (content stays out of the log, D-076; `query_id` identifies the query). The facts validate themselves: ranks 1 to
+     n, each chunk once, at most `top_k` hits, scores present exactly when `score_kind` is, and the ordering rule, so a tampered fact is unconstructible. `citations` is the tuple of references a work artifact cited
+     (its `source_refs`, verbatim, each once), a work node's only. Both fields are empty by default, so a log written before them replays identically. Captured only through `record_baseline`, as tool facts
+     are (D-204 unchanged). The recording adapter maps a port's answer to facts, and an answer that does not answer its request is recorded as `malformed_result`, never dropped and never trusted.
+  8. **Replay and the audit (D-218).** Replay folds the log exactly as before; the new facts ride in the events, so replay reproduces them from the log alone and imports nothing that could retrieve. `audit_evidence`
+     in `eidos.state` is the derived projection over an `ExecutionRecord`: it resolves each recorded citation to the recorded hits that carry the same evidence reference (a rule mirrored from
+     `eidos.knowledge` and kept equal by a test, as the tool-outcome enums are), and reports it as resolved, unresolved, ambiguous (one reference recorded for two chunks) or not knowledge evidence, with the
+     query, snapshot, rank, chunk, document and source of every hit. It does not count independent sources: the derivations live in the snapshot, not in the log (`snapshot_id` pins them), so the count is composed
+     by a caller that holds the snapshot, and the comparison with the verifier's recorded reason waits for the verifier wiring (Step 7).
+  9. **The dependency graph.** `eidos.state` imports no knowledge (its facts mirror identifiers as constrained strings, as `ToolCallFacts` does). `eidos.recording` gains one edge, to `eidos.knowledge`, in one
+     module, from the package root, for the retrieval adapter (`retrieval_facts_of`, `RecordingKnowledgePort`), and its guard is extended deliberately, as the agents guard was for the ledger. The recording seam
+     wraps the `KnowledgePort` now; at Step 7, as for tools, the seam moves to the gate. `RecordingAgent` gains an optional artifact store for citations; without one it does exactly what it did.
+  10. **The benchmark (D-213, readiness §14 and §15).** *Fixture:* a fictional tidal power station; 12 documents in 6 sources and 48 to 60 chunks (the exact number is recorded with the frozen digest),
+      each paragraph one chunk of at most 60 words (the semantic model's word-piece check needs the tokenizer and runs at Step 5); a byte-identical mirror of one document under a second source; a second source that restates another's facts in other words,
+      undeclared; three distractor documents that reuse the queries' vocabulary. *Queries:* 36 in English, 6 development (debugging only) and 30 frozen test queries: lexical-overlap 8, paraphrase 10,
+      multi-source 6, distractor-bait 6 (the development six are spread across the strata). Each stratum is defined by construction and **checked mechanically**, never by observed performance: a lexical-overlap
+      query shares at least two content tokens with every gold chunk, a paraphrase query none, a multi-source query has gold chunks in at least three sources, a distractor-bait query shares at least two content
+      tokens with some non-gold chunk (content tokens: the fixture's own fixed stop list, independent of the retriever). *Gold labels* are over content-equivalence groups (chunks of identical text), so the mirror
+      pair is one gold group; every chunk that states the fact is gold, the restating source's included. *Frozen:* the fixture, its gold labels and the metric definitions are digested and the digest pinned in a test
+      before the first retrieval run; nothing is tuned against it, and the lexical parameters are the customary ones fixed above. *Metrics, as operationalised:* Recall@k (k = 1, 3, 5) and MRR over the ranking
+      deduplicated by content-equivalence group, macro-averaged over queries and computed from the full ranking (the request's `top_k` is the corpus size for measurement; a test shows that a `top_k` of 5 returns
+      exactly the first five); source-coverage@k is over the chunk ranking (the first k chunks, each carrying its declared source, so a mirror is two sources, D-221) and is a supplementary measure of this
+      record's, not a substitute for the owner's. Reported overall and per stratum, the development and test sets separately, with per-query ranks; no significance test, and none of the strata has enough queries
+      for a gap below about 0.2 to mean anything (readiness §15). Efficiency is measured from actual runs only: index build and query latency (warm median and p95, one cold run in a fresh interpreter), peak
+      memory allocated by Python (`tracemalloc`, not process memory), the fixture's size on disk, the third-party modules loaded, and reproducibility across repeats, hash seeds and construction order.
+  11. **Not decided, left to the owner (named, not invented):** any numeric decision rule or margin (D-222 point 7 b: none is pre-registered, and the report says nothing about which retriever is better or
+      sufficient); the review of the paraphrase queries by the owner (point 7 c: the fixture is frozen as authored, and that review is still owed); whether measured latency or memory budgets matter (no budget is
+      set). Not built: the semantic retriever, the comparison, Research integration.
+- **Built (2026-09-25, V1.3 Step 4; one commit):**
+  - `eidos.knowledge.retrieval`: `RetrievalRequest`, `RetrievedChunk`, `RetrievalResult`, `RetrievalFailure` and its four kinds, `KnowledgePort`, `canonical_query_text`, `query_id_of` and `result_problem`. `eidos.knowledge.lexical`:
+    `LexicalKnowledgePort`, scheme `lexical-bm25-v1/k1=1.2/b=0.75/tokens=word-v1`, exact decimal arithmetic in the standard library alone, no dependency added.
+  - `eidos.state`: `RetrievalOutcome`, `RetrievalHitFacts`, `RetrievalFacts`, the additive `NodeSettledPayload.retrievals` and `.citations`, the matching `StepRecord` fields, and `audit_evidence` (`evidence_audit.py`).
+    `eidos.recording`: `retrieval_facts_of`, `RecordingKnowledgePort`, `RecordingCitations`, the tracker's retrieval and citation collections, and the recorder's hand-off and settlement wiring.
+  - The frozen benchmark: `tests/support/eidos_retrieval_fixture.py` (corpus, queries, gold labels, digest), `eidos_retrieval_benchmark.py` (metrics, runner, cost harness) and the scenario `test_retrieval_benchmark_lexical.py`.
+  - Unchanged: `eidos.contracts`, the reducer, the verifier, `eidos.agents` (`RecordingAgent`, `record_baseline` and `record_attempt` keep their signatures, pinned by tests), `eidos.policy`, `eidos.mcp`, every V1.2 contract,
+    Steps 2 and 3, and `pyproject.toml`. Guards revised deliberately, as they said they would be: the knowledge guards now confine retrieval vocabulary to `retrieval.py` and `lexical.py`, allow `decimal` and the word
+    `bm25` in `lexical.py` only and still forbid every embedding, vector, reranking and third-party engine name; the recording guard gains `eidos.knowledge` for one module and five names.
+- **Readings found while building (Open, none blocking):**
+  12. **Citations are captured by a wrapper, not a parameter.** `RecordingCitations` wraps a work agent and adds the references its artifact cited to the tracker; `RecordingAgent` hands them over exactly as it hands
+      over tool calls and retrievals. An optional store parameter on `RecordingAgent` or `record_baseline` would have changed signatures an existing test pins (D-204). A citation is what the artifact's `source_refs` say,
+      verbatim, whatever kind of reference it is.
+  13. **The audit is not causal.** `audit_evidence` resolves a citation against every retrieval recorded in the same execution record, in any step, and does not require the retrieval to come first in plan order
+      (steps are in plan order, not time order). It reports; it does not judge support (D-015) or count independent sources (reading 8).
+  14. **Retrieval moves no mission counter.** Nothing in `MissionState` changes because a node retrieved (retrieval is bounded by the request, D-216, and not budgeted here); a recording wrapper that shares a clock
+      with the recorder lengthens the accounted node time by the readings it takes, which is the only difference a test found.
+  15. **What the measured ranking contains.** A lexical retriever returns only chunks that share a term with the query, so a gold group with no shared term has no rank: two of the 36 queries have one (M03 and MD1,
+      below). `df` counts chunks, so a byte-identical mirror doubles the document frequency of its terms, which the scheme states rather than corrects.
+  16. **`MALFORMED_RESULT` is recorded by the adapter.** A port's answer that does not answer its request (`result_problem`), or is neither a result nor a failure, is recorded as `malformed_result` with the request's
+      identity and nothing else; the gate at Step 7 will make the same check before it serves an answer.
+- **The fixture (frozen 2026-09-25T23:14:01+05:30, before the first retrieval run at 2026-09-25T23:17:23+05:30):** digest `93db0b1f14c7c444073f86c763e891f1ccab92e5259f62351305b374db57df6b`; snapshot `b76e15e080adadab784effc727ec8876145b0e2a2ba80b833dce4b043d58491c`. 12 documents in 6 sources (`ops`, `safety`, `maint`, `grid`, `archive`,
+  `outreach`; one source holds four documents), 53 chunks (one paragraph each, 38 to 53 words), `archive` holds a byte-identical copy of the safety audit, `outreach` restates four maintenance paragraphs in other words and
+  declares nothing, and three outreach documents are distractors. 36 English queries: 30 frozen test (lexical 8, paraphrase 10, multi-source 6, distractor bait 6) and 6 development (2, 2, 1, 1); every stratum definition is
+  checked mechanically (57 tests) and no gold label was chosen from a retrieval result. Fixture tests were written and passed before the first run; nothing was tuned afterwards.
+- **The measured lexical baseline (the first run, 2026-09-25T23:17:23+05:30, reproduced byte for byte by every later run; macro-averages over queries, from the full ranking; exact rationals are in the scenario test):**
+
+| Queries | n | Recall@1 | Recall@3 | Recall@5 | MRR | Source-cov.@1 | @3 | @5 |
+|---|---|---|---|---|---|---|---|---|
+| **test, all 30** | 30 | 0.4386 | 0.4700 | 0.5186 | 0.6344 | 0.4056 | 0.5000 | 0.5500 |
+| test: lexical overlap | 8 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 0.9375 | 1.0000 | 1.0000 |
+| test: paraphrase | 10 | 0.0000 | 0.0000 | 0.1000 | 0.0782 | 0.0000 | 0.0000 | 0.1000 |
+| test: multi-source | 6 | 0.1931 | 0.3500 | 0.4264 | 1.0000 | 0.2778 | 0.5000 | 0.5833 |
+| test: distractor bait | 6 | 0.6667 | 0.6667 | 0.6667 | 0.7083 | 0.5000 | 0.6667 | 0.6667 |
+| development, all 6 (debugging only) | 6 | 0.5333 | 0.5667 | 0.6000 | 0.6944 | 0.5417 | 0.5833 | 0.6250 |
+
+  - Reading these numbers: each stratum has 6 to 10 queries, so a gap below about 0.2 in a macro-average is not distinguishable from noise (readiness §15), and Recall has a ceiling below 1 wherever a query has several gold groups
+    (multi-source queries have 4 to 8). **No retriever is called better, best or sufficient on this evidence, no threshold or margin exists, and this is a baseline for Step 5's semantic run, not a result.** Two queries have a
+    gold group the lexical retriever cannot return because it shares no term with the query: M03 (a restating paragraph says "brake disc", the query "braking discs") and MD1 (a paragraph says "record" and "file", the query
+    "recorded" and "filed"); they are counted, not removed. The owner's review of the paraphrase queries (D-222 point 7 c) is still owed.
+  - Cost, measured and never asserted: one machine, one day (Windows-11-10.0.26200-SP0, CPython 3.12.10, AMD64, Intel64 Family 6 Model 154 Stepping 3, GenuineIntel): building the index took a median of 3.19 ms (p95 3.54 ms over 30 builds); a full-ranking query took a median of 2.17 ms warm (p95 3.14 ms, maximum 6.61 ms over 1080 calls); in a fresh interpreter, five cold runs took 745 to 788 ms to import, 9.3 to 9.9 ms to build the snapshot, 2.2 to 2.6 ms to build the index and 3.2 to 3.6 ms to answer the first query; the peak memory Python allocated for the snapshot, the index and all 36 queries was 280,749 bytes (`tracemalloc`, not process memory); the corpus is 14,354 bytes of UTF-8 in 12 documents (53 chunks, 14,272 bytes of chunk text) and the index is in memory only (0 bytes on disk); the third-party modules a retrieval loads are annotated_types, pydantic, pydantic_core, typing_extensions, typing_inspection, all already required by the contracts, and no engine, model or network library.
+  - Reproducibility: the report digest `f10840ecaf7642f1ffbb098e031ae165a2ae017f913577495766965214a822ff` is identical across repeats, under four hash seeds and for shuffled document order (and a lexical answer does not depend on the ambient decimal context: a unit test); a `top_k` of 5 returns exactly the first five of the
+    full ranking for every query; a mirror pair is a real tie ordered by chunk id.
+- **Tests and checks (2026-09-25):** 501 new tests in nine files (115 retrieval contracts, 68 lexical, 26 metrics, 57 fixture, 110 state facts, 21 audit,
+  60 recording, 27 replay integration, 17 benchmark scenario) and 56 more guard cases; the full default suite 6,278 passed and 2 deselected (was 5,721) under
+  `PYTHONHASHSEED=57721`; mutation on isolated copies (four workers; the repository fingerprint identical before and after every run): 224 of 235 caught by a real test failure on the first run; of the 11 survivors, 6 were real test gaps and were closed by new tests (re-run: caught), 3 were checks in my own code that proved redundant and were removed from the source rather than excused (one re-tested with its new anchor: caught), and 2 are equivalent by analysis (query terms taken in set order, which only reorders decimal additions at 40 digits under a rounding to 1e-9, and an enumeration from zero that is algebraically the same)
+- **Still Open, unaffected:** D-222 points 1 (the milestone label), 7 (b and c) and 8 (the isolated-process mechanics) and, for Step 7, the admission vocabulary and the number of queries per execution; D-223; D-224
+  readings 2 to 6 and 8 to 11; D-204 to D-207.
+- **Effect:** additive. `eidos.contracts`, the reducer, the verifier, `eidos.agents`, `eidos.policy`, `eidos.mcp`, every V1.2 contract and `pyproject.toml` are unchanged; Steps 2 and 3 behave exactly as before. Existing source
+  edited: the `__init__` exports of `eidos.knowledge`, `eidos.state` and `eidos.recording`, and additively `state/payloads.py`, `state/execution_record.py`, `recording/adapters.py`, `recording/recorder.py` and `recording/run.py`.
