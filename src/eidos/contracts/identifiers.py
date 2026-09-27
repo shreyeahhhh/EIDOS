@@ -61,10 +61,10 @@ A2AContextId = NewType("A2AContextId", str)
 # fixed default TenantId is supplied by the single-tenant context... The
 # default carries no security meaning."
 #
-# The literal value is explicitly NOT settled by any decision — D-032
-# ("The literal default value of tenant_id") remains Open and states this
-# "does not block the model definitions — only the constant." The nil UUID
-# is used here as an unmistakable placeholder sentinel pending D-032.
-# CHANGE THIS when D-032 is resolved; do not treat this value as meaningful.
+# The literal value is settled by D-233 (resolving D-032): it stays the nil
+# UUID, as a RESERVED SENTINEL for tests, in-memory and single-tenant
+# contexts. A real tenant may never take it: the `tenants` table refuses it,
+# and the API neither accepts it nor produces it. A real mission's tenant
+# comes from the authenticated context. It carries no security meaning.
 
 DEFAULT_TENANT_ID: TenantId = TenantId(UUID(int=0))

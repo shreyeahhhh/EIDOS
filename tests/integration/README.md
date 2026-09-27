@@ -17,7 +17,9 @@ and from `tests/scenarios/`, which tests whole missions.
 | Checkpointing and replay against real state storage | V0.5 |
 | Semantic retrieval behind the process boundary: the real pinned model in the isolated Python 3.13 interpreter (`-m real_model`, deselected by default, never skipped, fail loudly), and, with a stub model and no model library, the boundary as an isolation guarantee and a semantic mission recorded and replayed with the worker gone | V1.3 Step 5 (D-226) — `tests/integration/semantic/` |
 | Qdrant retrieval, reranking | deferred (D-222, D-226 ruling 3): not built, not assigned |
-| Database/storage layer, once persistence exists | open — decision D-017 |
+| The V1.4 storage layer: one repository contract run on the in-memory and, with `-m postgres` and `EIDOS_TEST_DATABASE_URL`, the PostgreSQL storage; PostgreSQL-only tests (migrations, deny-all RLS, restart and recovery, a race between two processes) | V1.4-B — `tests/integration/persistence/` (D-017 is answered for V1.4 by D-230; snapshots and other stores stay open) |
+| The V1.4 HTTP surface end to end over the in-memory service, real JWT verification and a scripted model; the whole service path, restart, a store that fails part-way and concurrency | V1.4-B — `tests/integration/api/`, `tests/integration/service/` |
+| `run_with_replanning`'s optional `tracker` under a forced replan | V1.4-B — `tests/integration/planning/test_v1_replanning_tracker.py` (D-231) |
 
 ## Rules
 

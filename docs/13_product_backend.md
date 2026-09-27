@@ -1,6 +1,6 @@
 # 13. Product Backend (V1.4)
 
-**Status:** DERIVED. **V1.4-A (architecture and contracts, `decisions.md` D-229 to D-234, 2026-09-26) is frozen for the owner's confirmation. Nothing here is implemented:** no FastAPI, database, JWT or migration code exists and no dependency has been added.
+**Status:** DERIVED. **V1.4-A (architecture and contracts, `decisions.md` D-229 to D-234, 2026-09-26) was accepted by the owner on 2026-09-27, and V1.4-B, the backend MVP, implemented it in one phase (2026-09-27).** Sections 1 to 11 are the accepted contracts as V1.4-A wrote them; where the code says more, or differs, a **Built** note says so, and section 12 records what was built, the choices made under the accepted architecture, and what was and was not verified. The code is `eidos.api`, `eidos.service` and `eidos.persistence`, plus one optional parameter of `run_with_replanning`. No frontend, deployment, Qdrant or knowledge-base management exists.
 **Derived from:** handoff sections 51 to 54, 73, 76 and 78 (the handoff is not modified; where this document departs from it, D-229 and D-230 say so); `decisions.md` D-005, D-017, D-038, D-052, D-076, D-085, D-157, D-201, D-204, D-227.
 **Authority:** This document is derived from `EIDOS_CLAUDE_CODE_HANDOFF.md` and subordinate to it. If this document and the handoff conflict, stop and report the conflict to the human owner.
 
@@ -22,9 +22,9 @@ eidos.persistence   PostgreSQL adapters for the service Protocols and for the ex
 Supabase PostgreSQL
 ```
 
-- The core layers (`contracts`, `validation`, `compiler`, `runtime`, `state`) and every other existing package import none of the three new packages (CLAUDE.md section 8). The one composition module, in `eidos.api`, wires the service to the adapters. Import guards, in the pattern of the existing ones ("only X may import Y"), are written with the code.
+- The core layers (`contracts`, `validation`, `compiler`, `runtime`, `state`) and every other existing package import none of the three new packages (CLAUDE.md section 8). The one composition module, in `eidos.api`, wires the service to the adapters. **Built:** the import guards are `tests/unit/service/test_service_guards.py` (the direction of dependency, the one importer of each library, no `MissionState` construction, plain-`def` handlers, no ORM, the migrations' deny-all RLS, and that nothing deferred was built).
 - **The whole stack is synchronous.** The runtime is synchronous (the ports, the executors, the recorder's lock). Route handlers are plain `def`, run by FastAPI in its thread pool, and the database driver is synchronous. There is no async database layer and no second event loop.
-- **New dependencies are optional extras**, in the pattern of `langgraph` and `a2a`: `api` (FastAPI, an ASGI server, a JWT library) and `postgres` (psycopg 3 and its pool); `dev` includes both. Versions are verified and pinned when the code is written; none is added by this phase.
+- **New dependencies are optional extras**, in the pattern of `langgraph` and `a2a`: `api` (FastAPI, an ASGI server, a JWT library) and `postgres` (psycopg 3 and its pool); `dev` includes both. **Built:** `api` is `fastapi>=0.141.1,<1`, `uvicorn>=0.54,<1` and `pyjwt[crypto]>=2.15,<3`; `postgres` is `psycopg[binary,pool]>=3.3.6,<4`; `dev` includes both (`pyproject.toml`). The lower bounds are the versions installed and tested against on 2026-09-26. FastAPI's `TestClient` needs `httpx`, which `dev` already has through the `a2a` extra.
 - **One process per database in V1.4.** The runner is an in-process thread pool (section 6). A separate worker service, leases and multi-instance operation are deferred.
 
 ## 2. Persistence (D-230)
@@ -71,6 +71,7 @@ create table eidos.missions (
   mission_id uuid primary key,
   tenant_id uuid not null references eidos.tenants (tenant_id),
   execution_id uuid not null unique,     -- one execution per mission (D-085)
+  contract_id uuid not null,             -- the ReliabilityContractId assigned at creation: the run rebuilds the same contract from it
   created_by uuid not null,
   created_at timestamptz not null,
   spec jsonb not null,                   -- the validated MissionSpec as accepted, without supplied_documents (those are artifacts)
@@ -115,12 +116,16 @@ create table eidos.artifacts (
 );
 create unique index artifacts_one_primary_per_step on eidos.artifacts (execution_id, step_id) where kind = 'step';
 
--- Every table: row level security enabled with no policies, and no privilege for Supabase's API roles (section 5).
+alter table eidos.tenants enable row level security;   -- and the same for tenant_members, missions, mission_events, artifacts and schema_migrations:
+                                                       -- no policy, so the API roles are denied
+-- then every privilege on schema eidos and its tables is revoked from anon, authenticated and service_role, wherever those roles exist (Supabase's; section 5)
 ```
+
+- **Built.** The authoritative text is `src/eidos/persistence/migrations/0001_init.sql`. It differs from the block above in three ways only: the `contract_id` column; names for the constraints (`missions_scope`, `missions_execution_scope`, `missions_idempotency`, `mission_events_event_id`, `tenant_is_not_the_reserved_sentinel`); and the row level security and revoke statements written out. The composite foreign keys mean the schema itself refuses an event or an artifact that names another tenant's mission.
 
 - **`ArtifactStore` contract, unchanged.** `put_supplied`, `put_step_artifact`, `get`, `get_step_artifact`, `supplied`. A duplicate ref or a second primary artifact for a step raises `ArtifactConflict`. `supplied` orders by ref in code-point order (`order by ref collate "C"`), because the in-memory store sorts in Python and the database collation must not change the order a model is shown.
 - **Identifiers.** `tenant_id`, `mission_id`, `execution_id`, `plan_id`, `event_id`, `agent_id` are the existing EIDOS UUIDs, server-assigned. `user_id` is the Supabase user id, held only in the database (and in `MissionSummary`); it is not a core contract and no core model gains a field.
-- **Migrations.** Plain versioned SQL files and a small applier that records `schema_migrations`. No ORM. Nothing in a migration or a query uses session state (advisory locks, `LISTEN`, session `SET`, server-side prepared statements), so any Supabase connection mode can be used. This is to be verified against Supabase's current documentation when the code is written.
+- **Migrations.** Plain versioned SQL files and a small applier that records `schema_migrations`. No ORM. Nothing in a migration or a query uses session state (session-level advisory locks, `LISTEN`, session `SET`, server-side prepared statements: the pool sets `prepare_threshold=None`), so any Supabase connection mode can be used. The applier serialises concurrent appliers with a transaction-level advisory lock, which is released at commit and so holds under the transaction pooler. Checked against Supabase's documentation (section 12.4).
 
 ### 2.3 The write-through model
 
@@ -130,6 +135,7 @@ create unique index artifacts_one_primary_per_step on eidos.artifacts (execution
 4. **Fail-soft.** A flush failure never raises into the runtime: the recorder holds its lock and nodes run on worker threads. The outbox keeps the items and the run is marked degraded; every later accept and the final flush retry the whole outbox in order (bounded retries and timeouts, provisional, section 9).
 5. **End of run.** A final flush. If it fails after the bounded retries, `run_status` is `error` with reason `persistence`; the events that never reached the database exist only in memory and are lost when the process exits, and the API says so.
 6. **Consequence.** The durable log is behind the in-memory log by at most the unflushed outbox, and the durable prefix is always a valid log (contiguous from sequence 1, applied events only, D-155), so a crash leaves a replayable prefix. The recorder's lock is held while a flush runs, so database latency serialises node settlements; this is accepted for the MVP.
+7. **Built: lost answers and other writers.** A commit whose answer was lost (the write landed and the caller heard an error) is recognised on the retry: the guard refuses it as a conflict, the durable log is read, and if it already holds exactly the pending events (the same event ids at the same sequences) the outbox is cleared and nothing is written twice. Any other sequence conflict, and any artifact conflict, means another writer touched the mission: it is a permanent failure of the run (`error`) and nothing more is written. `DurableEventLog` overrides `accept_resumed` as it does `accept`.
 
 ### 2.4 The read path
 
@@ -163,9 +169,10 @@ def run_with_replanning(*, state, limits, registry, agents, verifier, admission_
 - **With a tracker**, the caller wraps its model, tool access, knowledge port and agents with that same tracker (`RecordingModel`, `RecordingToolAccess`, `RecordingKnowledgePort`, `RecordingCitations`), as for `record_baseline`. Every attempt's nodes then settle with their model, tool, retrieval and citation facts. One tracker across attempts is correct: its collectors are thread-local and opened and closed per node, and `record_attempt` still creates a fresh `Recorder` per attempt (its own docstring's reason stands).
 - **The only observable difference, and only when a tracker is supplied:** model-call and token counts stop being zero, so `TelemetryRecord` and `ExecutionExperience` (`model_call_count`, `tokens_used`, `responses_missing_token_counts`) become real.
 - **Not changed:** `record_attempt`, `record_baseline`, the recorder, the tracker, the reducer, the events, the flow of `run_with_replanning`, and D-204 item 2 (`tool_calls_used` stays a whole-mission total; it stays Open and deferred).
-- **Replanned duplicate queries.** As D-228 reading 5 says, the `KnowledgeGate` serves a repeated query from its stored answer, so a replan attempt's Research node records no retrieval fact of its own; its citations still resolve to the first attempt's recorded hits in `audit_evidence`.
+- **Replanned duplicate queries.** As D-228 reading 5 says, the `KnowledgeGate` serves a repeated query from its stored answer, so a replan attempt's Research node records no retrieval fact of its own. Its citations resolve to the first attempt's recorded hits in an `audit_evidence` over the whole execution; over the default `execution_record`, which holds the last plan's steps only, they are `unresolved` (found by a V1.4-B test; section 12.2).
 - **Frozen contract lifted, once.** D-208 item 5 listed `run_with_replanning`, `record_attempt` and tracker propagation as frozen for V1.3. V1.4 lifts that for this one parameter by the owner's direction.
 - **Tests required with the change:** every existing test passes unmodified; a run with no tracker records the log the existing replanning scenarios pin; with a tracker and a forced replan, model, tool, retrieval and citation facts are on the settled nodes of every attempt and are not attributed across attempts; the change touches only `replanning.py`.
+- **Built (V1.4-B).** The change is exactly the one above (`src/eidos/replanning.py`). "Every existing test passes unmodified" held, with one deliberate update: `tests/unit/recording/test_recording_tool_facts.py` pins the exact parameter list of `run_with_replanning`, and the pin now ends `log, tracker` (keyword-only, both default `None`). The new tests are `tests/integration/planning/test_v1_replanning_tracker.py`.
 
 ## 4. MissionSpec and its mapping (D-232)
 
@@ -203,7 +210,7 @@ def run_with_replanning(*, state, limits, registry, agents, verifier, admission_
 | `supplied_documents` | supplied `artifacts` (D-145) | optional; bounded in count and size; each ref unique |
 | (not accepted) `tenant_id` | from the authenticated context | a client-supplied tenant is a 422 |
 | (server) `mission_id`, `execution_id`, `contract_id`, `created_at` | fresh UUIDs and the clock | |
-| (server) the `MissionState` carrier | `status=CREATED`, `plans=()`, counters 0, `state_version=0` | carries the genome, the contract and the ids into `run_with_replanning`; `MISSION_CREATED` builds the real state (D-201: before a run the mission does not exist for the log) |
+| (server) the `MissionState` carrier | `status=CREATED`, `plans=()`, counters 0, `state_version=1`, built by the reducer (section 12.2) | carries the genome, the contract and the ids into `run_with_replanning`; `MISSION_CREATED` builds the real state (D-201: before a run the mission does not exist for the log) |
 
 Validation order: body size (413), structure with unknown fields forbidden (422), server ceilings (422), the existing contract validators (422), then persist. The mapping answers D-066 for the API: the contract is user-supplied and validated, never synthesised.
 
@@ -211,13 +218,13 @@ Validation order: body size (413), structure with unknown fields forbidden (422)
 
 ## 5. Authentication and tenancy (D-233)
 
-- **Authentication.** `Authorization: Bearer <Supabase-issued JWT>`. FastAPI verifies the **signature** (configured key material and an algorithm allowlist, never `none`), **expiry** (`exp` required) and **audience** (`aud` equals the configured audience). `sub`, which must parse as a UUID, is the user. Any failure is one `401 unauthenticated`. Supabase's current token and key details are to be verified when the code is written.
+- **Authentication.** `Authorization: Bearer <Supabase-issued JWT>`. FastAPI verifies the **signature** (configured key material and an algorithm allowlist, never `none`), **expiry** (`exp` required) and **audience** (`aud` equals the configured audience). `sub`, which must parse as a UUID, is the user. Any failure is one `401 unauthenticated`. The token and key details were checked against Supabase's documentation when the code was written (section 12.4).
 - **Membership.** `tenant_members(tenant_id, user_id, role)`, roles `owner` and `member`. Both roles have every V1 endpoint on their tenant's missions; the role is reserved for the membership management deferred to a later milestone.
 - **Tenant resolution.** No membership: `403 no_tenant_membership`. `X-Tenant-Id` present: it must be one of the user's tenants, otherwise `404 not_found` (it never says whether that tenant exists). Absent: the single membership; several memberships and no header: `422 tenant_required`. The result is a `RequestContext(user_id, tenant_id, role)` handed to the service.
 - **Every repository operation is tenant-scoped.** Each method takes `tenant_id` as a required parameter and each query filters on it. **A resource of another tenant is indistinguishable from one that does not exist: 404.** Isolation is tested with the same contract tests over the in-memory and the PostgreSQL repositories.
 - **The nil tenant.** `DEFAULT_TENANT_ID` (the nil UUID) is reserved for tests, in-memory and single-tenant contexts. The `tenants` table rejects it, and the API neither accepts it nor produces it. This settles D-032.
-- **Row level security.** Tenant isolation is **application-enforced**. RLS is enabled on every table **with no policies**, the `eidos` schema is not exposed through Supabase's Data API, and the API roles hold no privilege on it, so a leaked public key reaches nothing. The backend connects with a server-side credential. Tenant-scoped RLS policies are deferred. This is the smallest production-safe design; how Supabase exposes schemas and roles is to be verified when the code is written.
-- **Provisioning (proposed).** Tenants and memberships are created out of band (a SQL script); there is no signup, tenant or membership endpoint in V1.4-A.
+- **Row level security.** Tenant isolation is **application-enforced**. RLS is enabled on every table **with no policies**, the `eidos` schema is not exposed through Supabase's Data API, and the API roles hold no privilege on it, so a leaked public key reaches nothing. The backend connects with a server-side credential. Tenant-scoped RLS policies are deferred. This is the smallest production-safe design; how Supabase exposes schemas and roles was checked against its documentation (section 12.4).
+- **Provisioning (accepted).** Tenants and memberships are created out of band (SQL); there is no signup, tenant or membership endpoint in V1.4.
 - **Secrets** come from the environment only. None is in the repository, in a test or in a log.
 - **Not built:** SSO, an RBAC engine, rate limiting, per-endpoint policy, audit trails.
 
@@ -227,7 +234,7 @@ Validation order: body size (413), structure with unknown fields forbidden (422)
 
 **The runner.** `RunManager` owns a bounded `ThreadPoolExecutor` (`worker_pool_size`). `start` does a compare-and-set `created -> queued` and submits; a worker does `queued -> running`, builds the per-run composition, calls `run_with_replanning(... log=DurableEventLog, tracker=tracker)`, translates the result, and does the final transition. One execution per mission is guaranteed by the compare-and-set and by a per-process set of active mission ids. There is no cancel and no retry (deferred).
 
-**The per-run composition** (nothing is shared between runs, so per-execution memory is freed): the `MissionState` carrier; `SystemLimits` from configuration (D-103); a `CapabilityRegistry` with stable configured agent ids; the Research agent (model, and knowledge access when a static knowledge base is configured), the Analysis agent and `VerificationAgent`, wrapped with the tracker's recording adapters; a trivial always-admit `AdmissionGuard`, labelled as enforcing no budget; the sequential executor by default (the LangGraph backend by configuration); `SystemClock` and the UUID id sources; `RuleBasedCandidateGenerator` and `DeterministicSelector`; a per-mission in-memory `ExperienceStore`; `DurableEventLog` and `WriteThroughArtifactStore`. The model comes from a factory in `eidos.providers` chosen by configuration, so no vendor name enters `eidos.service` or `eidos.api` (D-135).
+**The per-run composition** (nothing is shared between runs, so per-execution memory is freed): the `MissionState` carrier; `SystemLimits` from configuration (D-103); a `CapabilityRegistry` with stable configured agent ids; the Research agent (model, and knowledge access when a `KnowledgeProvision` is supplied), the Analysis agent and `VerificationAgent`, wrapped with the tracker's recording adapters; a trivial always-admit `AdmissionGuard`, labelled as enforcing no budget; the sequential executor (the LangGraph backend is not wired); `SystemClock` and the UUID id sources; `RuleBasedCandidateGenerator` and `DeterministicSelector`; a per-mission in-memory `ExperienceStore`; `DurableEventLog` and `WriteThroughArtifactStore`. The model comes from a factory in `eidos.providers` chosen by configuration, so no vendor name enters `eidos.service` or `eidos.api` (D-135).
 
 **`run_status` is API-level. It is never a `MissionStatus`, never an event and never in `MissionState`.**
 
@@ -255,7 +262,7 @@ Common. JSON. `Authorization: Bearer` on everything except `healthz`; `X-Tenant-
 | `GET /v1/missions/{id}/execution` | The existing `ExecutionRecord`. 409 `no_events` before the first event. |
 | `GET /v1/missions/{id}/events?after=&limit=` | `{events: [EventRecord...], last_sequence, next_after}` in sequence order; `after` defaults to 0; `limit` defaults to 100 and is capped (section 9). An empty list is a normal answer. This is the live view: poll with `after`. |
 | `GET /v1/missions/{id}/result` | 409 `not_finished` until a terminal mission event exists. Then `{mission_status, verified, verdict: {verdict, reason} or null, artifacts: [...], failure: {cause, reason} or null}`. `verdict` is the verifier's verdict and reason, word for word. `artifacts` are the primary artifacts of the succeeded work steps that no other work step depends on in the last plan (the plan's sinks; the `VERIFY` step reads them). No confidence, no score. |
-| `GET /v1/missions/{id}/evidence` | `{audit: EvidenceAudit, evidence: [{ref, content_type, content}]}` where `audit` is `audit_evidence` of the execution record and `evidence` holds the text of the cited `evidence:` artifacts. 409 `no_events` before the first event. |
+| `GET /v1/missions/{id}/evidence` | `{audit: EvidenceAudit, evidence: [{ref, content_type, content}]}` where `audit` is `audit_evidence` of the whole-execution record (every plan's steps; section 12.2) and `evidence` holds the text of the artifacts the audit resolved. 409 `no_events` before the first event. |
 | `GET /v1/healthz` | Unauthenticated liveness, `{"status": "ok"}`. No database check (readiness is a deployment concern). |
 
 ## 8. Failure semantics
@@ -265,6 +272,7 @@ An API failure is a failure of the request or the service. A mission failure is 
 | Situation | Where it shows | HTTP |
 |---|---|---|
 | bad, expired, wrong-audience or unsigned token | API error `unauthenticated` | 401 |
+| the token's key source cannot be reached | `auth_unavailable` | 503 |
 | no membership | `no_tenant_membership` | 403 |
 | another tenant's, or an unknown, mission or tenant | `not_found` | 404 |
 | several tenants and no `X-Tenant-Id` | `tenant_required` | 422 |
@@ -276,6 +284,8 @@ An API failure is a failure of the request or the service. A mission failure is 
 | a mission that failed, or paused | the mission's own `mission_status`, `failure_cause` and reason | 200 |
 | a run that was `rejected`, `interrupted` or ended in `error` | `run_status` and `run_status_reason` on `GET /v1/missions/{id}` | 200 |
 | an unexpected exception in the service | run `error` (never a `MISSION_FAILED` event); `internal_error` if it was in a request | 500 |
+
+The message of a service fault (`storage_unavailable`, `integrity_error`, `auth_unavailable`, `internal_error`) is a fixed sentence and never the message the fault was raised with, and the `run_status_reason` of an unexpected or a persistence fault is the exception's type alone: the detail goes to the server log (`eidos.service.runner`). A 401 carries `WWW-Authenticate: Bearer`.
 
 ## 9. The configuration profile (PROVISIONAL)
 
@@ -291,21 +301,90 @@ An API failure is a failure of the request or the service. A mission failure is 
 | contract budgets | each at most `SystemLimits`'s same field |
 | `worker_pool_size`, `max_queued_runs`, `max_active_runs_per_tenant` | 2, 8, 1 (`queued` plus `running`) |
 | `events_page_default`, `events_page_max` | 100, 500 |
-| flush retries and per-flush timeout | 3 attempts, 10 seconds |
+| flush retries; database timeouts | 3 attempts with a growing pause (0.5 s, then 1 s); a 10-second statement timeout and a 10-second connect timeout |
 
 `SystemLimits` are supplied by configuration (D-103: EIDOS has no defaults); their values are provisional (D-046 stays Open) and are chosen when the configuration is written. **The admission guard is a trivial always-admit guard; it enforces no budget** (D-127, D-156). A run cannot be preempted, so there is no wall-clock cap; each model call and each tool call keeps its own timeout, and the plan's shape limits and `max_replans` bound the rest. Cancel, and a run timeout that means something, are deferred together.
 
-**Knowledge and tools for V1.4.** At most one **static knowledge base per deployment**: a configured directory of UTF-8 text files, each file one declared source, built once at startup by `build_snapshot` into a pinned snapshot and served by the in-process `LexicalKnowledgePort` behind the existing `KnowledgePort` and `KnowledgeGate`. The service refuses to start if a configured knowledge base is invalid. It is one read-only reference corpus shared by every tenant, so it must contain only what every tenant may read. Without one, missions work from their supplied documents. Semantic retrieval stays available behind `KnowledgePort` and is not reopened: its production wiring (interpreter and model paths, worker lifetime, worker-environment logging, index persistence) remains deferred (D-227). No tool and no MCP server is wired. No Qdrant.
+**Knowledge and tools for V1.4.** **Knowledge is optional and no production knowledge-base choice is made (the owner's ruling of 2026-09-27; D-227 is not reopened; no Qdrant).** The V1.4-A proposal of one static knowledge base per deployment is not built and no loader ships. A deployer may hand `Composition` a `KnowledgeProvision` (a `KnowledgeBaseDescriptor` and a `KnowledgePort`); Research then reaches it through the existing `KnowledgeGate`, and `eidos.api.main` configures none. Without one, missions work from their supplied documents. No tool and no MCP server is wired.
 
-## 10. Deferred, not built in V1.4-A
+## 10. Deferred, not built in V1.4
 
 List, cancel, replay and strategy-view endpoints; membership, tenant and signup endpoints, and any role behaviour beyond owner and member; tenant-scoped RLS policies; a separate worker service, leases, heartbeats and multi-instance operation; resume or retry of an interrupted run; preemptive cancel and a run timeout; projection columns, listing, search and pagination beyond events; server-sent events or websockets; tenant-private or managed knowledge bases, ingestion and index persistence; semantic-retrieval wiring (D-227); MCP tool wiring; Qdrant; strategy memory persistence and cross-mission learning (a tenant-scoped store is a later decision); runtime budget enforcement (D-043, D-127, D-156) and any real admission guard; D-204 item 2; observability and logging configuration; the frontend, Docker, cloud deployment and Kubernetes (Deployment and Frontend are unassigned, D-229).
 
-## 11. Proposed implementation order (for the owner's approval)
+## 11. Implementation order (replaced by the owner's scope change)
 
-Each step is one commit with its own tests, in this order, and none starts before the owner confirms D-229 to D-234:
+V1.4-A proposed four steps (the tracker; the service and persistence; the API and authentication; the close-out). On 2026-09-27 the owner replaced them with ONE substantial phase, V1.4-B, built and committed as one: the tracker; `MissionSpec` and the ceilings; the composition, `RunManager`, `DurableEventLog` and the write-through artifact store; the repository Protocols, the in-memory implementations, the PostgreSQL adapters and the migrations, with one contract suite over both; authentication and tenant resolution; the endpoints and the error mapping; and the tests. The new optional dependencies (FastAPI, uvicorn, PyJWT, psycopg 3 and its pool) were approved for that phase. Not built in V1.4-B, in addition to section 10: a knowledge-base loader or any production knowledge-base choice, the LangGraph executor in the service, a second model adapter and a readiness check.
 
-1. **V1.4-B, the additive tracker (D-231):** the one core change and its tests.
-2. **V1.4-C, the service and the persistence:** `MissionSpec`, ceilings, the composition, `RunManager`, `DurableEventLog`, the write-through artifact store, the repository Protocols with in-memory implementations, the PostgreSQL adapters and migrations, and shared contract tests over both. The PostgreSQL tests are opt-in (a marker and `EIDOS_TEST_DATABASE_URL` for a disposable database, never a real project's credentials); the default suite uses the in-memory implementations.
-3. **V1.4-D, the API and authentication:** FastAPI, JWT verification, tenant resolution, the endpoints and the error mapping, with end-to-end tests over in-memory repositories and a scripted model.
-4. **V1.4-E, the close-out audit.**
+## 12. Built in V1.4-B (implementation notes, 2026-09-27)
+
+### 12.1 The code
+
+| Package or module | What it is |
+|---|---|
+| `eidos.replanning` | the one core change: the optional keyword-only `tracker` parameter (D-231) |
+| `eidos.service.spec` | `MissionSpec`, `ReliabilitySpec`, `SuppliedDocument`; `validate_spec` (ceilings, allowlists, documents); `contract_and_genome` (the one-to-one mapping); `initial_state` (the reducer-built carrier); `spec_digest` |
+| `eidos.service.config` | `ApiCeilings`, `RunnerConfig`, `ServiceConfig`, `provisional_system_limits`: every number PROVISIONAL and labelled so |
+| `eidos.service.ports` | the repository Protocols (`TenancyRepository`, `MissionRepository`, `EventStore`), `MissionRecord`, `RunStatus`, `Role`, `ArtifactWrite` and the storage errors |
+| `eidos.service.memory` | `InMemoryStorage`: the default suite's implementation of every port |
+| `eidos.service.durable` | `RunPersistence` (the outbox), `DurableEventLog(EventLog)`, `WriteThroughArtifactStore` |
+| `eidos.service.composition` | `Composition` (one `prepare` per run), `AlwaysAdmit`, `InMemoryExperienceStore`, `KnowledgeProvision` |
+| `eidos.service.runner` | `RunManager`: the bounded in-process runner and `run_status` |
+| `eidos.service.views` | the response models and the replay projections (`summary_of`, `result_of`, `evidence_of`, `whole_execution_record`) |
+| `eidos.service.service` | `MissionService` and `RequestContext`: the only thing the HTTP layer calls |
+| `eidos.persistence` | `PostgresStorage`, `PostgresArtifacts`, `apply_migrations`, `migrations/0001_init.sql` |
+| `eidos.api` | `create_app`, `JwtVerifier`, `JwksKeys`, `StaticKey`, the error mapping, and `main.create_app_from_environment` (the composition root) |
+| `eidos.providers.factory` | `model_port(provider, *, base_url)`; the only provider is `ollama` |
+
+### 12.2 Choices made under the accepted architecture (not separately confirmed)
+
+1. **The carrier `MissionState` is built by the reducer.** Only the reducer may construct a `MissionState` (a repository guard), so `initial_state` folds one `MISSION_CREATED` event through a throwaway `EventLog` and discards the log; the run's own log records its own `MISSION_CREATED`. The carrier's `state_version` is 1 (V1.4-A said 0).
+2. **`missions.contract_id`** is stored (section 2.2), so the run rebuilds the same reliability contract the creation validated.
+3. **Evidence is audited over the whole execution.** The default `execution_record` is the last plan's steps only, and a retrieval fact lives on the node of the attempt that made it, so a replan attempt's citations are `unresolved` in an audit over the default record. `whole_execution_record` lays every plan's steps, in plan order, into one `ExecutionRecord` through the record's own strict JSON form (validated, never constructed around its validators); `GET .../evidence` audits that. `GET .../execution` returns the existing default record, unchanged. A core question, left to the owner: whether the default should ever be the whole execution.
+4. **Knowledge is optional** and no loader ships (the owner's ruling); see section 9.
+5. **The sequential reference executor only.** The LangGraph executor was proposed "by configuration" and is not wired: the backend does not need it and it would add an import path.
+6. **`AlwaysAdmit`** is the admission guard `run_with_replanning` requires and none ships; it enforces no budget and says so (D-127, D-156).
+7. **A per-mission in-memory experience store**: nothing is learned across missions and nothing leaks across tenants.
+8. **The checks of `start` run in this order:** `not_startable` (a mission that is not `created` never becomes startable, so that answer is not hidden behind a capacity answer that could change), then `tenant_run_limit`, then `busy`. The compare-and-set stays the authority.
+9. **Fixed sentences for service faults; type-only reasons.** Found by a test: a storage message would have reached the caller and, through `run_status_reason`, every reader of the mission. The API now answers a service fault with a fixed sentence, a `run_status_reason` for an unexpected or a persistence fault is the exception's type alone (a sequence or artifact conflict keeps its own wording), and the full detail goes to the `eidos.service.runner` logger. The PostgreSQL adapter already raised `StorageError` with the exception's type name only.
+10. **The request body is counted as it arrives** and refused with 413 over the limit whether or not it declares a length; it is parsed with `MissionSpec.model_validate_json`, because the EIDOS contracts are strict and only the JSON form of a strict model accepts JSON's own types (a JSON integer is a valid `min_quality`; a string is not).
+11. **`/v1/openapi.json` is served; `/docs` and `/redoc` are off.**
+12. **PostgreSQL connection:** a pool of 1 to 8 connections, `prepare_threshold=None`, a 10-second statement timeout and connect timeout, no `timezone` connection option (timestamps are converted to UTC by the client; the embedded test server has no time-zone data), and every statement one round trip or one transaction.
+13. **`X-Tenant-Id`** is the header that names the tenant of a user of several.
+14. **The service does not import `eidos.knowledge`.** The knowledge package is imported by three boundary modules only (its guard, unchanged). `KnowledgeProvision.port` is typed by a one-method structural `RetrievalPort` in `eidos.service.composition`, which is a `KnowledgePort` in shape and is handed straight to the recording adapter. The first full run found this: the composition had imported `KnowledgePort` for an annotation and the guard refused it.
+15. **`start` is idempotent by state, not by key:** a second `start` of a mission that is queued, running or over is a 409 `not_startable`. `Idempotency-Key` applies to creation only, and a key lives as long as its mission row.
+
+### 12.3 Running it
+
+```bash
+pip install -e ".[api,postgres]"
+python -m eidos.persistence.migrate                          # reads EIDOS_DATABASE_URL and applies pending migrations
+uvicorn eidos.api.main:create_app_from_environment --factory
+```
+
+Configuration is the environment. A missing or malformed variable stops startup before anything is served and names the variable, never its value; no connection string, secret or token is logged or echoed. Required: `EIDOS_DATABASE_URL`; `EIDOS_MODEL_PROVIDER` (`ollama`), `EIDOS_MODEL_BASE_URL`, `EIDOS_MODEL_NAME`, `EIDOS_MODEL_TEMPERATURE`, `EIDOS_MODEL_SEED`, `EIDOS_MODEL_MAX_OUTPUT_TOKENS`, `EIDOS_MODEL_TIMEOUT_SECONDS` (no defaults, D-135); and exactly one of `EIDOS_JWKS_URL` (an `https` URL, the asymmetric mode) and `EIDOS_JWT_SECRET` (the legacy HS256 mode). Optional: `EIDOS_JWT_AUDIENCE` (default `authenticated`), `EIDOS_JWT_ISSUER`, `EIDOS_ALLOWED_ACTIONS` (comma separated), `EIDOS_WORKER_POOL_SIZE`, `EIDOS_MAX_QUEUED_RUNS`, `EIDOS_MAX_ACTIVE_RUNS_PER_TENANT`. Tenants and memberships are inserted with SQL.
+
+### 12.4 What was verified, and what was not
+
+**Read from Supabase's documentation on 2026-09-26 (nothing was run against a Supabase project):** a signed-in user's token has audience `authenticated` and the user's UUID as `sub`; asymmetric signing keys are published at `https://<project>.supabase.co/auth/v1/.well-known/jwks.json` and may be cached for at most about ten minutes so a rotation is picked up; the legacy shared HS256 secret is discouraged; the direct connection is on port 5432, the session pooler on 5432 (IPv4) and the transaction pooler on 6543, which supports no prepared statements and no session features; a table with row level security enabled and no policy is denied to the `anon` and `authenticated` roles, while `service_role` and `postgres` bypass row level security (so the application connects with its own server-side credential and the schema also revokes the API roles' privileges).
+
+**Run:** the default suite (no database, no credential); the same repository-contract tests and 15 PostgreSQL-only tests on a real PostgreSQL 16.2 (an embedded local server, not Supabase) with `-m postgres`. **Not run:** anything against a live Supabase project, a real model through the API, mutation testing (no explicit acceptance criterion required it and the brief said not to start it), and a load or soak test.
+
+### 12.5 The tests
+
+| Suite | Tests | Holds |
+|---|---|---|
+| `tests/unit/service/test_service_spec.py` | 36 | the mapping, ceilings that reject, documents, the digest |
+| `tests/unit/service/test_service_durable.py` | 12 | the write-through model: order, fail-soft, bounded flush, lost answers, another writer, artifacts |
+| `tests/unit/service/test_service_runner.py` | 17 | `run_status`, the bounded runner, recovery, failure versus API failure, no leak of a fault's message |
+| `tests/unit/service/test_service_service.py` | 40 | identity, creation, idempotency, tenant isolation, every read as a replay, integrity failure |
+| `tests/unit/service/test_service_guards.py` | 93 | the boundaries, no `MissionState` construction, the migrations, nothing deferred built |
+| `tests/unit/api/test_api_auth.py` | 32 | JWT verification, algorithm confusion, JWKS availability |
+| `tests/unit/api/test_api_main.py` | 17 | configuration errors name the variable and never a value |
+| `tests/integration/api/test_api_endpoints.py` | 108 | the eight endpoints and no others, authentication, tenancy, failure semantics, invariants |
+| `tests/integration/service/test_service_flow.py` | 12 | the durable log is the runtime's log, restart, a store that fails part-way, concurrency |
+| `tests/integration/persistence/test_storage_contract.py` | 32 | the repository contract, on the in-memory storage and, with `-m postgres`, on PostgreSQL (the count includes both) |
+| `tests/integration/persistence/test_postgres_service.py` | 15 | (all `-m postgres`) migrations, deny-all RLS, the schema's own constraints, a whole mission, recovery, a race between two processes |
+| `tests/integration/persistence/test_postgres_boundary.py` | 3 | an unreachable database and the migration runner, without a server |
+| `tests/integration/planning/test_v1_replanning_tracker.py` | 6 | the tracker parameter under replanning |
+
+**The full default suite:** 7,233 passed and 65 deselected under `PYTHONHASHSEED=20270927` (V1.3's close-out: 6,819 passed and 34 deselected), including the unit suite run with LangGraph, LangChain and LangSmith unimportable. The deselected tests are the real-model tests and the 31 PostgreSQL tests.

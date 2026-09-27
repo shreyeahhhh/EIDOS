@@ -25,14 +25,30 @@ langgraph = [
 a2a = [
     "httpx>=0.27,<1",
 ]
+# D-234 (V1.4): the HTTP boundary. FastAPI, an ASGI server and a JWT library are imported by eidos.api only (guarded); none is imported by the core or by
+# eidos.service. Lower bounds are the versions verified against on 2026-09-26 (V1.4-B).
+api = [
+    "fastapi>=0.141.1,<1",
+    "uvicorn>=0.54,<1",
+    "pyjwt[crypto]>=2.15,<3",
+]
+# D-230 (V1.4): PostgreSQL persistence. psycopg 3 and its pool are imported by eidos.persistence only (guarded).
+postgres = [
+    "psycopg[binary,pool]>=3.3.6,<4",
+]
 dev = [
     "pytest",
     "eidos[langgraph]",
     "eidos[a2a]",
+    "eidos[api]",
+    "eidos[postgres]",
 ]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"eidos.persistence" = ["migrations/*.sql"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src", "tests/support"]
@@ -41,9 +57,12 @@ pythonpath = ["src", "tests/support"]
 # asked, but nothing in EIDOS asks for it, so it is not loaded (V0.3 Step 4).
 # Real-model tests call a real local model runtime, so they run only when selected with `-m real_model` (V0.4, D-136). They are
 # deselected here, never skipped, and when selected they fail loudly if their configuration is missing.
-addopts = "-p no:langsmith_plugin -m 'not real_model'"
+# PostgreSQL tests need a real, disposable database (EIDOS_TEST_DATABASE_URL), so they run only when selected with `-m postgres`; they are deselected here, never skipped, and when selected they
+# fail loudly if the database is missing (V1.4-B, D-230), exactly as the real-model tests do.
+addopts = "-p no:langsmith_plugin -m 'not real_model and not postgres'"
 markers = [
     "real_model: calls a real local model runtime; excluded from the default run, selected explicitly with -m real_model (D-136)",
+    "postgres: needs a real PostgreSQL database at EIDOS_TEST_DATABASE_URL; excluded from the default run, selected explicitly with -m postgres (D-230)",
 ]
 testpaths = [
     "tests/unit",

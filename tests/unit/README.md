@@ -21,6 +21,7 @@ scoring and policy evaluation — are all verified here.
 | The V0.4 model seam and static guards on `eidos.agents`: explicit configuration, typed failures, no vendor, no I/O | V0.4 — `tests/unit/agents/` (Step 3) |
 | Static guards on the LangGraph backend package: who may import LangGraph, and which of its features are ruled out | V0.3 — `tests/unit/backends/` (Step 4; runs without LangGraph installed) |
 | State reducer, including duplicate and out-of-order event handling | V0.5 |
+| The V1.4 application service (the `MissionSpec` mapping and ceilings, the write-through model, the bounded runner and `run_status`, identity and tenant isolation, every read as a replay), the JWT verification and the configuration errors, and the static guards on the new packages and migrations | V1.4-B — `tests/unit/service/`, `tests/unit/api/` |
 | Scoring and quality proxies | V1.0 |
 | Policy and autonomy evaluation | V1.2 |
 

@@ -69,7 +69,7 @@ from eidos.planning import (
     generate_candidate_strategies,
     select_strategy,
 )
-from eidos.recording import Clock, IdSource, Recorder, record_attempt, terminal_payload_for
+from eidos.recording import Clock, IdSource, ModelCallTracker, Recorder, record_attempt, terminal_payload_for
 from eidos.runtime import AdmissionGuard, RunOutcome, Verifier
 from eidos.state import (
     EventLog,
@@ -209,6 +209,7 @@ def run_with_replanning(
     selector: Selector,
     store: ExperienceStore,
     log: EventLog | None = None,
+    tracker: ModelCallTracker | None = None,
 ) -> ReplanRun | ReplanRejection:
     """Run ``state``'s own task genome to a conclusion, trying more than one candidate strategy in turn when an
     attempt's own outcome is replan-eligible (D-199) and the mission's own configured budget allows it.
@@ -217,6 +218,11 @@ def run_with_replanning(
     factory shape) — never one guard instance reused across attempts, so a guard that itself holds any
     per-attempt state can never leak between them. ``selector`` is the caller's own already-configured
     ``Selector``, called again, unmodified, for every attempt — never a new one, never a different kind.
+
+    ``tracker`` (D-231, V1.4; resolves D-204 item 1) is optional and defaults to ``None``, which changes nothing: ``record_attempt`` then builds its own fresh
+    tracker per attempt exactly as it always did. When the caller supplies one, it is forwarded to every attempt, so the model, tool, retrieval and citation
+    facts of the wrappers that share it are recorded on every settled node, replan attempts included. It is the same tracker for every attempt because its
+    collectors are thread-local and opened and closed per node; each attempt still gets a fresh ``Recorder``.
 
     Returns a ``ReplanRejection`` — recording nothing — when no first strategy can be selected (D-201 item 2);
     otherwise a ``ReplanRun``. This function raises nothing for a domain outcome.
@@ -256,7 +262,7 @@ def run_with_replanning(
         recorder, report = record_attempt(
             state=state, plan=plan, limits=limits, registry=registry, agents=agents, verifier=verifier,
             admission_guard=admission_guard_factory(), executor_factory=executor_factory,
-            clock=clock, ids=ids, log=log,
+            clock=clock, ids=ids, log=log, tracker=tracker,
         )
         refused += recorder.refused
         discrepancies += recorder.discrepancies

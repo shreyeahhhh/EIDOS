@@ -9,6 +9,7 @@ else; agents never import this package, and no core layer does.
 Standard library only (D-136). Installing the runtime and choosing a model are the owner's actions, never Claude Code's.
 """
 
+from .factory import KNOWN_PROVIDERS, model_port
 from .ollama import OllamaModel
 
-__all__ = ["OllamaModel"]
+__all__ = ["KNOWN_PROVIDERS", "OllamaModel", "model_port"]

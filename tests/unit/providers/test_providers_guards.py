@@ -86,8 +86,10 @@ def test_the_provider_added_no_dependency_and_no_extra():
     assert project["dependencies"] == ["pydantic>=2"]
     # D-171 (V0.6 Step 5) added a second optional extra, "a2a" (httpx, the one dependency eidos.a2a needs) — the
     # same shape as "langgraph" (D-116): an extra eidos.providers itself contributes nothing to and never imports.
-    assert set(project["optional-dependencies"]) == {"langgraph", "a2a", "dev"}
-    assert project["optional-dependencies"]["dev"] == ["pytest", "eidos[langgraph]", "eidos[a2a]"]
+    # V1.4-B (D-234, D-230) added two more optional extras, "api" (FastAPI, an ASGI server, a JWT library) and "postgres" (psycopg): the same shape as "langgraph" and "a2a", and extras
+    # eidos.providers itself contributes nothing to and never imports. The core dependency list above is unchanged.
+    assert set(project["optional-dependencies"]) == {"langgraph", "a2a", "api", "postgres", "dev"}
+    assert project["optional-dependencies"]["dev"] == ["pytest", "eidos[langgraph]", "eidos[a2a]", "eidos[api]", "eidos[postgres]"]
 
 
 def test_real_model_tests_are_registered_and_excluded_from_the_default_run_never_skipped():

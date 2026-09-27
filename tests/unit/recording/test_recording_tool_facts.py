@@ -311,7 +311,7 @@ def test_two_recorded_passes_do_not_share_tool_facts():
     assert first.log.state.tool_calls_used == 1 and second.log.state.tool_calls_used == 0
 
 
-# --- what this step did not touch (D-204 stays open) --------------------------------------------------------------------------------
+# --- what this step did not touch (D-204 item 1 was resolved later by D-231; item 2 stays open) --------------------------------------------------------------------------------
 
 
 def test_the_public_recording_and_replanning_entry_points_keep_their_signatures():
@@ -321,4 +321,11 @@ def test_the_public_recording_and_replanning_entry_points_keep_their_signatures(
     assert list(inspect.signature(record_attempt).parameters) == [
         "state", "plan", "limits", "registry", "agents", "verifier", "admission_guard", "executor_factory", "clock", "ids", "log", "prior", "tracker",
     ]
-    assert "tracker" not in inspect.signature(run_with_replanning).parameters  # D-204 item 1: not fixed here
+    # D-231 (V1.4) resolved D-204 item 1 with exactly one additive parameter: keyword-only, optional, defaulting to None. Nothing else about the signature changed.
+    parameters = inspect.signature(run_with_replanning).parameters
+    assert list(parameters) == [
+        "state", "limits", "registry", "agents", "verifier", "admission_guard_factory", "executor_factory", "clock", "ids", "strategy_ids", "plan_ids",
+        "candidate_generator", "max_candidates", "selector", "store", "log", "tracker",
+    ]
+    assert all(parameter.kind is inspect.Parameter.KEYWORD_ONLY for parameter in parameters.values())
+    assert parameters["tracker"].default is None and parameters["log"].default is None
