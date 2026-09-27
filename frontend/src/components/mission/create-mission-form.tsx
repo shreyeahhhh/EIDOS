@@ -4,15 +4,15 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import { ApiError } from "@/lib/api/errors";
-import { createMission, startMission } from "@/lib/api/client";
-import type { CreatedMission, MissionSpec, RiskLevel, StartedMission } from "@/lib/api/types";
+import { createMission } from "@/lib/api/client";
+import type { MissionSpec, RiskLevel } from "@/lib/api/types";
 import { KNOWN_CAPABILITIES } from "@/lib/api/types";
-import { setStoredTenantId } from "@/lib/tenant";
-import { RUN_STATUS_LABEL, formatDateTime } from "@/lib/status";
-import { Badge } from "@/components/ui/badge";
+import { rememberMission } from "@/lib/mission-index";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { Field, fieldInputClassName } from "@/components/ui/field";
+import { NoWorkspaceAccess } from "./no-workspace-access";
+import { TenantRequiredForm } from "./tenant-required-form";
 
 const CAPABILITY_LABEL: Record<(typeof KNOWN_CAPABILITIES)[number], string> = {
   research: "Research",
@@ -23,11 +23,7 @@ const CAPABILITY_LABEL: Record<(typeof KNOWN_CAPABILITIES)[number], string> = {
 
 const RISK_LEVELS: RiskLevel[] = ["low", "medium", "high"];
 
-type Stage =
-  | { name: "form" }
-  | { name: "tenant_required" }
-  | { name: "no_membership" }
-  | { name: "created"; mission: CreatedMission };
+type Stage = { name: "form" } | { name: "tenant_required" } | { name: "no_membership" };
 
 interface FieldErrors {
   goal?: string;
@@ -35,6 +31,8 @@ interface FieldErrors {
   risk_level?: string;
 }
 
+/** Creates a mission, then hands off to its workspace (`/missions/[id]`) — the one place its status, its run, and
+ * its results ever live. This form never shows a mission's state itself. */
 export function CreateMissionForm() {
   const router = useRouter();
 
@@ -47,12 +45,10 @@ export function CreateMissionForm() {
   const [minIndependentEvidence, setMinIndependentEvidence] = useState(1);
   const [supportingDocument, setSupportingDocument] = useState("");
 
-  const [tenantIdInput, setTenantIdInput] = useState("");
   const [stage, setStage] = useState<Stage>({ name: "form" });
   const [submitting, setSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [generalErrors, setGeneralErrors] = useState<string[]>([]);
-  const [banner, setBanner] = useState<string | null>(null);
 
   function toggleCapability(capability: string) {
     setCapabilities((current) =>
@@ -82,7 +78,6 @@ export function CreateMissionForm() {
     event.preventDefault();
     setFieldErrors({});
     setGeneralErrors([]);
-    setBanner(null);
 
     const errors: FieldErrors = {};
     if (!goal.trim()) errors.goal = "A goal is required.";
@@ -95,10 +90,10 @@ export function CreateMissionForm() {
     setSubmitting(true);
     try {
       const mission = await createMission(buildSpec());
-      setStage({ name: "created", mission });
+      rememberMission({ id: mission.mission_id, goal, createdAt: mission.created_at });
+      router.push(`/missions/${mission.mission_id}`);
     } catch (error) {
       handleError(error);
-    } finally {
       setSubmitting(false);
     }
   }
@@ -136,91 +131,14 @@ export function CreateMissionForm() {
     }
   }
 
-  async function handleTenantSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!tenantIdInput.trim()) return;
-    setStoredTenantId(tenantIdInput.trim());
-    setStage({ name: "form" });
-    setBanner("Workspace remembered. Submit the mission again.");
-  }
-
-  async function handleStart(missionId: string) {
-    setSubmitting(true);
-    try {
-      const started: StartedMission = await startMission(missionId);
-      setBanner(`Mission ${RUN_STATUS_LABEL[started.run_status].toLowerCase()}.`);
-    } catch (error) {
-      handleError(error);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  if (stage.name === "no_membership") {
-    return (
-      <Callout tone="warning" title="No workspace access yet">
-        Your account isn&apos;t linked to an EIDOS workspace yet. Ask whoever administers your workspace to add
-        you, then sign in again.
-      </Callout>
-    );
-  }
+  if (stage.name === "no_membership") return <NoWorkspaceAccess />;
 
   if (stage.name === "tenant_required") {
-    return (
-      <form onSubmit={handleTenantSubmit} className="flex flex-col gap-4">
-        <Callout tone="info" title="Which workspace?">
-          Your account belongs to more than one EIDOS workspace. Enter the workspace ID you were given.
-        </Callout>
-        <Field label="Workspace (tenant) ID">
-          {(id, describedBy) => (
-            <input
-              id={id}
-              aria-describedby={describedBy}
-              value={tenantIdInput}
-              onChange={(event) => setTenantIdInput(event.target.value)}
-              placeholder="00000000-0000-0000-0000-000000000000"
-              className={fieldInputClassName(false)}
-            />
-          )}
-        </Field>
-        <Button type="submit">Continue</Button>
-      </form>
-    );
-  }
-
-  if (stage.name === "created") {
-    const { mission } = stage;
-    return (
-      <div className="flex flex-col gap-6">
-        <Callout tone="success" title="Mission created">
-          Nothing has run yet — start it when you&apos;re ready.
-        </Callout>
-        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-          <dt className="text-ink-faint">Mission ID</dt>
-          <dd className="font-mono text-xs text-ink">{mission.mission_id}</dd>
-          <dt className="text-ink-faint">Status</dt>
-          <dd>
-            <Badge>{RUN_STATUS_LABEL[mission.run_status]}</Badge>
-          </dd>
-          <dt className="text-ink-faint">Created</dt>
-          <dd className="text-ink">{formatDateTime(mission.created_at)}</dd>
-        </dl>
-        {banner && <Callout tone="info">{banner}</Callout>}
-        <div className="flex gap-3">
-          <Button onClick={() => handleStart(mission.mission_id)} disabled={submitting}>
-            {submitting ? "Starting…" : "Start mission"}
-          </Button>
-          <Button variant="secondary" onClick={() => setStage({ name: "form" })}>
-            Create another
-          </Button>
-        </div>
-      </div>
-    );
+    return <TenantRequiredForm onSubmitted={() => setStage({ name: "form" })} />;
   }
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-6" noValidate>
-      {banner && <Callout tone="info">{banner}</Callout>}
       {generalErrors.length > 0 && (
         <Callout tone="error" title="This request was refused">
           <ul className="list-disc space-y-1 pl-4">

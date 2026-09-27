@@ -1,20 +1,33 @@
 import { describe, expect, it } from "vitest";
 
-import type { MissionStatus, RunStatus, VerificationVerdict } from "./api/types";
+import type { MissionStatus, NodeStatus, RunStatus, VerificationVerdict } from "./api/types";
 import {
   MISSION_STATUS_LABEL,
   MISSION_STATUS_TONE,
+  NODE_STATUS_LABEL,
+  NODE_STATUS_TONE,
   RUN_STATUS_LABEL,
   RUN_STATUS_TONE,
   VERDICT_LABEL,
   VERDICT_TONE,
   failureCauseLabel,
   formatDateTime,
+  stepKindLabel,
 } from "./status";
 
 const RUN_STATUSES: RunStatus[] = ["created", "queued", "running", "finished", "rejected", "interrupted", "error"];
 const MISSION_STATUSES: MissionStatus[] = ["created", "completed", "failed", "paused"];
 const VERDICTS: VerificationVerdict[] = ["pass", "fail", "inconclusive"];
+const NODE_STATUSES: NodeStatus[] = [
+  "succeeded",
+  "failed",
+  "no_result",
+  "verification_failed",
+  "verification_inconclusive",
+  "skipped",
+  "not_reached",
+  "awaiting",
+];
 
 describe("status labels and tones", () => {
   it("has a label and a tone for every run_status value the backend can send", () => {
@@ -54,5 +67,21 @@ describe("status labels and tones", () => {
   it("formats an ISO timestamp into a readable local date and time", () => {
     const formatted = formatDateTime("2026-09-27T07:03:57.330675Z");
     expect(formatted).toMatch(/2026/);
+  });
+
+  it("has a label and a tone for every plan-node status the backend can send, distinct from mission_status", () => {
+    for (const status of NODE_STATUSES) {
+      expect(NODE_STATUS_LABEL[status]).toBeTruthy();
+      expect(NODE_STATUS_TONE[status]).toBeTruthy();
+    }
+    expect(NODE_STATUS_TONE.succeeded).toBe("success");
+    expect(NODE_STATUS_TONE.verification_inconclusive).toBe("warning");
+  });
+
+  it("labels a work step by its capability, and a control step by its role", () => {
+    expect(stepKindLabel("agent", "research")).toBe("Research");
+    expect(stepKindLabel("agent", null)).toBe("Agent");
+    expect(stepKindLabel("VERIFY", null)).toBe("Verify");
+    expect(stepKindLabel("REPLAN", null)).toBe("Replan");
   });
 });

@@ -1,4 +1,4 @@
-import type { MissionFailureCause, MissionStatus, RunStatus, VerificationVerdict } from "./api/types";
+import type { MissionFailureCause, MissionStatus, NodeStatus, PlanStepKind, RunStatus, VerificationVerdict } from "./api/types";
 
 export type Tone = "neutral" | "info" | "success" | "warning" | "error";
 
@@ -52,6 +52,44 @@ export const VERDICT_TONE: Record<VerificationVerdict, Tone> = {
   fail: "error",
   inconclusive: "warning",
 };
+
+/** A plan node's own settled state (`NodeResult.status`), distinct from the mission-level `MissionStatus` above — several nodes each carry one of these while the mission carries one of the other. */
+export const NODE_STATUS_LABEL: Record<NodeStatus, string> = {
+  succeeded: "Succeeded",
+  failed: "Failed",
+  no_result: "No result",
+  verification_failed: "Failed verification",
+  verification_inconclusive: "Inconclusive",
+  skipped: "Skipped",
+  not_reached: "Not reached",
+  awaiting: "Awaiting",
+};
+
+export const NODE_STATUS_TONE: Record<NodeStatus, Tone> = {
+  succeeded: "success",
+  failed: "error",
+  no_result: "error",
+  verification_failed: "error",
+  verification_inconclusive: "warning",
+  skipped: "neutral",
+  not_reached: "neutral",
+  awaiting: "info",
+};
+
+const PLAN_STEP_KIND_LABEL: Record<Exclude<PlanStepKind, "agent">, string> = {
+  ROUTE: "Route",
+  VERIFY: "Verify",
+  RETRY: "Retry",
+  REPLAN: "Replan",
+  HUMAN_APPROVAL: "Human approval",
+  TERMINATE: "Terminate",
+};
+
+/** What a plan node is, in one short phrase: its capability if it is work, or its control-flow role otherwise. */
+export function stepKindLabel(kind: PlanStepKind, capability: string | null): string {
+  if (kind === "agent") return capability ? capability[0].toUpperCase() + capability.slice(1) : "Agent";
+  return PLAN_STEP_KIND_LABEL[kind];
+}
 
 const FAILURE_CAUSE_LABEL: Record<MissionFailureCause, string> = {
   plan_rejected: "The plan was rejected before it could run",

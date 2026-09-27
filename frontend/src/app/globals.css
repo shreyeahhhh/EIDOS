@@ -8,7 +8,18 @@
   are muted and distinct from the accent so they always read as semantic, never decorative.
 
   Dark mode follows the system preference only (no manual toggle): the same tokens are
-  redefined under `prefers-color-scheme: dark`.
+  redefined under `prefers-color-scheme: dark`. Dark is not an inversion of light: the accent,
+  its soft backgrounds and the shadow all get their own values so both feel deliberately tuned.
+
+  Type scale (a convention applied by hand at each call site — Tailwind utilities, not new
+  classes — so this is documentation, not a competing system):
+    display        font-display text-4xl/5xl/6xl   the landing page and nothing else
+    page title     font-display text-3xl           one per page ("New mission", "Missions")
+    section title  font-display text-xl             a workspace section ("Execution", "Plan")
+    body           text-sm sm:text-base, text-ink-muted   prose and descriptions
+    metadata       text-sm text-ink-faint            timestamps, counts, secondary facts
+    technical      font-mono text-xs                 ids, event names, hashes, refs
+    numeric/data   font-mono text-sm                  a count or duration presented as data
 */
 
 :root {
@@ -19,6 +30,8 @@
   --color-surface: #faf8f3;
   --color-surface-raised: #ffffff;
   --color-surface-sunken: #f1ede4;
+  /* A step above --surface-raised: the sticky mission-workspace header only, never a plain card. */
+  --color-surface-elevated: rgb(255 255 255 / 0.86);
 
   --color-border: #e4ded0;
   --color-border-strong: #cfc7b4;
@@ -49,6 +62,7 @@
     --color-surface: #131217;
     --color-surface-raised: #1c1b21;
     --color-surface-sunken: #0d0c10;
+    --color-surface-elevated: rgb(28 27 33 / 0.86);
 
     --color-border: #33313a;
     --color-border-strong: #454250;
@@ -79,6 +93,7 @@
   --color-surface: var(--color-surface);
   --color-surface-raised: var(--color-surface-raised);
   --color-surface-sunken: var(--color-surface-sunken);
+  --color-surface-elevated: var(--color-surface-elevated);
 
   --color-border: var(--color-border);
   --color-border-strong: var(--color-border-strong);

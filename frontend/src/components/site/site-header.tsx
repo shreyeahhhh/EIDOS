@@ -16,10 +16,13 @@ export async function SiteHeader() {
         <Link href="/" className="font-display text-lg tracking-tight text-ink">
           EIDOS
         </Link>
-        <nav className="flex items-center gap-6 text-sm">
+        <nav className="flex items-center gap-4 text-sm sm:gap-6">
           {user ? (
             <>
-              <Link href="/missions/new" className="text-ink-muted hover:text-ink">
+              <Link href="/missions" className="text-ink-muted hover:text-ink">
+                Missions
+              </Link>
+              <Link href="/missions/new" className="hidden text-ink-muted hover:text-ink sm:inline">
                 New mission
               </Link>
               <span className="hidden text-ink-faint sm:inline">{user.email}</span>

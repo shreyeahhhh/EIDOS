@@ -330,9 +330,11 @@ export interface Plan {
 
 /**
  * The recorded event payload. Only the event types this backend build can actually emit are typed
- * precisely (no tool, no knowledge base and no A2A agent is wired in V1.4); the rest fall back to
- * `Record<string, unknown>` so an unexpected shape never breaks rendering — the UI should show them
- * generically rather than assume a shape it has not verified.
+ * precisely (no tool, no knowledge base and no A2A agent is wired in V1.4); anything else falls back
+ * to bare `{ event_type }` so an unexpected type never breaks rendering — the UI shows it generically
+ * rather than assume a shape it has not verified. (Deliberately *not* `Record<string, unknown>`: an
+ * index signature on the fallback would give every field on every other member type `unknown` too,
+ * defeating `"field" in payload` narrowing everywhere else in the app.)
  */
 export type EventPayload =
   | ({ event_type: "MISSION_CREATED" } & { task_genome: TaskGenome; reliability_contract: ReliabilityContract; execution_id: Uuid })
@@ -344,7 +346,7 @@ export type EventPayload =
   | ({ event_type: "MISSION_COMPLETED" } & { plan_id: Uuid; verified: boolean })
   | ({ event_type: "MISSION_FAILED" } & { plan_id: Uuid | null; cause: MissionFailureCause; reason: string })
   | ({ event_type: "MISSION_PAUSED" } & { plan_id: Uuid; halt: HaltInfo | null; awaiting: AwaitingInfo[] })
-  | ({ event_type: string } & Record<string, unknown>);
+  | { event_type: string };
 
 export interface EventRecord {
   event: MissionEvent;
