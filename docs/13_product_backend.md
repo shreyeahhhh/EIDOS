@@ -277,10 +277,12 @@ An API failure is a failure of the request or the service. A mission failure is 
 | another tenant's, or an unknown, mission or tenant | `not_found` | 404 |
 | several tenants and no `X-Tenant-Id` | `tenant_required` | 422 |
 | invalid `MissionSpec`, or over a ceiling | `invalid_spec` with per-field details | 422 |
+| a well-formed request that is wrong as a call (a bad `after` or `limit`, a malformed `Idempotency-Key`) | `invalid_request` | 422 |
 | body too large | `payload_too_large` | 413 |
 | wrong state to start; no events yet; not finished; run limit | `not_startable`, `no_events`, `not_finished`, `tenant_run_limit`, `idempotency_conflict` | 409 |
 | queue full; database unavailable | `busy`, `storage_unavailable` | 503 |
 | a stored log that does not replay | `integrity_error` (never a mission outcome) | 500 |
+| a path or a method this API does not have | `not_found` or `method_not_allowed` (the framework's own 404 and 405, in the same shape) | 404 / 405 |
 | a mission that failed, or paused | the mission's own `mission_status`, `failure_cause` and reason | 200 |
 | a run that was `rejected`, `interrupted` or ended in `error` | `run_status` and `run_status_reason` on `GET /v1/missions/{id}` | 200 |
 | an unexpected exception in the service | run `error` (never a `MISSION_FAILED` event); `internal_error` if it was in a request | 500 |
@@ -375,16 +377,56 @@ Configuration is the environment. A missing or malformed variable stops startup 
 |---|---|---|
 | `tests/unit/service/test_service_spec.py` | 36 | the mapping, ceilings that reject, documents, the digest |
 | `tests/unit/service/test_service_durable.py` | 12 | the write-through model: order, fail-soft, bounded flush, lost answers, another writer, artifacts |
-| `tests/unit/service/test_service_runner.py` | 17 | `run_status`, the bounded runner, recovery, failure versus API failure, no leak of a fault's message |
+| `tests/unit/service/test_service_runner.py` | 21 | `run_status`, the bounded runner, recovery, failure versus API failure, no leak of a fault's message, a transient store fault around a transition (V1.4-C) |
 | `tests/unit/service/test_service_service.py` | 40 | identity, creation, idempotency, tenant isolation, every read as a replay, integrity failure |
-| `tests/unit/service/test_service_guards.py` | 93 | the boundaries, no `MissionState` construction, the migrations, nothing deferred built |
+| `tests/unit/service/test_service_guards.py` | 96 | the boundaries, no `MissionState` construction, the migrations, nothing deferred built, no credential in the repository (V1.4-C) |
+| `tests/unit/service/test_service_storable.py` | 8 | text the durable store cannot keep (V1.4-C) |
 | `tests/unit/api/test_api_auth.py` | 32 | JWT verification, algorithm confusion, JWKS availability |
-| `tests/unit/api/test_api_main.py` | 17 | configuration errors name the variable and never a value |
-| `tests/integration/api/test_api_endpoints.py` | 108 | the eight endpoints and no others, authentication, tenancy, failure semantics, invariants |
+| `tests/unit/api/test_api_main.py` | 18 | configuration errors name the variable and never a value, a shared secret below the least an HS256 key may be (V1.4-C) |
+| `tests/integration/api/test_api_endpoints.py` | 112 | the eight endpoints and no others, authentication, tenancy, failure semantics, invariants |
+| `tests/integration/api/test_api_real_process.py` | 6 (5 `-m postgres`) | the documented start command as a real `uvicorn` process: a whole mission, a process killed mid-run, concurrency, misconfiguration (V1.4-C) |
 | `tests/integration/service/test_service_flow.py` | 12 | the durable log is the runtime's log, restart, a store that fails part-way, concurrency |
-| `tests/integration/persistence/test_storage_contract.py` | 32 | the repository contract, on the in-memory storage and, with `-m postgres`, on PostgreSQL (the count includes both) |
-| `tests/integration/persistence/test_postgres_service.py` | 15 | (all `-m postgres`) migrations, deny-all RLS, the schema's own constraints, a whole mission, recovery, a race between two processes |
+| `tests/integration/persistence/test_storage_contract.py` | 34 | the repository contract, on the in-memory storage and, with `-m postgres`, on PostgreSQL (the count includes both) |
+| `tests/integration/persistence/test_postgres_service.py` | 18 | (all `-m postgres`) migrations, deny-all RLS, the schema's own constraints, a whole mission, recovery, a race between two processes, a model's answer holding a NUL (V1.4-C) |
 | `tests/integration/persistence/test_postgres_boundary.py` | 3 | an unreachable database and the migration runner, without a server |
 | `tests/integration/planning/test_v1_replanning_tracker.py` | 6 | the tracker parameter under replanning |
 
-**The full default suite:** 7,233 passed and 65 deselected under `PYTHONHASHSEED=20270927` (V1.3's close-out: 6,819 passed and 34 deselected), including the unit suite run with LangGraph, LangChain and LangSmith unimportable. The deselected tests are the real-model tests and the 31 PostgreSQL tests.
+**The full default suite (after V1.4-C):** 7,255 passed and 74 deselected, reproduced under two hash seeds (`PYTHONHASHSEED=20270927` and `20270928`); 7,233 and 65 at V1.4-B; 6,819 and 34 at V1.3's close-out. The deselected tests are the 34 real-model tests and the 40 PostgreSQL tests (`-m postgres`, all 40 passed against a disposable local PostgreSQL 16.2). Section 12.6 is the V1.4-C acceptance audit.
+
+### 12.6 The V1.4-C acceptance audit (2026-09-27)
+
+A bounded acceptance audit of the implemented backend against this document and D-229 to D-234, before anything is pushed: no new capability, no redesign, no reopening of a provisional value or a deferred item
+unless the audit found a concrete correctness or security failure in it.
+
+**Method.** The existing suites first; new tests only for a genuine gap the audit found. An independent AST import audit at `e6bcb1a` (V1.3's close) and at this commit, over every file, confirms exactly the three
+new package edges reported in section 1 and none from a core layer; a documentation-conformance script checked the eight endpoints, every error code and status, and every configured environment variable
+against the code, all matching; a real `uvicorn` process (the documented start command) was driven over real HTTP and a real disposable PostgreSQL, including killing it mid-run; and the repository was scanned
+for credential-shaped text (private key blocks, JWTs, cloud and platform tokens, connection strings with a password) with no other change made on that account beyond hardening `.gitignore`.
+
+**Found and fixed, each with a new test (no core file changed; every fix is in `eidos.service` or `eidos.api`):**
+
+1. **A NUL character reaching PostgreSQL was an unhandled 500, and a model that answered with one ended its run in error with a short prefix.** PostgreSQL's `text` and `jsonb` refuse a NUL outright. A
+   request holding one (the goal, an information dependency, a document) is now refused at the door with a 422 naming the field (`eidos.service.spec`, `UNSTORABLE`); a model's answer is passed through a
+   `StorableModel` port that replaces a NUL with U+FFFD before anything is recorded, so the runtime sees, records and cites the same text the store holds and the durable log is still exactly the runtime's
+   log (`eidos.service.composition`).
+2. **The framework's own 404 (no such path) and 405 (wrong method) were FastAPI's default `{"detail": ...}` body**, not this API's one error shape. They now go through the same `error_response` (a new
+   `method_not_allowed` code; `not_found` is reused for a missing path) and section 8 documents both.
+3. **A transient storage fault exactly when a run started or ended was a single try.** `RunManager`'s own transition to `running` or to a terminal status now retries with the same bound and backoff as the
+   event flush (`RunnerConfig.flush_attempts`/`flush_backoff_seconds`) before it gives up and lets startup recovery mark the row `interrupted`; the fault is logged, never raised past that bound.
+4. **A shared HS256 secret shorter than 32 bytes** (the least RFC 7518 section 3.2 allows for that algorithm) is now refused at startup, naming the variable and never the value.
+5. **A concurrent-create race relies on the database's own unique constraint** (`missions_idempotency`), confirmed under real concurrency: many simultaneous creates with one `Idempotency-Key`, over the
+   in-memory service, the `TestClient` and a real `uvicorn` process over real PostgreSQL, all make exactly one mission.
+6. **Awkward but storable text (emoji, right-to-left marks, combining marks, control characters other than NUL, quotes, SQL and JSON metacharacters) round-trips unchanged** through a document, a step
+   artifact, a goal and an event, confirmed on the in-memory storage and on real PostgreSQL byte for byte.
+
+**Reconfirmed, not changed (the audit found no defect):** D-231's tracker propagation under a forced replan (the existing suite, rerun); the import boundaries (no edge from a core layer, no edge into
+`eidos.api`/`eidos.service`/`eidos.persistence` from outside them); tenant isolation and cross-tenant 404 on every method, in-memory and on real PostgreSQL; idempotency, including the race above; the
+write-through model and replay from a persisted log; restart and interrupted-run recovery, including a process killed mid-run over real PostgreSQL; the bounded runner's one-execution-per-mission guarantee
+under real concurrency; the API-error-versus-mission-failure separation; and that no confidence or score appears in any answer. No credential, key, token or connection string with a password was found in
+the repository.
+
+**Left exactly as documented, because the audit found no concrete failure in them (the owner's brief named these as non-blocking MVP limitations):** no configured knowledge base means an empty evidence
+view; `execution_record` stays last-plan-only; the API, `SystemLimits`, runner, flush and database values stay provisional; one API process per database; only the `ollama` model adapter exists.
+
+**Tests:** 22 new default tests and 9 new opt-in PostgreSQL tests (31 total; section 12.5's counts already include them). The full default suite passed under two hash seeds; the full opt-in PostgreSQL suite
+(40 tests) passed once against a disposable local PostgreSQL 16.2, never against a Supabase project. Mutation testing was not run: no acceptance criterion required it.

@@ -14,7 +14,9 @@ from eidos.contracts import ArtifactRef, StepId, TenantId
 from eidos.service import ArtifactWrite, DuplicateIdempotencyKey, InMemoryStorage, Role, RunStatus, SequenceConflict
 from eidos.state import replay
 
-from eidos_service_fixture import ALICE, BOB, CAROL, DAVE, TENANT_A, TENANT_B
+from eidos.service.spec import without_documents
+
+from eidos_service_fixture import ALICE, BOB, CAROL, DAVE, TENANT_A, TENANT_B, make_spec
 from eidos_storage_helpers import NOW, artifact, commit, events_for, make_record
 
 
@@ -227,3 +229,31 @@ def test_supplied_documents_come_back_in_code_point_order_whatever_the_database_
     refs = ["b", "B", "a", "A1", "a1", "Z", "_x", "doc:10", "doc:2"]
     seeded.missions.create(record, tuple(artifact(ref, ref) for ref in refs))
     assert [str(a.ref) for a in seeded.artifacts(TENANT_A).supplied(record.execution_id)] == sorted(refs)
+
+
+# --- V1.4-C acceptance audit: what is stored is what was given, for text that is unusual but storable ----------------------------------------------------
+
+
+BACKSLASH = chr(92)  # written as a character code: a doubled backslash in a source file is easily mangled on the way here
+AWKWARD = (
+    "emoji " + chr(0x1F600) + " noncharacter " + chr(0xFFFF) + " private " + chr(0xE000) + " rtl " + chr(0x202E) + "abc combining e" + chr(0x301)
+    + " tab" + chr(9) + "CRLF" + chr(13) + chr(10) + "LF" + chr(10) + "bell" + chr(7) + " del" + chr(0x7F)
+    + " quotes " + chr(39) + chr(34) + " backslash " + BACKSLASH + " percent %s %(x)s sql " + chr(39) + "; drop table eidos.missions; -- json {" + chr(34) + "a" + chr(34) + ": [1, 2.50, 1e3]} "
+    + BACKSLASH + "u0000 as literal text (not a NUL) " + BACKSLASH + BACKSLASH + " two backslashes"
+    + " " + "long " * 5000
+)
+
+
+def test_awkward_but_storable_text_round_trips_exactly_in_a_document_a_step_artifact_a_goal_and_an_event(seeded):
+    """Every place free text is stored, on both backends: nothing is escaped, normalised or truncated on the way in or out (a database that changed a byte would make the durable log differ from the runtime's)."""
+    record = make_record(spec=without_documents(make_spec(goal=AWKWARD[:1500], information_dependencies=(AWKWARD[:200],))))
+    document = artifact("doc:awkward", AWKWARD, "doc:other")
+    seeded.missions.create(record, (document,))
+    stored = seeded.missions.get(record.tenant_id, record.mission_id)
+    assert stored.spec.goal == AWKWARD[:1500] and stored.spec.information_dependencies == (AWKWARD[:200],)
+    assert seeded.artifacts(record.tenant_id).supplied(record.execution_id) == (document,)
+    step = ArtifactWrite(artifact=artifact("artifact:awkward", AWKWARD, "doc:awkward"), kind="step", step_id=StepId("s-awkward"))
+    records = events_for(record)
+    commit(seeded, record, records, expected=0, artifacts=(step,))
+    assert seeded.artifacts(record.tenant_id).get_step_artifact(record.execution_id, StepId("s-awkward")) == step.artifact
+    assert seeded.events.read(record.tenant_id, record.mission_id) == records

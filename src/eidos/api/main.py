@@ -53,6 +53,8 @@ def build_verifier(environ: Mapping[str, str]) -> JwtVerifier:
         raise ConfigurationError("exactly one of EIDOS_JWKS_URL and EIDOS_JWT_SECRET is required")
     audience = environ.get("EIDOS_JWT_AUDIENCE", "").strip() or "authenticated"  # Supabase's audience for a signed-in user
     issuer = environ.get("EIDOS_JWT_ISSUER", "").strip() or None
+    if secret and len(secret.encode("utf-8")) < 32:
+        raise ConfigurationError("EIDOS_JWT_SECRET is shorter than 32 bytes, the least an HS256 key may be (RFC 7518 section 3.2)")  # a weak shared secret is forgeable: refuse it at startup
     try:
         if jwks_url:
             return JwtVerifier(keys=JwksKeys(jwks_url), settings=JwtSettings(audience=audience, algorithms=ASYMMETRIC_ALGORITHMS, issuer=issuer))

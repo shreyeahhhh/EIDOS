@@ -93,7 +93,7 @@ def make_rig(*, respond=cite_every_document, config: ServiceConfig | None = None
 
         repositories = replace(repositories, events=events)
     composition = Composition(config=config, model=model, events=repositories.events, knowledge=knowledge, sleep=sleep)
-    manager = RunManager(repositories=repositories, composition=composition, config=config.runner)
+    manager = RunManager(repositories=repositories, composition=composition, config=config.runner, sleep=sleep)
     service = MissionService(repositories=repositories, runner=manager, composition=composition, config=config)
     rig = ServiceRig(service=service, storage=storage, runner=manager, model=model, composition=composition, config=config)
     rig.contexts = {

@@ -24,7 +24,7 @@ from eidos.service import (
     RunStatus,
     TenantRunLimit,
 )
-from eidos.state import replay
+from eidos.state import execution_record, replay
 
 from eidos_service_fixture import ALICE, BOB, TENANT_A, TENANT_B, make_rig, make_spec
 from eidos_storage_helpers import NOW, artifact, commit, events_for, make_record
@@ -284,3 +284,82 @@ def test_the_other_tenants_cannot_see_a_mission_on_the_real_database_either(stor
             read(bob, mission_id)
     assert storage.read(TENANT_B, mission_id) == () and storage.artifacts_for(TENANT_B).supplied(storage.get(TENANT_A, mission_id).execution_id) == ()
     assert {m.role for m in storage.repositories().tenancy.memberships_of(ALICE)} == {Role.OWNER} and BOB != ALICE and UUID(int=0) != TENANT_A
+
+
+def test_what_postgres_holds_is_exactly_what_the_runtime_recorded_and_replays_to_its_final_state(storage):
+    """The durable log read back from PostgreSQL equals the runtime's in-memory log record for record (jsonb normalises numbers and key order, and none of that may change a value), it replays to the state the
+    runtime folded, and every artifact the run made is stored with the content the run held. A plain run and a replanned one."""
+    from eidos.replanning import ReplanRun, run_with_replanning
+
+    from eidos_replanning_factories import ScriptedCalls, always_fails
+    from eidos_search_fixture import cite_every_document
+
+    rig = make_rig(storage=storage)
+    for respond, plans in ((cite_every_document, 1), (ScriptedCalls((cite_every_document, always_fails), then=cite_every_document), 2)):
+        rig.model.script(respond)
+        context = rig.context("alice")
+        mission_id = rig.service.create_mission(context, make_spec())[0].mission_id
+        record = storage.get(TENANT_A, mission_id)
+        prepared = rig.composition.prepare(record, storage.artifacts_for(TENANT_A).supplied(record.execution_id))
+        outcome = run_with_replanning(**prepared.run_arguments)
+        assert isinstance(outcome, ReplanRun) and prepared.persistence.finish() and len(outcome.plans) == plans
+        durable = storage.read(TENANT_A, mission_id)
+        assert durable == outcome.log.records and len(durable) > 6
+        replayed = replay(durable)
+        assert replayed.rejection is None and replayed.state == outcome.log.state
+        held = storage.artifacts_for(TENANT_A)
+        for step in execution_record(durable).steps:
+            if step.result is not None and step.result.artifact is not None:
+                assert held.get(record.execution_id, step.result.artifact) == prepared.store.get(record.execution_id, step.result.artifact)
+        assert held.supplied(record.execution_id) == prepared.store.supplied(record.execution_id)
+
+
+# --- V1.4-C acceptance audit: what PostgreSQL cannot store never becomes a 500 or a lost run --------------------------------------------------------------
+
+
+def test_a_model_that_answers_with_a_nul_still_has_its_whole_run_stored_on_postgres(storage):
+    """The defect the audit found: a NUL in a model's answer made PostgreSQL refuse the artifact and every event queued behind it, and the run ended in error with a short prefix although the mission had finished."""
+    from eidos.agents import ModelResponse
+
+    from eidos_search_fixture import cite_every_document
+
+    def nul_answer(request):
+        reply = cite_every_document(request)
+        return ModelResponse(text=reply.text + " tail" + chr(0) + " more", measured=reply.measured)
+
+    rig = make_rig(storage=storage, respond=nul_answer)
+    context = rig.context("alice")
+    mission_id = rig.service.create_mission(context, make_spec())[0].mission_id
+    summary = rig.run_to_the_end(context, mission_id)
+    assert (summary.run_status, summary.mission_status, summary.verified, summary.run_status_reason) == (RunStatus.FINISHED, MissionStatus.COMPLETED, True, None)
+    records = storage.read(TENANT_A, mission_id)
+    assert len(records) == summary.last_sequence > 6 and replay(records).rejection is None
+    assert all(chr(0xFFFD) in a.content and chr(0) not in a.content for a in rig.service.result(context, mission_id).artifacts)
+
+
+def test_the_api_over_postgres_refuses_a_nul_with_a_422_and_stores_unusual_text_exactly(storage):
+    import json
+
+    from eidos_api_fixture import ALICE, bearer, make_api
+
+    api = make_api(rig=make_rig(storage=storage))
+    nul = chr(0)
+    headers = {**bearer(ALICE), "Content-Type": "application/json"}
+
+    def body(**changes):
+        document = json.loads(make_spec().model_dump_json())
+        document.update(changes)
+        return json.dumps(document)
+
+    with_nul_document = json.loads(make_spec().model_dump_json())
+    with_nul_document["supplied_documents"][0]["content"] = "x" + nul
+    for label, content in (("goal", body(goal="a" + nul + "b")), ("information_dependencies", body(information_dependencies=["dep" + nul])), ("document", json.dumps(with_nul_document))):
+        refused = api.client.post("/v1/missions", content=content, headers=headers)
+        assert refused.status_code == 422 and refused.json()["error"]["code"] == "invalid_spec", (label, refused.text)
+    assert storage.count_active(TENANT_A) == 0  # and nothing was stored by any of them
+    with storage._transaction() as connection:
+        assert connection.execute("select count(*) from eidos.missions").fetchone()[0] == 0
+    unusual = "emoji " + chr(0x1F600) + " noncharacter " + chr(0xFFFF) + " rtl " + chr(0x202E) + "abc e" + chr(0x301) + " tab" + chr(9) + "end"
+    created = api.client.post("/v1/missions", content=body(goal=unusual), headers=headers)
+    assert created.status_code == 201
+    assert api.client.get(f"/v1/missions/{created.json()['mission_id']}", headers=bearer(ALICE)).json()["goal"] == unusual

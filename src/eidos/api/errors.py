@@ -11,6 +11,7 @@ STATUS_OF = {
     "unauthenticated": 401,
     "no_tenant_membership": 403,
     "not_found": 404,
+    "method_not_allowed": 405,
     "tenant_required": 422,
     "invalid_spec": 422,
     "invalid_request": 422,
@@ -37,9 +38,10 @@ FAULT_MESSAGES = {
 }
 
 
-def error_response(code: str, message: str, details=()) -> JSONResponse:
+def error_response(code: str, message: str, details=(), *, headers: dict | None = None) -> JSONResponse:
     body: dict = {"code": code, "message": FAULT_MESSAGES.get(code, message)}
     if details:
         body["details"] = list(details)
-    headers = {"WWW-Authenticate": "Bearer"} if code == "unauthenticated" else None
-    return JSONResponse({"error": body}, status_code=STATUS_OF[code], headers=headers)
+    extra = {"WWW-Authenticate": "Bearer"} if code == "unauthenticated" else {}
+    extra.update(headers or {})
+    return JSONResponse({"error": body}, status_code=STATUS_OF[code], headers=extra or None)

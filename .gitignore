@@ -29,3 +29,6 @@ Thumbs.db
 *.db
 *.sqlite3
 .env
+.env.*
+*.pem
+*.key

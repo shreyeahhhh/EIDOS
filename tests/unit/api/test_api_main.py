@@ -140,3 +140,12 @@ def test_the_module_reads_the_environment_only_through_its_argument_and_logs_and
     calls = {node.func.id for node in ast.walk(tree) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)}
     assert not calls & {"print", "eval", "exec", "open"}
     assert "logging" not in source and "getLogger" not in source
+
+
+def test_a_shared_secret_shorter_than_an_hs256_key_may_be_is_refused_at_startup_naming_the_variable_and_not_the_value():
+    weak = "short-secret"
+    message = refuses(without(EIDOS_JWT_SECRET=weak))
+    assert "EIDOS_JWT_SECRET" in message and "32 bytes" in message and weak not in message
+    assert build_verifier({"EIDOS_JWT_SECRET": "x" * 32})._algorithms == ("HS256",)  # exactly the least is enough
+    with pytest.raises(ConfigurationError):
+        build_verifier({"EIDOS_JWT_SECRET": "x" * 31})

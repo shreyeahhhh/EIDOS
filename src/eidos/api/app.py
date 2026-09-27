@@ -22,6 +22,7 @@ from fastapi import Depends, FastAPI, Header, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from pydantic import ValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from eidos.contracts import MissionId
 from eidos.service import InvalidSpec, MissionService, MissionSpec, NotFound, PayloadTooLarge, RequestContext, ServiceError
@@ -75,6 +76,13 @@ def create_app(*, service: MissionService, verifier: JwtVerifier, max_body_bytes
     @app.exception_handler(RequestValidationError)
     async def _bad_request(request: Request, error: RequestValidationError) -> JSONResponse:
         return error_response("invalid_request", "the request is not valid", _details(error))
+
+    @app.exception_handler(StarletteHTTPException)
+    async def _framework_error(request: Request, error: StarletteHTTPException) -> JSONResponse:
+        """The framework's own 404 (no such path) and 405 (a path that does not take this method) in the same shape as every other error. Nothing else raises one."""
+        if error.status_code == 405:
+            return error_response("method_not_allowed", "this method is not allowed here", headers=dict(error.headers or {}))
+        return error_response("not_found", "no such resource")
 
     @app.exception_handler(Exception)
     async def _unexpected(request: Request, error: Exception) -> JSONResponse:

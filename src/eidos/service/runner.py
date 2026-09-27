@@ -15,6 +15,7 @@ is a service fault: an unexpected exception, persistence that failed after its b
 
 import logging
 import threading
+import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -42,8 +43,10 @@ def _reason(error: BaseException) -> str:
 
 
 class RunManager:
-    def __init__(self, *, repositories: Repositories, composition: Composition, config: RunnerConfig, now: Callable[[], datetime] = _now) -> None:
-        self._repositories, self._composition, self._config, self._now = repositories, composition, config, now
+    def __init__(
+        self, *, repositories: Repositories, composition: Composition, config: RunnerConfig, now: Callable[[], datetime] = _now, sleep: Callable[[float], None] = time.sleep
+    ) -> None:
+        self._repositories, self._composition, self._config, self._now, self._sleep = repositories, composition, config, now, sleep
         self._pool = ThreadPoolExecutor(max_workers=config.worker_pool_size, thread_name_prefix="eidos-run")
         self._lock = threading.Lock()
         self._idle = threading.Condition(self._lock)
@@ -104,15 +107,30 @@ class RunManager:
 
     # --- the run ---------------------------------------------------------------------------------------------------------------------
 
+    def _transition(self, tenant_id: TenantId, mission_id: MissionId, expected: tuple[RunStatus, ...], new: RunStatus, reason: str | None) -> bool:
+        """A worker's compare-and-set, surviving a transient store fault: the flush's own bound (``flush_attempts`` tries, a growing pause between them), and then the fault is raised.
+
+        A row left ``queued`` or ``running`` by a fault that outlasts this bound is counted as active (it holds its tenant's limit) and misreports the run until the next startup marks it ``interrupted``;
+        a short outage must not do that, so the last words of a run are not a single try. ``start`` makes one try only: it holds the runner's lock, and its caller can simply ask again.
+        """
+        for attempt in range(self._config.flush_attempts):
+            try:
+                return self._repositories.missions.transition(tenant_id, mission_id, expected=expected, new=new, reason=reason, at=self._now())
+            except StorageError:
+                if attempt + 1 == self._config.flush_attempts:
+                    raise
+                self._sleep(self._config.flush_backoff_seconds * (attempt + 1))
+        raise AssertionError("unreachable")  # flush_attempts is at least 1
+
     def _finish(self, tenant_id: TenantId, mission_id: MissionId, expected: tuple[RunStatus, ...], new: RunStatus, reason: str | None) -> None:
         try:
-            self._repositories.missions.transition(tenant_id, mission_id, expected=expected, new=new, reason=reason, at=self._now())
+            self._transition(tenant_id, mission_id, expected, new, reason)
         except Exception:  # noqa: BLE001 - nothing more can be done from here; a stuck row is recovered as interrupted at the next startup
-            pass
+            _log.exception("run %s of tenant %s: its final status %s could not be recorded; startup will mark it interrupted", mission_id, tenant_id, new.value)
 
     def _run(self, tenant_id: TenantId, mission_id: MissionId) -> None:
         try:
-            if not self._repositories.missions.transition(tenant_id, mission_id, expected=(RunStatus.QUEUED,), new=RunStatus.RUNNING, reason=None, at=self._now()):
+            if not self._transition(tenant_id, mission_id, (RunStatus.QUEUED,), RunStatus.RUNNING, None):
                 return  # something else moved it (startup recovery, in a test): nothing to run
             status, reason = self._execute(tenant_id, mission_id)
             self._finish(tenant_id, mission_id, (RunStatus.RUNNING,), status, reason)

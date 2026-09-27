@@ -46,6 +46,9 @@ from .errors import InvalidSpec
 RESERVED_REF_PREFIXES = ("artifact:", "evidence:", "tool:")  # the namespaces the runtime writes its own artifacts under (a supplied ref there would collide with a step or a gate)
 _REF = re.compile(r"^[A-Za-z0-9][A-Za-z0-9:._/-]{0,127}$")  # a reference a model can cite as [[ref]]
 _BUDGETS = ("max_retries", "max_replans", "max_agent_calls", "max_tool_calls", "max_execution_time", "max_tokens")
+# Text PostgreSQL cannot store: a NUL character (its text and jsonb types refuse it). (A lone surrogate, which has no UTF-8 form either, cannot reach here: the strict ``str`` of every EIDOS model refuses it.)
+# Free text that holds a NUL is refused at the door (422), and text a model produces holds none once it has passed ``storable`` (composition.py); either would otherwise be a 500 or a run whose events cannot be written.
+UNSTORABLE = re.compile(chr(0))
 
 
 class SuppliedDocument(EidosModel):
@@ -127,6 +130,7 @@ def validate_spec(spec: MissionSpec, *, ceilings: ApiCeilings, allowed_actions: 
             problems.append(_problem(f"reliability.{name}", f"{value} is above the system ceiling {getattr(limits, name)}"))
 
     problems.extend(_document_problems(spec, ceilings))
+    problems.extend(_unstorable_problems(spec))
     if problems:
         raise InvalidSpec("the mission specification is not acceptable", details=tuple(problems))
 
@@ -158,6 +162,15 @@ def _document_problems(spec: MissionSpec, ceilings: ApiCeilings) -> list[dict]:
     if total > ceilings.max_total_document_bytes:
         problems.append(_problem("supplied_documents", f"{total} bytes in all; the ceiling is {ceilings.max_total_document_bytes}"))
     return problems
+
+
+def _unstorable_problems(spec: MissionSpec) -> list[dict]:
+    """Every free-text field that holds a character the durable store cannot keep (see ``UNSTORABLE``)."""
+    fields: list[tuple[str, str]] = [("goal", spec.goal)]
+    fields += [(f"information_dependencies[{i}]", str(item)) for i, item in enumerate(spec.information_dependencies)]
+    for i, document in enumerate(spec.supplied_documents):
+        fields += [(f"supplied_documents[{i}].ref", document.ref), (f"supplied_documents[{i}].content_type", document.content_type), (f"supplied_documents[{i}].content", document.content)]
+    return [_problem(where, "holds a NUL character, which cannot be stored") for where, value in fields if UNSTORABLE.search(value)]
 
 
 def spec_digest(spec: MissionSpec) -> str:

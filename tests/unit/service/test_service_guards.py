@@ -168,7 +168,7 @@ def test_route_handlers_are_plain_functions_because_the_runtime_is_synchronous()
     tree = ast.parse((API / "app.py").read_text(encoding="utf-8"))
     for node in ast.walk(tree):
         if isinstance(node, ast.AsyncFunctionDef):
-            assert node.name in {"lifespan", "raw_body", "_service_error", "_unauthenticated", "_auth_unavailable", "_bad_request", "_unexpected"}, node.name
+            assert node.name in {"lifespan", "raw_body", "_service_error", "_unauthenticated", "_auth_unavailable", "_bad_request", "_framework_error", "_unexpected"}, node.name
         if isinstance(node, ast.FunctionDef) and any(isinstance(d, ast.Call) and isinstance(d.func, ast.Attribute) and d.func.attr in {"get", "post"} for d in node.decorator_list):
             assert node.name in {"healthz", "create_mission", "start_mission", "get_mission", "get_execution", "get_events", "get_result", "get_evidence"}, node.name
 
@@ -294,3 +294,56 @@ def test_the_carrier_state_is_built_by_one_function_that_folds_one_created_event
 def test_no_new_package_imports_the_knowledge_package(package):
     for path in modules(package):
         assert "knowledge" not in eidos_targets(path), path.name
+
+
+# --- no credential in the repository -----------------------------------------------------------------------------------------------------------
+
+
+_SKIP_DIRECTORIES = {".git", "__pycache__", ".venv", "venv", "env", ".pytest_cache", "node_modules", ".ruff_cache", "eidos.egg-info"}
+_SECRET_SHAPES = {
+    "a private key block": re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
+    "a JWT (three base64url segments)": re.compile(r"eyJ[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]{10,}"),
+    "an AWS access key id": re.compile(r"AKIA[0-9A-Z]{16}"),
+    "an API secret key (sk-...)": re.compile(r"\bsk-[A-Za-z0-9]{20,}"),
+    "a GitHub token": re.compile(r"\bgh[pousr]_[A-Za-z0-9]{30,}"),
+    "a Slack token": re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}"),
+    "a Supabase project host": re.compile(r"\b[a-z0-9]{20}\.supabase\.(?:co|com)\b"),
+}
+_URL_WITH_PASSWORD = re.compile(r"(?:postgres(?:ql)?|mysql|redis|mongodb)://[^:/@\s\"']+:([^@\s\"']+)@")
+_CANARIES = ("hunter2", "{PASSWORD}", "{secret}")  # deliberate fake values that tests plant to prove a secret is never echoed
+
+
+def _repository_files():
+    for path in sorted(ROOT.rglob("*")):
+        if path.is_file() and not (set(path.relative_to(ROOT).parts) & _SKIP_DIRECTORIES) and path.suffix in {".py", ".md", ".toml", ".sql", ".txt", ".cfg", ".ini", ".yml", ".yaml", ".json", ".env", ""}:
+            yield path
+
+
+def test_no_credential_key_token_or_password_url_is_committed():
+    """The audit's secrets scan, kept: no private key block, JWT, cloud or platform token, Supabase project host or connection string with a password anywhere in the tree (tests plant a few deliberate fake
+    canary values to prove a secret is never echoed; those are the only allowed exceptions)."""
+    found = []
+    for path in _repository_files():
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        for label, pattern in _SECRET_SHAPES.items():
+            if pattern.search(text):
+                found.append(f"{path.relative_to(ROOT)}: {label}")
+        for match in _URL_WITH_PASSWORD.finditer(text):
+            if not any(canary in match.group(0) for canary in _CANARIES):
+                found.append(f"{path.relative_to(ROOT)}: a connection string with a password")
+    assert found == []
+
+
+def test_no_environment_or_key_file_is_in_the_tree_and_the_ignore_file_keeps_it_that_way():
+    names = {path.name for path in ROOT.rglob("*") if path.is_file() and not (set(path.relative_to(ROOT).parts) & _SKIP_DIRECTORIES)}
+    assert not {name for name in names if name == ".env" or name.startswith(".env.") or name.endswith((".pem", ".key", ".p12", ".pfx"))}
+    ignored = (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+    assert {".env", ".env.*", "*.pem", "*.key"} <= {line.strip() for line in ignored}
+
+
+def test_the_production_source_holds_no_literal_secret_and_reads_its_configuration_from_the_environment_only():
+    literal = re.compile(r"(?i)(password|passwd|secret|api_key|apikey|token)\s*=\s*[\"'][^\"']{6,}[\"']")
+    for package in (API, SERVICE, PERSISTENCE):
+        for path in modules(package):
+            assert not literal.search(path.read_text(encoding="utf-8")), path.relative_to(SRC)
+    assert "environ" in (API / "main.py").read_text(encoding="utf-8")  # the one place configuration enters, and only by name

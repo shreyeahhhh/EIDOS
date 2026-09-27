@@ -27,7 +27,10 @@ from eidos.agents import (
     EvidenceLedger,
     KnowledgeBaseDescriptor,
     KnowledgeGate,
+    ModelFailure,
     ModelPort,
+    ModelRequest,
+    ModelResponse,
     ResearchAgent,
     VerificationAgent,
 )
@@ -50,7 +53,34 @@ from eidos.runtime import AdmissionDecision, AdmissionRequest, SequentialExecuto
 from .config import ANALYSIS_AGENT_ID, RESEARCH_AGENT_ID, ServiceConfig
 from .durable import DurableEventLog, RunPersistence, WriteThroughArtifactStore
 from .ports import EventStore, MissionRecord
-from .spec import contract_and_genome, initial_state
+from .spec import UNSTORABLE, contract_and_genome, initial_state
+
+
+def storable(text: str) -> str:
+    """``text`` with every NUL replaced by U+FFFD: what PostgreSQL cannot store, in the standard replacement for what cannot be represented."""
+    return UNSTORABLE.sub(chr(0xFFFD), text)
+
+
+class StorableModel:
+    """A ``ModelPort`` that hands the runtime only text the durable store can keep.
+
+    A model can answer with a NUL (a small local model sometimes does), and PostgreSQL refuses one in text and in jsonb. Left alone it would make the artifact, and every event queued behind it, unwritable:
+    the mission would finish in memory and the run would end ``error`` with a short prefix. Replacing it here, at the port and before anything is recorded, means the runtime sees, records and cites the same
+    text the store holds, so the durable log is still exactly the runtime's log. Nothing else about the answer changes.
+    """
+
+    def __init__(self, inner: ModelPort) -> None:
+        self._inner = inner
+
+    def complete(self, request: ModelRequest):
+        result = self._inner.complete(request)
+        if isinstance(result, ModelResponse):
+            text = storable(result.text)
+            return result if text == result.text else ModelResponse(text=text, measured=result.measured)
+        if isinstance(result, ModelFailure):
+            message = storable(result.message)
+            return result if message == result.message else ModelFailure(kind=result.kind, message=message)
+        return result
 
 
 class AlwaysAdmit:
@@ -138,7 +168,7 @@ class Composition:
         if self._knowledge is not None:
             port = RecordingKnowledgePort(self._knowledge.port, tracker, clock)
             knowledge = KnowledgeGate(descriptor=self._knowledge.descriptor, port=port, ledger=EvidenceLedger(), store=store)
-        model = RecordingModel(self._model, tracker)
+        model = RecordingModel(StorableModel(self._model), tracker)
         research = ResearchAgent(model=model, settings=config.model_settings, store=store, **({} if knowledge is None else {"knowledge": knowledge}))
         analysis = AnalysisAgent(model=model, settings=config.model_settings, store=store)
         agents = {

@@ -430,6 +430,8 @@ def test_every_error_has_one_shape_and_no_stack_or_internal_name():
         api.client.get(f"/v1/missions/{uuid4()}", headers=api.headers()),
         create(api, body=b"nope"),
         get(api, f"/v1/missions/{uuid4()}/events?limit=0"),
+        api.client.get("/v1/nope", headers=api.headers()),
+        api.client.delete(f"/v1/missions/{uuid4()}", headers=api.headers()),
     ]
     for response in samples:
         body = response.json()
@@ -481,3 +483,55 @@ def test_leaving_the_app_runs_its_closers_after_the_runner_is_shut_down():
     with TestClient(app):
         assert order == []
     assert order == ["runner", "closer"]
+
+
+# --- V1.4-C acceptance audit ------------------------------------------------------------------------------------------------------------------------
+
+
+def test_free_text_holding_a_nul_is_a_422_naming_the_field_and_never_a_500():
+    """Found over a real PostgreSQL: a NUL in the goal, an information dependency or a document was a 500 (the database refuses it). The door refuses it whatever the storage is."""
+    api = make_api()
+    nul = chr(0)
+    body = json.loads(spec_json())
+    body["goal"] = "a" + nul + "b"
+    body["information_dependencies"] = ["ok", "dep" + nul]
+    body["supplied_documents"][0]["content"] = "x" + nul
+    response = create(api, body=json.dumps(body))
+    assert response.status_code == 422 and response.json()["error"]["code"] == "invalid_spec"
+    assert {"goal", "information_dependencies[1]", "supplied_documents[0].content"} <= {item["field"] for item in response.json()["error"]["details"]}
+    assert api.rig.storage._missions == {}
+
+
+def test_a_path_or_a_method_the_api_does_not_have_answers_in_the_same_error_shape_as_every_other_error():
+    api = make_api()
+    missing = api.client.get("/v1/nope", headers=api.headers())
+    assert missing.status_code == 404 and missing.json() == {"error": {"code": "not_found", "message": "no such resource"}}
+    for method, path in (("POST", "/v1/healthz"), ("DELETE", f"/v1/missions/{uuid4()}"), ("PUT", "/v1/missions"), ("GET", f"/v1/missions/{uuid4()}/start")):
+        wrong = api.client.request(method, path, headers=api.headers())
+        assert wrong.status_code == 405 and wrong.json()["error"]["code"] == "method_not_allowed" and set(wrong.json()) == {"error"}, (method, path)
+        assert "allow" in wrong.headers  # the framework's own hint survives
+    assert api.client.get("/nope").json()["error"]["code"] == "not_found"  # even without a token: it is not an authenticated route
+
+
+def test_every_code_the_api_can_answer_with_is_documented_in_section_8_of_docs_13():
+    from pathlib import Path
+
+    from eidos.api.errors import STATUS_OF
+
+    text = (Path(__file__).resolve().parents[3] / "docs" / "13_product_backend.md").read_text(encoding="utf-8")
+    section = text[text.index("## 8. Failure semantics"):text.index("## 9. The configuration profile")]
+    assert {code for code in STATUS_OF if f"`{code}`" not in section} == set()
+    for code, status in STATUS_OF.items():
+        row = next(line for line in section.splitlines() if f"`{code}`" in line and line.startswith("|"))
+        assert str(status) in row, (code, status, row)
+
+
+def test_many_simultaneous_creates_with_one_key_make_one_mission_and_a_different_body_conflicts():
+    api = make_api()
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(8) as pool:
+        answers = list(pool.map(lambda _: create(api, key="race"), range(8)))
+    assert sorted(r.status_code for r in answers) == [200] * 7 + [201]
+    assert len({r.json()["mission_id"] for r in answers}) == 1 and len(api.rig.storage._missions) == 1
+    assert create(api, key="race", goal="another").status_code == 409

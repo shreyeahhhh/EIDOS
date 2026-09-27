@@ -296,3 +296,74 @@ def test_the_provisional_limits_and_ceilings_are_labelled_as_such_and_the_admiss
     assert "PROVISIONAL" in config_module.__doc__ and "PROVISIONAL" in config_module.ApiCeilings.__doc__ and "PROVISIONAL" in config_module.provisional_system_limits.__doc__
     assert "enforces no budget" in composition_module.AlwaysAdmit.__doc__
     assert provisional_system_limits().max_nodes > 0
+
+
+# --- V1.4-C acceptance audit: a store fault around the edges of a run ------------------------------------------------------------------------------
+
+
+class Flaky:
+    """Wraps a storage's ``transition`` so it raises ``StorageError`` for the first ``failures`` calls that move a run to one of ``targets``."""
+
+    def __init__(self, storage, targets, failures):
+        self.storage, self.targets, self.failures, self.calls = storage, set(targets), failures, 0
+        self.original = storage.transition
+
+    def __call__(self, tenant_id, mission_id, *, expected, new, reason, at):
+        if new in self.targets:
+            self.calls += 1
+            if self.calls <= self.failures:
+                raise StorageError("down")
+        return self.original(tenant_id, mission_id, expected=expected, new=new, reason=reason, at=at)
+
+
+def test_a_short_outage_at_the_end_of_a_run_does_not_leave_the_row_running(monkeypatch):
+    sleeps = []
+    rig = make_rig(runner=RunnerConfig(flush_attempts=3, flush_backoff_seconds=0.5), sleep=sleeps.append)
+    flaky = Flaky(rig.storage, {RunStatus.FINISHED}, failures=2)
+    monkeypatch.setattr(rig.storage, "transition", flaky)
+    context, mission_id = created(rig)
+    summary = rig.run_to_the_end(context, mission_id)
+    assert summary.run_status is RunStatus.FINISHED and flaky.calls == 3  # two failures, then the third try recorded it
+    assert sleeps == [0.5, 1.0]  # a growing pause between the tries, and no other pause
+
+
+def test_an_outage_that_outlasts_the_bound_leaves_the_row_for_startup_to_interrupt_and_never_raises(monkeypatch, caplog):
+    sleeps = []
+    rig = make_rig(runner=RunnerConfig(flush_attempts=3, flush_backoff_seconds=0.5), sleep=sleeps.append)
+    flaky = Flaky(rig.storage, {RunStatus.FINISHED}, failures=10**6)
+    monkeypatch.setattr(rig.storage, "transition", flaky)
+    context, mission_id = created(rig)
+    with caplog.at_level("ERROR", logger="eidos.service.runner"):
+        summary = rig.run_to_the_end(context, mission_id)
+    assert flaky.calls == 3 and sleeps == [0.5, 1.0]  # bounded: exactly the attempts configured, then it stops
+    assert summary.run_status is RunStatus.RUNNING and summary.mission_status is MissionStatus.COMPLETED  # the log says what the mission came to; the row could not be told
+    assert "could not be recorded" in caplog.text and str(mission_id) in caplog.text
+    monkeypatch.undo()
+    assert rig.service.startup() == 1  # and the next startup marks it interrupted, as designed
+    assert rig.service.get_mission(context, mission_id).run_status is RunStatus.INTERRUPTED
+
+
+def test_a_short_outage_when_a_run_begins_does_not_strand_it_queued(monkeypatch):
+    rig = make_rig(runner=RunnerConfig(flush_attempts=3, flush_backoff_seconds=0.0))
+    flaky = Flaky(rig.storage, {RunStatus.RUNNING}, failures=2)
+    monkeypatch.setattr(rig.storage, "transition", flaky)
+    context, mission_id = created(rig)
+    assert rig.run_to_the_end(context, mission_id).run_status is RunStatus.FINISHED and flaky.calls == 3
+
+
+def test_an_outage_at_start_is_a_503_for_the_caller_to_retry_and_the_mission_stays_startable(monkeypatch):
+    from eidos.service import StorageUnavailable
+
+    rig = make_rig()
+    context, mission_id = created(rig)
+    original = rig.storage.count_active
+
+    def down(tenant_id):
+        raise StorageError("down")
+
+    monkeypatch.setattr(rig.storage, "count_active", down)
+    with pytest.raises(StorageUnavailable):
+        rig.service.start_mission(context, mission_id)
+    monkeypatch.setattr(rig.storage, "count_active", original)
+    assert rig.service.get_mission(context, mission_id).run_status is RunStatus.CREATED
+    assert rig.run_to_the_end(context, mission_id).run_status is RunStatus.FINISHED  # nothing was left half-done: the same mission starts
