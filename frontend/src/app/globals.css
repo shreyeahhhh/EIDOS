@@ -51,6 +51,9 @@
   --color-info-soft: #dfe7ec;
 
   --shadow-card: 0 1px 2px 0 rgb(23 22 28 / 0.04), 0 1px 1px 0 rgb(23 22 28 / 0.03);
+  --shadow-raised: 0 8px 24px -8px rgb(23 22 28 / 0.16), 0 2px 6px -2px rgb(23 22 28 / 0.08);
+
+  --ease-standard: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -82,6 +85,7 @@
     --color-info-soft: #1c2933;
 
     --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.3), 0 1px 1px 0 rgb(0 0 0 / 0.2);
+    --shadow-raised: 0 8px 24px -8px rgb(0 0 0 / 0.5), 0 2px 6px -2px rgb(0 0 0 / 0.3);
   }
 }
 
@@ -139,6 +143,19 @@
   }
 }
 
+@layer utilities {
+  /* Scroll-reveal for the landing page only (`Reveal` in components/landing): a small opacity/translate
+     step, never a slide-in-from-offscreen or bounce. Starts visible — JS adds `.is-hidden` only once an
+     IntersectionObserver confirms it can reveal the element, so content is never lost to a script error. */
+  .reveal.is-hidden {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  .reveal {
+    transition: opacity 0.6s var(--ease-standard), transform 0.6s var(--ease-standard);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -147,5 +164,10 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
+  }
+
+  .reveal.is-hidden {
+    opacity: 1;
+    transform: none;
   }
 }

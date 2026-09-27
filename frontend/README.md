@@ -70,13 +70,16 @@ src/
   components/
     ui/                            shared primitives (Button, Card, Badge, Field, Callout, Skeleton, EmptyState, ErrorState)
     layout/                        PageHeader, Section — the workspace's only structure
-    site/                          header/footer, sign-out
+    site/                          header (marketing nav signed-out, app nav signed-in) / footer, sign-out
     auth/                          the login form
-    mission/                       creation form, dashboard, MissionCard, MissionStatusPair, ExecutionMetrics, the workspace itself, and the two shared access states (no-workspace-access, tenant-required)
+    mission/                       creation form, dashboard, MissionCard, MissionHeader, MissionStatusPair, ExecutionMetrics, the workspace itself, and the two shared access states (no-workspace-access, tenant-required)
     execution/                     ExecutionTimeline (plain-language event descriptions, raw payload behind a disclosure)
     plan/                          PlanGraph (a hand-built SVG DAG, no graph library) and ReplanLineage
     evidence/                      EvidencePanel
     result/                        ResultPanel, VerificationPanel, ArtifactCard
+    landing/                       the landing page's own sections (Reveal, MissionLoopVisual, ProductThesis, HowItWorks,
+                                    WhyEidos, ProductPreview, ModelIndependent, Principles, BuildWithEidos) — composed only
+                                    by `app/page.tsx`, never imported into the authenticated app
   lib/
     supabase/                      browser and server Supabase clients
     api/                           typed client, hand-written types mirroring the backend, ApiError
@@ -116,11 +119,38 @@ src/
   artifact existing is never presented as the same fact as it having been verified, and a verdict is
   its own reason text, never a score or a percentage.
 
+## Design
+
+The landing page and every application page share one visual language: Fraunces for display moments
+only, Inter for interface text, JetBrains Mono for technical metadata; a warm off-white/deep-ink palette
+with one restrained terracotta accent (never a generic AI purple); status shown as a colored dot plus its
+own label (`Badge`), never a filled pill; whitespace and typographic hierarchy doing the work generic
+cards used to do.
+
+The landing page (`app/page.tsx`, `components/landing/`) demonstrates the product rather than describing
+it: a live Mission → Plan → Execute → Verify → Result visual in the hero, one interactive Plan/Execute/
+Verify/Learn section (not three overlapping ones — the loop is explained in exactly one place), and a
+"see it work" preview that renders the *real* `PlanGraph`/`ReplanLineage`/`ExecutionTimeline`/
+`MissionStatusPair` components against static, honestly-captioned example data — not a mockup drawn to
+look like the product, the actual product code. Engineering-principles copy is drawn from this project's
+own CLAUDE.md invariants, not invented marketing language. Scroll-reveal (`Reveal`) and the hero's
+auto-advancing stages both respect `prefers-reduced-motion`.
+
 ## Status
 
-**V1.5-A** (foundation, real Supabase auth, mission creation) and **V1.5-B** (the mission dashboard and
-workspace: timeline, plan graph, replan lineage, result, verification, evidence) are both built and
-verified. V1.5-C (hardening + closeout) has not started.
+**V1.5-A** (foundation, real Supabase auth, mission creation), **V1.5-B** (the mission dashboard and
+workspace: timeline, plan graph, replan lineage, result, verification, evidence), and a **visual + UX
+redesign pass** (landing page rebuild, app-page visual language, no functional or contract changes) are
+built and verified. V1.5-C (hardening + closeout) has not started.
+
+- The redesign pass touched presentation only: no backend file, no API contract, no Supabase auth flow
+  and no data-fetching logic changed. `git diff --stat -- ':!frontend'` is empty for this pass.
+- Verified live in the browser (dark and light, desktop and mobile) against the real, running dev server:
+  the full landing page including the interactive tab section and the auto-advancing hero visual, and the
+  `/login` page. `/missions`, `/missions/new` and `/missions/[id]` were verified by type-check, lint, the
+  component test suite and code review, but not re-exercised live in this pass — this session held no
+  Supabase session to sign in with (V1.5-B already verified their real data flow against the real backend;
+  this pass changed only their layout and copy, not the calls or the state machines underneath).
 
 - `npm run typecheck`, `npm run lint`, `npm run test` (43 tests) all pass; `npm run build` succeeds.
 - **Exercised live in the browser** against the owner's real Supabase project and a real local FastAPI

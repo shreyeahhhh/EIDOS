@@ -12,7 +12,7 @@ interface SectionProps {
  * only structure — never a card-per-section, so the page reads as one continuous document, not a grid of boxes. */
 export function Section({ id, title, description, actions, children }: SectionProps) {
   return (
-    <section id={id} className="scroll-mt-24 border-t border-border py-10 first:border-t-0 first:pt-0">
+    <section id={id} className="scroll-mt-40 border-t border-border py-10 first:border-t-0 first:pt-0">
       <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 className="font-display text-xl text-ink">{title}</h2>

@@ -9,13 +9,13 @@ export const metadata: Metadata = { title: "Missions" };
 
 export default function MissionsPage() {
   return (
-    <div className="mx-auto max-w-3xl px-6 py-16">
+    <div className="mx-auto max-w-4xl px-6 py-16">
       <PageHeader
         title="Missions"
-        description="Missions you've created in this browser. EIDOS itself remains the source of truth for each one."
+        description="Your execution workspace. EIDOS remains the source of truth for each mission's state — this browser only remembers which ones to ask about."
         actions={
           <Link href="/missions/new" className={buttonClassName("primary", "md")}>
-            New mission
+            + New mission
           </Link>
         }
       />

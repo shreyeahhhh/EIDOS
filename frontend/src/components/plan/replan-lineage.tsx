@@ -30,13 +30,19 @@ export function ReplanLineage({ events }: { events: EventRecord[] }) {
   plans.sort((a, b) => a.version - b.version);
 
   return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-3 text-sm">
+    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-3 text-sm">
       {plans.map((plan, index) => {
         const isCurrent = index === plans.length - 1;
         const reason = reasons.get(plan.planId);
         return (
-          <span key={plan.planId} className="flex items-center gap-2">
-            <span className={isCurrent ? "font-medium text-ink" : "text-ink-faint"}>
+          <span key={plan.planId} className="flex items-center gap-1.5">
+            <span
+              className={
+                isCurrent
+                  ? "rounded-md border border-accent bg-accent-soft px-2.5 py-1 font-medium text-accent-strong"
+                  : "rounded-md border border-border px-2.5 py-1 text-ink-faint"
+              }
+            >
               Plan v{plan.version}
               {isCurrent && " (current)"}
             </span>
@@ -45,7 +51,7 @@ export function ReplanLineage({ events }: { events: EventRecord[] }) {
                 <span aria-hidden="true" className="text-ink-faint">
                   →
                 </span>
-                <span className="text-ink-faint">{reason}</span>
+                <span className="rounded-md border border-error/30 bg-error-soft px-2.5 py-1 text-xs text-error">{reason}</span>
                 <span aria-hidden="true" className="text-ink-faint">
                   →
                 </span>

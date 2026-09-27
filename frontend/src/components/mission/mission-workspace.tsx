@@ -6,12 +6,9 @@ import { useEffect, useState } from "react";
 import { getEvents, getEvidence, getExecution, getResult, startMission } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/errors";
 import { forgetMission } from "@/lib/mission-index";
-import { formatDateTime } from "@/lib/status";
 import { useApiResource } from "@/lib/use-api-resource";
 import { useMissionStatus } from "@/lib/use-mission-status";
 import { Section } from "@/components/layout/section";
-import { Button } from "@/components/ui/button";
-import { Callout } from "@/components/ui/callout";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,8 +17,7 @@ import { PlanGraph } from "@/components/plan/plan-graph";
 import { ReplanLineage } from "@/components/plan/replan-lineage";
 import { EvidencePanel } from "@/components/evidence/evidence-panel";
 import { ResultPanel } from "@/components/result/result-panel";
-import { ExecutionMetrics } from "./execution-metrics";
-import { MissionStatusPair } from "./mission-status-pair";
+import { MissionHeader } from "./mission-header";
 import { NoWorkspaceAccess } from "./no-workspace-access";
 import { TenantRequiredForm } from "./tenant-required-form";
 
@@ -118,33 +114,7 @@ export function MissionWorkspace({ missionId }: { missionId: string }) {
 
   return (
     <div className="flex flex-col">
-      <header className="sticky top-0 z-10 -mx-6 border-b border-border bg-[var(--color-surface-elevated)] px-6 py-6 backdrop-blur-sm sm:mx-0 sm:rounded-b-lg">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <h1 className="font-display text-2xl text-ink sm:text-3xl">{mission.goal}</h1>
-            <p className="mt-1 font-mono text-xs text-ink-faint">Created {formatDateTime(mission.created_at)}</p>
-          </div>
-          {mission.run_status === "created" && (
-            <Button onClick={handleStart} disabled={starting} className="shrink-0">
-              {starting ? "Starting…" : "Start mission"}
-            </Button>
-          )}
-        </div>
-        <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2">
-          <MissionStatusPair runStatus={mission.run_status} missionStatus={mission.mission_status} />
-          {mission.counters && <ExecutionMetrics counters={mission.counters} />}
-        </div>
-        {startError && (
-          <Callout tone="error" className="mt-4">
-            {startError}
-          </Callout>
-        )}
-        {mission.run_status_reason && !hasEvents && (
-          <Callout tone={mission.run_status === "rejected" ? "warning" : "error"} className="mt-4">
-            {mission.run_status_reason}
-          </Callout>
-        )}
-      </header>
+      <MissionHeader mission={mission} hasEvents={hasEvents} starting={starting} startError={startError} onStart={handleStart} />
 
       {hasEvents && (
         <nav aria-label="Mission sections" className="mt-6 flex gap-1 overflow-x-auto border-b border-border">
@@ -152,7 +122,7 @@ export function MissionWorkspace({ missionId }: { missionId: string }) {
             <a
               key={section.id}
               href={`#${section.id}`}
-              className="shrink-0 px-3 py-2 text-sm text-ink-muted hover:text-ink"
+              className="shrink-0 border-b-2 border-transparent px-3 py-3 text-sm text-ink-muted transition-colors hover:border-border-strong hover:text-ink"
             >
               {section.label}
             </a>

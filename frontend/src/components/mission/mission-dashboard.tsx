@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { getMission } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/errors";
-import type { MissionSummary } from "@/lib/api/types";
+import type { MissionSummary, RunStatus } from "@/lib/api/types";
 import { forgetMission, listIndexedMissions } from "@/lib/mission-index";
+import { RUN_STATUS_LABEL } from "@/lib/status";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
@@ -22,6 +23,10 @@ type LoadState =
   | { name: "error"; message: string }
   | { name: "ready"; missions: MissionSummary[] };
 
+/** Only worth showing once there's enough to actually search or sort through. */
+const FILTER_THRESHOLD = 6;
+const RUN_STATUS_OPTIONS: RunStatus[] = ["created", "queued", "running", "finished", "rejected", "interrupted", "error"];
+
 /**
  * Lists this browser's remembered missions (`lib/mission-index`), fetching each live from the
  * backend — the index only says *which ids to ask about*, never a mission's actual state. An id the
@@ -30,6 +35,8 @@ type LoadState =
 export function MissionDashboard() {
   const [state, setState] = useState<LoadState>({ name: "loading" });
   const [reloadToken, setReloadToken] = useState(0);
+  const [query, setQuery] = useState("");
+  const [runFilter, setRunFilter] = useState<RunStatus | "all">("all");
 
   useEffect(() => {
     let cancelled = false;
@@ -84,6 +91,15 @@ export function MissionDashboard() {
     };
   }, [reloadToken]);
 
+  const filtered = useMemo(() => {
+    if (state.name !== "ready") return [];
+    return state.missions.filter((mission) => {
+      if (runFilter !== "all" && mission.run_status !== runFilter) return false;
+      if (query.trim() && !mission.goal.toLowerCase().includes(query.trim().toLowerCase())) return false;
+      return true;
+    });
+  }, [state, query, runFilter]);
+
   if (state.name === "loading") {
     return (
       <div className="flex flex-col gap-4">
@@ -115,18 +131,51 @@ export function MissionDashboard() {
     );
   }
 
+  const showFilters = state.missions.length >= FILTER_THRESHOLD;
+
   return (
     <div className="flex flex-col">
-      <div className="mb-2 flex justify-end">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        {showFilters ? (
+          <div className="flex flex-1 flex-wrap items-center gap-3">
+            <input
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search by objective…"
+              aria-label="Search missions by objective"
+              className="w-full max-w-xs rounded-md border border-border-strong bg-surface-raised px-3 py-1.5 text-sm text-ink placeholder:text-ink-faint focus-visible:border-accent"
+            />
+            <select
+              value={runFilter}
+              onChange={(event) => setRunFilter(event.target.value as RunStatus | "all")}
+              aria-label="Filter by run status"
+              className="rounded-md border border-border-strong bg-surface-raised px-3 py-1.5 text-sm text-ink focus-visible:border-accent"
+            >
+              <option value="all">Every run status</option>
+              {RUN_STATUS_OPTIONS.map((status) => (
+                <option key={status} value={status}>
+                  {RUN_STATUS_LABEL[status]}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <span />
+        )}
         <Button variant="ghost" size="sm" onClick={() => setReloadToken((token) => token + 1)}>
           Refresh
         </Button>
       </div>
-      <div className="border-t border-border">
-        {state.missions.map((mission) => (
-          <MissionCard key={mission.mission_id} mission={mission} />
-        ))}
-      </div>
+      {filtered.length === 0 ? (
+        <EmptyState title="No missions match">Try a different search or run status.</EmptyState>
+      ) : (
+        <div className="border-t border-border">
+          {filtered.map((mission) => (
+            <MissionCard key={mission.mission_id} mission={mission} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
