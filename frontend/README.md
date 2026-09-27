@@ -97,12 +97,23 @@ refresh/route protection), and mission creation are built and verified:
   disposable PostgreSQL (not a mock): `GET /api/eidos/healthz` round-trips correctly, and a protected
   path with no session correctly short-circuits to `401 unauthenticated` (`WWW-Authenticate: Bearer`)
   without even reaching FastAPI.
-- **Not exercised** (needs the real Supabase project's URL/key and a backend configured with its
-  `EIDOS_JWKS_URL`, plus a real `tenant_members` row for a real test user — all owner-provided, never
-  fabricated here): an actual person signing in, session refresh across a real session, logout, an
-  authenticated mission creation, and the `no_tenant_membership`/`tenant_required` states against a
-  real account. These are the integration checks the owner should run once real credentials exist;
-  see the repository root's session report for the exact list.
+- **The whole real-auth chain was then exercised for real** (2026-09-27), against the owner's actual
+  Supabase project and a local FastAPI instance configured with its real `EIDOS_JWKS_URL`, over the
+  same disposable PostgreSQL: the owner signed in with a real account through the real login form;
+  the session persisted across a full page reload; sign-out revoked access (a direct request to a
+  protected route redirected back to `/login`); the account had no `tenant_members` row yet, and the
+  app correctly showed the "no workspace access" state instead of pretending otherwise (`403
+  no_tenant_membership`, exactly as documented); a test membership row was then inserted directly into
+  the local disposable database (never Supabase, which holds no such table) for that account's real
+  user id, read from its own already-authenticated session (never requested from Supabase with an
+  elevated credential); after that, mission creation succeeded for real — the created `mission_id`,
+  `tenant_id` and `created_by` all match what is in the database — and starting it ran the mission to
+  a real, recorded outcome (`MISSION_CREATED` → `PLAN_GENERATED` → `PLAN_COMPILED` → `NODE_STARTED` →
+  two `NODE_SETTLED` → `MISSION_FAILED`, because no real model provider was configured for this local
+  smoke test — an honest failure, not a defect). Every item of the "real auth verification" checklist
+  holds.
+- **Not exercised**: anything against a real production Postgres or a deployed backend (only a local,
+  disposable one was used); a real model provider (V1.4's own limitation, unrelated to the frontend).
 
 V1.5-B (dashboard, execution timeline, plan/evidence/result views) and V1.5-C (hardening + closeout)
 have not been started.
