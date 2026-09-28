@@ -139,9 +139,29 @@ auto-advancing stages both respect `prefers-reduced-motion`.
 ## Status
 
 **V1.5-A** (foundation, real Supabase auth, mission creation), **V1.5-B** (the mission dashboard and
-workspace: timeline, plan graph, replan lineage, result, verification, evidence), and a **visual + UX
-redesign pass** (landing page rebuild, app-page visual language, no functional or contract changes) are
-built and verified. V1.5-C (hardening + closeout) has not started.
+workspace: timeline, plan graph, replan lineage, result, verification, evidence), a **visual + UX
+redesign pass** (landing page rebuild, app-page visual language, no functional or contract changes), and
+**V1.5-C** (a live authenticated QA pass, then a hardening + closeout review — no redesign, no new
+features, no backend or contract changes) are built and verified. This is now considered a **frontend
+MVP, hardened and ready for V1.6 deployment** — not "production ready" in the absolute sense; see "Not
+exercised" below for what that excludes.
+
+**The live authenticated QA pass** (real Supabase Auth, a real FastAPI backend run locally against the
+owner's actual Supabase Postgres in an isolated `eidos` schema — dropped afterward, never touching
+`auth`/`public` — and real Ollama execution) walked the complete flow for real: sign-in, the dashboard
+(including its search/status filter, exercised against six real missions), mission creation, starting a
+mission, a real execution that failed honestly (no supplied document to research — not a fabricated
+success), the timeline, plan graph, result, evidence, technical-detail disclosures, refresh persistence,
+a genuine mission-not-found state, and sign-out correctly revoking the session — at both a narrow and a
+desktop viewport, light and dark. It found **no application defects**; everything that went sideways
+during that pass was tooling or environment friction (dev-server cold-compile latency, a stretch of stale
+screenshot capture in the testing harness, one testing-script mistake, a transient DNS blip reaching the
+remote database after a long idle period) — see the closeout report in the repository's own session
+history for the detail.
+
+**The V1.5-C hardening review** that followed (security, auth/session, API-client, error/loading states,
+accessibility, responsive, performance, dependency hygiene) found and fixed a small number of genuine,
+narrow issues — listed below — and confirmed everything else already held.
 
 - The redesign pass touched presentation only: no backend file, no API contract, no Supabase auth flow
   and no data-fetching logic changed. `git diff --stat -- ':!frontend'` is empty for this pass.
@@ -152,7 +172,21 @@ built and verified. V1.5-C (hardening + closeout) has not started.
   Supabase session to sign in with (V1.5-B already verified their real data flow against the real backend;
   this pass changed only their layout and copy, not the calls or the state machines underneath).
 
-- `npm run typecheck`, `npm run lint`, `npm run test` (43 tests) all pass; `npm run build` succeeds.
+- `npm run typecheck`, `npm run lint`, `npm run test` (47 tests) all pass; `npm run build` succeeds.
+- **V1.5-C hardening fixes:** `lib/api/client.ts`'s shared `request()` now wraps `fetch` itself in a
+  try/catch with a 30-second bound (`AbortSignal.timeout`) — the live QA pass showed a genuinely stalled
+  or unreachable connection surfacing as a raw, unhandled `TypeError`/`DOMException` instead of a
+  readable, retryable error; regression-tested in `lib/api/client.test.ts`. `MissionDashboard` now
+  redirects to `/login` on an `unauthenticated` response from an individual mission fetch, matching the
+  pattern the workspace already used (a session that expires between page load and that fetch is rare,
+  since `proxy.ts` refreshes it on the way in, but was previously left as a generic error instead).
+  `--color-ink-faint` (both themes) and light-mode `--color-warning` were nudged darker/lighter — the
+  originals measured 3.4–4.3:1 against the surfaces they're actually used on (timestamps, hints, warning
+  badges), under WCAG AA's 4.5:1 for normal text; the new values clear it, same hue. The landing page's
+  Plan/Execute/Verify/Learn tabs gained proper `id`/`aria-controls`/`aria-labelledby` wiring between each
+  tab and the panel it controls. `MissionStatusPair` gained `aria-live="polite"` so a status change
+  (e.g. a mission moving from Created to Running) is announced, not just repainted. Five unused
+  `create-next-app` scaffold SVGs were removed from `public/`.
 - **Exercised live in the browser** against the owner's real Supabase project and a real local FastAPI
   instance over a real disposable PostgreSQL (not a mock): sign-in, session persistence across a
   reload, sign-out revoking access, the correct `403 no_tenant_membership` state before a workspace
@@ -172,5 +206,8 @@ built and verified. V1.5-C (hardening + closeout) has not started.
 - Two of the new data hooks reset their state via a render-time key comparison (React's documented
   "adjusting state when a prop changes" pattern) rather than a synchronous `setState` call inside an
   effect body, to satisfy the React Compiler-oriented lint rules `eslint-config-next` 16 now ships.
-- **Not exercised**: anything against a real production Postgres or a deployed backend (only a local,
-  disposable one was used); a real model provider (V1.4's own limitation, unrelated to the frontend).
+- **Not exercised**: a deployed (rather than locally-run) backend; the "signed in" half of V1.5-C's own
+  final smoke test was not re-run live, since the QA tenant and local backend were torn down at the
+  owner's request beforehand and none of its fixes touch a signed-in code path in a way the existing
+  test suite doesn't already cover — the signed-out half (landing, login, protected-route redirect) was
+  re-verified live, at 375px/768px/1280px and in both themes.

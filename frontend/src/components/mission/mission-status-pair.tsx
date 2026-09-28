@@ -15,7 +15,7 @@ export function MissionStatusPair({
   missionStatus: MissionStatus | null;
 }) {
   return (
-    <dl className="flex items-center gap-5 text-sm">
+    <dl className="flex items-center gap-5 text-sm" aria-live="polite" aria-atomic="true">
       <div className="flex items-center gap-2">
         <dt className="text-xs font-medium tracking-wide text-ink-faint uppercase">Run</dt>
         <dd>

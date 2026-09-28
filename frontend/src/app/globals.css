@@ -25,7 +25,10 @@
 :root {
   --color-ink: #17161c;
   --color-ink-muted: #56534d;
-  --color-ink-faint: #8a867c;
+  /* Darkened from #8a867c (V1.5-B) during V1.5-C: the original read at 3.4–3.6:1 against the surface
+     colors it's actually used on (timestamps, hints, technical labels) — below WCAG AA's 4.5:1 for
+     normal text. This clears 4.5:1 against both --surface and --surface-raised, same hue. */
+  --color-ink-faint: #767268;
 
   --color-surface: #faf8f3;
   --color-surface-raised: #ffffff;
@@ -43,7 +46,9 @@
 
   --color-success: #3d6b46;
   --color-success-soft: #e2ece2;
-  --color-warning: #93701f;
+  /* Darkened from #93701f during V1.5-C: read at 4.3:1 against --surface, just under WCAG AA's
+     4.5:1 for normal text (this tone's badge/status text is 12px). Same hue, minimal nudge. */
+  --color-warning: #906d1c;
   --color-warning-soft: #f2e9d2;
   --color-error: #a23327;
   --color-error-soft: #f3ded9;
@@ -60,7 +65,8 @@
   :root {
     --color-ink: #f1eee6;
     --color-ink-muted: #b7b0a1;
-    --color-ink-faint: #7d7869;
+    /* Lightened from #7d7869 during V1.5-C for the same WCAG AA reason as the light value above. */
+    --color-ink-faint: #898475;
 
     --color-surface: #131217;
     --color-surface-raised: #1c1b21;

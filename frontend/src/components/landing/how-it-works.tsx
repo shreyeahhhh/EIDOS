@@ -30,9 +30,11 @@ export function HowItWorks() {
         {STAGES.map((stage, index) => (
           <button
             key={stage.key}
+            id={`how-it-works-tab-${stage.key}`}
             type="button"
             role="tab"
             aria-selected={stage.key === activeKey}
+            aria-controls={`how-it-works-panel-${stage.key}`}
             onClick={() => setActiveKey(stage.key)}
             className={`rounded-md border px-4 py-2 text-sm font-medium transition-colors ${
               stage.key === activeKey
@@ -45,7 +47,13 @@ export function HowItWorks() {
         ))}
       </div>
 
-      <div role="tabpanel" className="mt-8 flex flex-col gap-6 sm:flex-row sm:items-center">
+      <div
+        role="tabpanel"
+        id={`how-it-works-panel-${active.key}`}
+        aria-labelledby={`how-it-works-tab-${active.key}`}
+        tabIndex={0}
+        className="mt-8 flex flex-col gap-6 sm:flex-row sm:items-center"
+      >
         <ol className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:gap-0">
           {active.steps.map((step, index) => (
             <li key={step} className="flex items-center gap-3 sm:flex-1">

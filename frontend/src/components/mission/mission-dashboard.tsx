@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { getMission } from "@/lib/api/client";
@@ -33,6 +34,7 @@ const RUN_STATUS_OPTIONS: RunStatus[] = ["created", "queued", "running", "finish
  * backend genuinely no longer has (a real 404) is pruned silently, not shown as an error.
  */
 export function MissionDashboard() {
+  const router = useRouter();
   const [state, setState] = useState<LoadState>({ name: "loading" });
   const [reloadToken, setReloadToken] = useState(0);
   const [query, setQuery] = useState("");
@@ -55,6 +57,7 @@ export function MissionDashboard() {
       const missions: MissionSummary[] = [];
       let accessIssue: LoadState | null = null;
       let backendIssue: string | null = null;
+      let unauthenticated = false;
 
       results.forEach((result, position) => {
         if (result.status === "fulfilled") {
@@ -67,13 +70,21 @@ export function MissionDashboard() {
             forgetMission(index[position].id);
             return;
           }
-          if (error.code === "no_tenant_membership") accessIssue = { name: "no_membership" };
+          if (error.code === "unauthenticated") unauthenticated = true;
+          else if (error.code === "no_tenant_membership") accessIssue = { name: "no_membership" };
           else if (error.code === "tenant_required") accessIssue = { name: "tenant_required" };
           else backendIssue = error.message;
         } else {
           backendIssue = "Something unexpected went wrong.";
         }
       });
+
+      // A session that expired between page load and this fetch (rare — `proxy.ts` already refreshes
+      // it on the way in) sends the visitor back to sign in, exactly like the mission workspace does.
+      if (unauthenticated) {
+        router.push("/login?next=/missions");
+        return;
+      }
 
       if (accessIssue) {
         setState(accessIssue);
@@ -89,7 +100,7 @@ export function MissionDashboard() {
     return () => {
       cancelled = true;
     };
-  }, [reloadToken]);
+  }, [reloadToken, router]);
 
   const filtered = useMemo(() => {
     if (state.name !== "ready") return [];
