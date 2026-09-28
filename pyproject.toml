@@ -59,10 +59,13 @@ pythonpath = ["src", "tests/support"]
 # deselected here, never skipped, and when selected they fail loudly if their configuration is missing.
 # PostgreSQL tests need a real, disposable database (EIDOS_TEST_DATABASE_URL), so they run only when selected with `-m postgres`; they are deselected here, never skipped, and when selected they
 # fail loudly if the database is missing (V1.4-B, D-230), exactly as the real-model tests do.
-addopts = "-p no:langsmith_plugin -m 'not real_model and not postgres'"
+# Groq tests call the real, hosted Groq API and need a real GROQ_API_KEY, so they run only when selected with `-m groq` (V1.6); the
+# same rule as real_model and postgres: deselected here, never skipped, and when selected they fail loudly if the key is missing.
+addopts = "-p no:langsmith_plugin -m 'not real_model and not postgres and not groq'"
 markers = [
     "real_model: calls a real local model runtime; excluded from the default run, selected explicitly with -m real_model (D-136)",
     "postgres: needs a real PostgreSQL database at EIDOS_TEST_DATABASE_URL; excluded from the default run, selected explicitly with -m postgres (D-230)",
+    "groq: calls the real, hosted Groq API and needs a real GROQ_API_KEY; excluded from the default run, selected explicitly with -m groq (V1.6)",
 ]
 testpaths = [
     "tests/unit",

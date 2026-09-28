@@ -61,6 +61,36 @@ def test_an_unknown_model_provider_is_refused():
     assert "not-a-provider" in message or "provider" in message
 
 
+def test_the_groq_provider_requires_an_api_key_that_ollama_never_needed():
+    # No GROQ_API_KEY at all: refused, naming the key, not the (absent) value.
+    message = refuses(without(EIDOS_MODEL_PROVIDER="groq"))
+    assert "api_key" in message.lower() or "groq_api_key" in message.lower()
+    # Blank is the same as missing (the same rule every other required variable follows).
+    message = refuses(without(EIDOS_MODEL_PROVIDER="groq", GROQ_API_KEY="   "))
+    assert "api_key" in message.lower() or "groq_api_key" in message.lower()
+
+
+def test_a_complete_groq_configuration_builds_the_app_and_never_echoes_the_key(monkeypatch):
+    storage = InMemoryStorage()
+
+    class Stand:
+        def repositories(self):
+            return storage.repositories()
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(main.PostgresStorage, "open", classmethod(lambda cls, url, **kwargs: Stand()))
+    from fastapi.testclient import TestClient
+
+    groq = without(EIDOS_MODEL_PROVIDER="groq", EIDOS_MODEL_BASE_URL="https://api.groq.com/openai/v1", GROQ_API_KEY=SECRET_VALUE)
+    app = create_app_from_environment(groq)
+    with TestClient(app) as client:
+        assert client.get("/v1/healthz").json() == {"status": "ok"}
+    # A config error elsewhere, with the same real key present, must still never mention it.
+    assert SECRET_VALUE not in refuses(without("EIDOS_MODEL_NAME", EIDOS_MODEL_PROVIDER="groq", GROQ_API_KEY=SECRET_VALUE))
+
+
 def test_exactly_one_authentication_source_is_required():
     assert "exactly one" in refuses(without("EIDOS_JWT_SECRET"))
     assert "exactly one" in refuses(without(EIDOS_JWKS_URL="https://project.example.test/auth/v1/.well-known/jwks.json"))

@@ -52,9 +52,12 @@ def test_a_provider_opens_no_file_prints_nothing_and_executes_no_generated_code(
             assert node.func.id not in {"open", "print", "eval", "exec", "compile", "input", "__import__"}, node.func.id
 
 
-def test_the_adapter_reads_no_environment_and_has_no_default_endpoint():
-    source = (PROVIDERS / "ollama.py").read_text(encoding="utf-8")
-    assert "environ" not in source and "getenv" not in source  # nothing is ambient (D-135)
+@pytest.mark.parametrize("module", [m for m in MODULES if m.name not in {"__init__.py", "factory.py"}], ids=lambda m: m.name)
+def test_an_adapter_reads_no_environment_and_has_no_default_endpoint_or_key(module):
+    # factory.py is the one place a variable *name* may be mentioned in a docstring or a default parameter
+    # (e.g. "api_key: str | None = None") — reading the environment itself stays main.py's job alone (D-135).
+    source = module.read_text(encoding="utf-8")
+    assert "environ" not in source and "getenv" not in source  # nothing is ambient
     assert not re.search(r"(localhost|127\.0\.0\.1|11434)", source), "an endpoint is the caller's choice, never a default"
 
 
@@ -99,3 +102,13 @@ def test_real_model_tests_are_registered_and_excluded_from_the_default_run_never
     real = (ROOT / "tests" / "integration" / "providers" / "test_ollama_real.py").read_text(encoding="utf-8")
     assert "pytest.skip" not in real and "skipif" not in real and "importorskip" not in real  # CLAUDE.md section 6
     assert "pytest.mark.real_model" in real
+
+
+def test_groq_tests_are_registered_and_excluded_from_the_default_run_never_skipped():
+    # The same three checks as real_model above, for the Groq opt-in added in V1.6.
+    options = pyproject()["tool"]["pytest"]["ini_options"]
+    assert any(marker.startswith("groq") for marker in options["markers"])
+    assert "not groq" in options["addopts"]
+    real = (ROOT / "tests" / "integration" / "providers" / "test_groq_real.py").read_text(encoding="utf-8")
+    assert "pytest.skip" not in real and "skipif" not in real and "importorskip" not in real
+    assert "pytest.mark.groq" in real

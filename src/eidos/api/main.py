@@ -8,6 +8,10 @@ before it serves anything and names the *variable*, never a value: no connection
 
 Authentication is one of two mutually exclusive settings: ``EIDOS_JWKS_URL`` (Supabase's asymmetric signing keys, the default choice) or ``EIDOS_JWT_SECRET`` (the legacy shared HS256 secret).
 Knowledge is not configured here: it is optional and no production knowledge base is chosen in V1.4 (D-234, D-227).
+
+``EIDOS_MODEL_PROVIDER`` is ``ollama`` (a local development runtime) or ``groq`` (a hosted, OpenAI-compatible
+provider — V1.6). ``GROQ_API_KEY`` is read here and only here; it is required, and startup fails, if and
+only if the provider is ``groq`` — ``ollama`` needs no key and this variable is simply ignored for it.
 """
 
 import os
@@ -74,7 +78,12 @@ def create_app_from_environment(environ: Mapping[str, str] | None = None) -> Fas
         timeout_seconds=_number(environ, "EIDOS_MODEL_TIMEOUT_SECONDS", float),
     )
     try:
-        model = model_port(_required(environ, "EIDOS_MODEL_PROVIDER"), base_url=_required(environ, "EIDOS_MODEL_BASE_URL"))
+        model = model_port(
+            _required(environ, "EIDOS_MODEL_PROVIDER"),
+            base_url=_required(environ, "EIDOS_MODEL_BASE_URL"),
+            # Only the 'groq' provider needs this (D-234, V1.6); 'ollama' ignores it, exactly as before.
+            api_key=environ.get("GROQ_API_KEY", "").strip() or None,
+        )
     except ValueError as error:
         raise ConfigurationError(str(error)) from None
     defaults = RunnerConfig()
