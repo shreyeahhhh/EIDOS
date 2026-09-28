@@ -197,31 +197,41 @@ def test_the_new_libraries_are_optional_extras_behind_their_boundaries_and_the_b
 def test_nothing_deferred_was_built():
     """Still-deferred infrastructure has not appeared without an explicit decision (D-236).
 
-    This guard's own history is exactly the point: at V1.4-B it asserted `frontend` did not exist, which
-    was true then and became false, on the owner's own explicit direction, at V1.5-A — a decision
-    (V1.5's own commits), not a violation. `frontend` was removed from the forbidden list below for that
-    reason, once (V1.6, D-236); it must not quietly grow further. Docker, Kubernetes, a separate worker
-    service and Qdrant remain genuinely unbuilt as this is written, so those checks are unchanged and
-    stay meaningful: this test's job was never "the repository looks like V1.4-B forever", it is "nothing
-    got built before the owner decided it should be" — checked against what is *currently* decided, not
-    frozen at V1.4-B's finish line.
+    This guard's own history is exactly the point: at V1.4-B it asserted `frontend` did not exist, and
+    later `Dockerfile`/`render.yaml` did not exist either — both true then, and both became false only on
+    the owner's own explicit direction (V1.5-A; V1.6's own deployment step). Each exception was added to
+    the lists below exactly once, at the commit that implements the decision permitting it (D-236,
+    `test_the_only_approved_exceptions_...` below pins the exact set) — never widened quietly. Kubernetes,
+    a separate worker service, Docker Compose and Qdrant remain genuinely unbuilt as this is written, so
+    those checks are unchanged and stay meaningful: this test's job was never "the repository looks like
+    V1.4-B forever", it is "nothing got built before the owner decided it should be" — checked against
+    what is *currently* decided, not frozen at V1.4-B's finish line.
     """
-    for name in ("Dockerfile", "docker-compose.yml", "docker-compose.yaml", "render.yaml", "package.json", "next.config.js", "Procfile"):
+    for name in ("docker-compose.yml", "docker-compose.yaml", "package.json", "next.config.js", "Procfile"):
         assert not (ROOT / name).exists(), name
     for directory in ("web", "k8s", "kubernetes", "deploy", "worker"):
         assert not (ROOT / directory).exists() and not (SRC / directory).exists(), directory
     assert not any("qdrant" in p.read_text(encoding="utf-8").lower() for p in SRC.rglob("*.py"))
 
 
-def test_the_one_approved_exception_to_the_above_is_frontend_and_nothing_else_snuck_in_beside_it():
-    """Pins the V1.6/D-236 change itself: `frontend` is a real, owner-approved directory (V1.5), and it is
-    the *only* thing this suite now treats differently from a fresh V1.4-B checkout. If Docker work lands
-    (the rest of V1.6, not yet started) it earns its own decision and its own update here — this test is
-    not an invitation to quietly widen the exception list."""
+def test_the_only_approved_exceptions_to_the_above_are_frontend_and_the_backends_own_docker_deployment():
+    """Pins every exception this suite now makes to a fresh V1.4-B checkout, each tied to the decision that
+    approved it: `frontend` (V1.5-A) and the backend's own Docker/Render deployment (V1.6, this commit —
+    `Dockerfile`, `.dockerignore`, `render.yaml`, all at the repository root, all backend-only). Not an
+    invitation to quietly widen this list — a *new* exception needs its own decision and its own line
+    here, same as these two did.
+    """
     assert (ROOT / "frontend").is_dir()
     assert (ROOT / "frontend" / "src" / "app" / "page.tsx").is_file()  # it is the real frontend, not an empty placeholder directory
-    for name in ("Dockerfile", "docker-compose.yml", "docker-compose.yaml", "render.yaml"):
-        assert not (ROOT / name).exists(), f"{name} exists but V1.6's Docker work has not been approved as built yet"
+    assert (ROOT / "Dockerfile").is_file() and (ROOT / ".dockerignore").is_file() and (ROOT / "render.yaml").is_file()
+    # The Dockerfile builds the backend only: no COPY of frontend/, tests/ or docs/, and no vendor SDK,
+    # secret or hardcoded credential reaches the image (D-234's "no secret in the image"). A bare mention
+    # of "frontend" in a comment (explaining why it is *not* copied) is fine; an actual COPY of it is not.
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    assert not re.search(r"(?im)^\s*COPY\s+(frontend|tests|docs)\b", dockerfile)
+    assert not re.search(r"(?i)(password|secret|api_key|token)\s*=\s*[\"'][^\"']{6,}[\"']", dockerfile)
+    for name in ("docker-compose.yml", "docker-compose.yaml", "Procfile"):
+        assert not (ROOT / name).exists(), f"{name} exists but was never decided — only a single Dockerfile deployed by Render was"
 
 
 def test_there_are_exactly_three_new_packages_and_no_worker_or_frontend_module():

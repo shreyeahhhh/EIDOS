@@ -1,0 +1,9 @@
+# The backend image's build context: deny everything, then allow only what Dockerfile actually copies.
+# This is the guarantee against a secret, a dev file, the frontend, or any local-machine path reaching
+# the image — not a convenience list to keep updated by hand as the repo grows.
+*
+
+!pyproject.toml
+!README.md
+!src
+!src/**

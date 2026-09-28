@@ -29,6 +29,15 @@ forwards the signed-in visitor's own Supabase access token as `Authorization: Be
 
 `.env.local` is git-ignored; never commit a real value into `.env.local.example`.
 
+## Deployment (V1.6)
+
+This app deploys to Vercel as-is — no code change, everything already environment-driven (see
+`docs/14_deployment.md` in the repository root for the full account, including the backend's own Docker
+deployment to Render). In short: import this repository into Vercel, set **Root Directory** to
+`frontend`, set the three variables above (`EIDOS_API_BASE_URL` pointing at the deployed Render service),
+deploy. The browser still only ever calls this app's own origin (`/api/eidos/...`); no CORS is added to
+the backend by deploying it.
+
 ## Scripts
 
 | Command | Does |

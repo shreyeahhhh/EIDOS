@@ -1,0 +1,119 @@
+# 14. Deployment (V1.6)
+
+**Status:** DERIVED. Docker and Render/Vercel configuration built and verified by static inspection
+(no Docker installed in the build environment; Render performs the actual container build). Live
+deployment itself is the owner's own action (Render/Vercel account access), not something built here.
+No EIDOS core, contract or API change. D-235 (Groq), D-236 (guard tests) are separate records.
+
+## 14.1 Target architecture
+
+```
+        USER
+          │
+          ▼
+      VERCEL
+     Next.js (frontend/)
+          │
+          │ server-side proxy (app/api/eidos/[...path]/route.ts) — no CORS, no direct browser→backend call
+          ▼
+      RENDER
+     FastAPI (this repo's root, Dockerfile)
+          │
+   ┌──────┴───────┐
+   ▼               ▼
+SUPABASE        GROQ
+PostgreSQL      (production model provider — D-235)
+```
+
+Ollama stays local-development-only (nothing about it changes); it is not deployed anywhere. Nothing
+new is added beyond what D-235 already built: the same `ModelPort` boundary, a second adapter.
+
+## 14.2 Backend — Docker + Render
+
+`Dockerfile` (repository root) builds a single-stage `python:3.12-slim` image: installs `.[api,postgres]`
+only (never the `dev` extras — no pytest, no langgraph, no a2a in production), runs as a non-root user,
+and its one `CMD` applies pending migrations (`python -m eidos.persistence.migrate` — idempotent, safe on
+every restart) then execs `uvicorn eidos.api.main:create_app_from_environment --factory`, bound to
+Render's `$PORT`. `.dockerignore` denies everything except `pyproject.toml`, `README.md` and `src/` — the
+frontend, tests, docs and every `.env*` file are structurally unable to reach the image.
+
+`render.yaml` is a Render Blueprint: point Render at this repository and it configures the service from
+this file. Every real value (`sync: false` in the file) is entered once, by hand, in Render's own
+dashboard — never in git.
+
+**Critical, architectural:** the runtime's `RunManager` assumes exactly one process per database
+(decisions.md D-234 — "multi-instance operation needs leases and heartbeats, which are deferred").
+**Do not** enable autoscaling or raise this service above 1 instance; nothing in the runtime is safe
+for two processes to share one database concurrently. `render.yaml` relies on Render's own default
+(1 instance, autoscaling off) rather than asserting a specific Blueprint key for this, to avoid getting
+a Render-specific field wrong; verify it in the dashboard after the first deploy.
+
+## 14.3 Environment variables
+
+**Public, frontend-only** (safe in the browser; `NEXT_PUBLIC_*`, inlined at build time):
+
+| Variable | Set in |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Vercel |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (the anon/publishable key — never the service-role key) | Vercel |
+
+**Server-only, frontend** (never sent to the browser; read only by `app/api/eidos/[...path]/route.ts`):
+
+| Variable | Set in |
+|---|---|
+| `EIDOS_API_BASE_URL` | Vercel — the Render service's public URL, once known |
+
+**Backend** (`eidos.api.main`; see `docs/13_product_backend.md` section 12.3 for the full, unchanged list):
+
+| Variable | Category | Set in |
+|---|---|---|
+| `EIDOS_DATABASE_URL` | secret (embeds the Postgres password) | Render |
+| `EIDOS_JWKS_URL` | not secret (a public discovery URL) but real per-project | Render |
+| `EIDOS_MODEL_PROVIDER` | config (`groq` in production) | Render |
+| `EIDOS_MODEL_BASE_URL` | config (`https://api.groq.com/openai/v1` in production) | Render |
+| `GROQ_API_KEY` | **secret** | Render — entered directly in Render's dashboard, never in this repository, never in a commit, never pasted into chat |
+| `EIDOS_MODEL_NAME`, `_TEMPERATURE`, `_SEED`, `_MAX_OUTPUT_TOKENS`, `_TIMEOUT_SECONDS` | config | Render |
+
+No backend secret is ever `NEXT_PUBLIC_*`; no frontend file imports anything from `eidos.*`; the two
+runtimes share nothing but the deployed backend's public HTTPS URL.
+
+## 14.4 Database migrations
+
+Unchanged from `docs/13` section 12.3: plain, versioned SQL, applied by `eidos.persistence.migrate`
+(idempotent — a transaction-level advisory lock and a per-version skip check), now run automatically as
+the first half of the container's own `CMD` before every start. A fresh production database (this
+project's `eidos` schema, currently absent — see V1.5-C's closeout) is created by the first deploy's
+first migration run, from nothing.
+
+## 14.5 Frontend — Vercel
+
+No code change (`frontend/README.md`'s own account already holds — no hardcoded `localhost`, everything
+environment-driven). Steps: import this repository into Vercel, set **Root Directory** to `frontend`
+(it is a subdirectory, not the repository root), set the three variables above, deploy. Vercel's own
+production cookies are HTTPS-only by default, matching `@supabase/ssr`'s expectations with no extra
+configuration.
+
+## 14.6 Production model provider
+
+**Groq**, not Ollama (D-235): Render cannot reasonably host Ollama itself (real RAM/disk for model
+weights; not a typical web service), so production inference goes through Groq's hosted,
+OpenAI-compatible API instead. This was a full architectural addition (a second `ModelPort` adapter),
+not a deployment hack — see decisions.md D-235 for the complete account. Ollama remains exactly what it
+was: the local-development adapter, unused and untouched in production.
+
+## 14.7 Known deployment limitations (stated, not hidden)
+
+- **One process only.** See 14.2. A second Render instance pointed at the same database is not safe.
+- **`/v1/healthz` is liveness, not readiness.** It does not check database connectivity (documented,
+  intentional — `docs/13` section 7: "readiness is a deployment concern"). A healthy process can still
+  fail real requests if the database is unreachable; monitor actual request outcomes too, not only this
+  check.
+- **Render's free tier spins down when idle.** Architecturally safe (a restart's own startup recovery
+  marks any interrupted run `interrupted`, never fabricates a result — D-234) but slow to wake; a cost
+  decision for the owner, not addressed here.
+- **This container was never built with a local `docker build`** — no Docker is installed in this
+  environment. It was verified by careful reading against the real `pyproject.toml` and entrypoint, not
+  by a real local build. Render performs the first real build.
+- **No separate staging environment.** Production points at the same real Supabase project already used
+  throughout V1.5's development and QA (with a freshly re-created, empty `eidos` schema — the earlier QA
+  schema was fully dropped, decisions.md's V1.5-C record).

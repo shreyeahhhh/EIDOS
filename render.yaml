@@ -1,0 +1,53 @@
+# Render Blueprint for the EIDOS backend (eidos.api). Deploy: Render dashboard → New → Blueprint →
+# point at this repository. Render reads this file and creates the service below; every `sync: false`
+# variable is then set once, by hand, in Render's own dashboard — never here, never in git.
+#
+# CRITICAL, architectural (decisions.md D-234): the runtime's RunManager assumes exactly one process per
+# database — "multi-instance operation needs leases and heartbeats, which are deferred." Do not enable
+# autoscaling or raise this service's instance count above 1 in Render's dashboard; nothing in the
+# runtime is safe for two processes to share the same database concurrently.
+#
+# The frontend (frontend/) is not here: it deploys to Vercel separately (see frontend/README.md).
+
+services:
+  - type: web
+    name: eidos-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free # Render's smallest tier; change in the dashboard if the free tier's spin-down-when-idle
+    # behavior is not acceptable. Spin-down is architecturally safe here (the runner's own startup
+    # recovery marks any interrupted run `interrupted`, never fabricates a result — D-234), just slow to
+    # wake from idle; raising the plan is a cost decision, not a correctness one, so it is left to you.
+    healthCheckPath: /v1/healthz # liveness only — it does not check database connectivity
+    # (docs/13_product_backend.md section 7: "readiness is a deployment concern," by design).
+    envVars:
+      # --- Supabase Postgres (the same real project the frontend already uses) ---
+      - key: EIDOS_DATABASE_URL
+        sync: false # postgresql://postgres:{PASSWORD}@<project-ref>.pooler.supabase.com:5432/postgres
+        # Use the *session pooler* host (IPv4), not the direct connection — Render's network may not
+        # reach a Supabase project's direct (IPv6) endpoint. docs/13 section 12.4 documents both modes.
+
+      # --- authentication (Supabase's own JWKS; matches the frontend's Supabase project) ---
+      - key: EIDOS_JWKS_URL
+        sync: false # https://<project-ref>.supabase.co/auth/v1/.well-known/jwks.json
+
+      # --- model provider: Groq for production (Ollama has nothing to run on here) ---
+      - key: EIDOS_MODEL_PROVIDER
+        value: groq
+      - key: EIDOS_MODEL_BASE_URL
+        value: https://api.groq.com/openai/v1
+      - key: GROQ_API_KEY
+        sync: false # enter as a Render "secret" value — never in this file, never in git
+      - key: EIDOS_MODEL_NAME
+        sync: false # a real Groq model id, e.g. llama-3.3-70b-versatile — confirm against Groq's
+        # current model list before setting this; none is assumed here
+      - key: EIDOS_MODEL_TEMPERATURE
+        sync: false # e.g. 0.0
+      - key: EIDOS_MODEL_SEED
+        sync: false # e.g. 7
+      - key: EIDOS_MODEL_MAX_OUTPUT_TOKENS
+        sync: false # e.g. 2048
+      - key: EIDOS_MODEL_TIMEOUT_SECONDS
+        sync: false # e.g. 60 — Groq is materially faster than a local model; no need for Ollama's
+        # generous local timeouts
