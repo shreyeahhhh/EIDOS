@@ -1,12 +1,16 @@
-"""Static guards on the product backend's boundaries (decisions.md D-229 to D-234; invariants 1, 2 and 9; ``CLAUDE.md`` section 8; V1.4-B).
+"""Static guards on the product backend's boundaries (decisions.md D-229 to D-234, D-236; invariants 1, 2 and 9; ``CLAUDE.md`` section 8; V1.4-B).
 
 Three new packages and one direction of dependency: ``eidos.api`` (HTTP) calls ``eidos.service`` (use cases) which runs the unchanged core, and ``eidos.persistence`` (PostgreSQL) implements the
 service's ports. New libraries stay behind their one boundary, the core imports none of the three, FastAPI never touches the log or the reducer, there is no ORM, and the migrations deny every API
 role by construction.
+
+D-236 (V1.6): the "nothing deferred was built" and "no credential is committed" guards below were written at V1.4-B, when the repository was backend-only, and scanned the raw filesystem. Both were
+made git-aware (``_committable_files()``) rather than weakened, once ``frontend`` (V1.5, an owner decision, not a violation) made their original raw-filesystem assumption stop matching reality.
 """
 
 import ast
 import re
+import subprocess
 import tomllib
 from pathlib import Path
 
@@ -191,12 +195,33 @@ def test_the_new_libraries_are_optional_extras_behind_their_boundaries_and_the_b
 
 
 def test_nothing_deferred_was_built():
-    """No Next.js, Docker, Render, Kubernetes, separate worker service or Qdrant was added in V1.4-B (the owner's approved scope)."""
+    """Still-deferred infrastructure has not appeared without an explicit decision (D-236).
+
+    This guard's own history is exactly the point: at V1.4-B it asserted `frontend` did not exist, which
+    was true then and became false, on the owner's own explicit direction, at V1.5-A — a decision
+    (V1.5's own commits), not a violation. `frontend` was removed from the forbidden list below for that
+    reason, once (V1.6, D-236); it must not quietly grow further. Docker, Kubernetes, a separate worker
+    service and Qdrant remain genuinely unbuilt as this is written, so those checks are unchanged and
+    stay meaningful: this test's job was never "the repository looks like V1.4-B forever", it is "nothing
+    got built before the owner decided it should be" — checked against what is *currently* decided, not
+    frozen at V1.4-B's finish line.
+    """
     for name in ("Dockerfile", "docker-compose.yml", "docker-compose.yaml", "render.yaml", "package.json", "next.config.js", "Procfile"):
         assert not (ROOT / name).exists(), name
-    for directory in ("frontend", "web", "k8s", "kubernetes", "deploy", "worker"):
+    for directory in ("web", "k8s", "kubernetes", "deploy", "worker"):
         assert not (ROOT / directory).exists() and not (SRC / directory).exists(), directory
     assert not any("qdrant" in p.read_text(encoding="utf-8").lower() for p in SRC.rglob("*.py"))
+
+
+def test_the_one_approved_exception_to_the_above_is_frontend_and_nothing_else_snuck_in_beside_it():
+    """Pins the V1.6/D-236 change itself: `frontend` is a real, owner-approved directory (V1.5), and it is
+    the *only* thing this suite now treats differently from a fresh V1.4-B checkout. If Docker work lands
+    (the rest of V1.6, not yet started) it earns its own decision and its own update here — this test is
+    not an invitation to quietly widen the exception list."""
+    assert (ROOT / "frontend").is_dir()
+    assert (ROOT / "frontend" / "src" / "app" / "page.tsx").is_file()  # it is the real frontend, not an empty placeholder directory
+    for name in ("Dockerfile", "docker-compose.yml", "docker-compose.yaml", "render.yaml"):
+        assert not (ROOT / name).exists(), f"{name} exists but V1.6's Docker work has not been approved as built yet"
 
 
 def test_there_are_exactly_three_new_packages_and_no_worker_or_frontend_module():
@@ -312,10 +337,37 @@ _SECRET_SHAPES = {
 _URL_WITH_PASSWORD = re.compile(r"(?:postgres(?:ql)?|mysql|redis|mongodb)://[^:/@\s\"']+:([^@\s\"']+)@")
 _CANARIES = ("hunter2", "{PASSWORD}", "{secret}")  # deliberate fake values that tests plant to prove a secret is never echoed
 
+# The one deliberately committed, secret-free environment template (V1.5-A): frontend/.gitignore carries
+# its own named exception for it (`.env*` then `!.env.local.example`), and it is real product
+# documentation, not a commit risk. Every other `.env*`/key/cert file these guards find is exactly what
+# it looks like. Grow this set only for another reviewed, genuinely secret-free template — never to quiet
+# a real failure (D-236).
+_ALLOWED_ENV_FILES = frozenset({"frontend/.env.local.example"})
+
+
+def _committable_files() -> list[Path]:
+    """Every file git would track, or would itself offer to add — the same universe `git status`/`git add .`
+    show, including every nested ``.gitignore`` (``frontend/.gitignore``'s own rules for `node_modules`,
+    `.next/`, `.env*` and its one named exception all apply automatically, exactly as they would for a
+    real `git add`).
+
+    Deliberately not a raw filesystem walk (D-236): a build artifact, a lock file a running dev server
+    holds open, or a file `.gitignore` already excludes (`frontend/.env.local`, in particular — real on a
+    developer's disk, and never a commit risk) is not "in the repository" in the sense either guard below
+    actually cares about. Scanning the raw filesystem instead only made these guards fragile against
+    whatever a machine happens to be doing (a locked build-tool file could fail the whole suite) without
+    making them any more protective — a secret that is genuinely at risk of being committed is, by
+    definition, something `git status` would already show.
+    """
+    output = subprocess.run(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"], cwd=ROOT, capture_output=True, check=True, text=True,
+    ).stdout
+    return [ROOT / name for name in output.split("\0") if name]
+
 
 def _repository_files():
-    for path in sorted(ROOT.rglob("*")):
-        if path.is_file() and not (set(path.relative_to(ROOT).parts) & _SKIP_DIRECTORIES) and path.suffix in {".py", ".md", ".toml", ".sql", ".txt", ".cfg", ".ini", ".yml", ".yaml", ".json", ".env", ""}:
+    for path in sorted(_committable_files()):
+        if path.is_file() and not (set(path.relative_to(ROOT).parts) & _SKIP_DIRECTORIES) and path.suffix in {".py", ".md", ".toml", ".sql", ".txt", ".cfg", ".ini", ".yml", ".yaml", ".json", ".env", ".example", ""}:
             yield path
 
 
@@ -335,10 +387,43 @@ def test_no_credential_key_token_or_password_url_is_committed():
 
 
 def test_no_environment_or_key_file_is_in_the_tree_and_the_ignore_file_keeps_it_that_way():
-    names = {path.name for path in ROOT.rglob("*") if path.is_file() and not (set(path.relative_to(ROOT).parts) & _SKIP_DIRECTORIES)}
-    assert not {name for name in names if name == ".env" or name.startswith(".env.") or name.endswith((".pem", ".key", ".p12", ".pfx"))}
+    """No real ``.env``/key/cert file is committed or committable (D-236: over ``_committable_files()``, so
+    a gitignored local file like ``frontend/.env.local`` — real on a developer's disk, never a commit
+    risk — correctly never appears here at all, exactly as it never would in ``git status``). The one
+    deliberate exception is ``frontend/.env.local.example`` (``_ALLOWED_ENV_FILES``): a real, secret-free,
+    intentionally tracked template that ``frontend/.gitignore`` itself names as an exception to its own
+    broad ``.env*`` rule (V1.5-A) — and which the secrets-content scan above still checks like any other
+    committed file.
+    """
+    risky = {}
+    for path in _committable_files():
+        if not path.is_file() or (set(path.relative_to(ROOT).parts) & _SKIP_DIRECTORIES):
+            continue
+        relative = str(path.relative_to(ROOT)).replace("\\", "/")
+        if relative in _ALLOWED_ENV_FILES:
+            continue
+        name = path.name
+        if name == ".env" or name.startswith(".env.") or name.endswith((".pem", ".key", ".p12", ".pfx")):
+            risky[relative] = name
+    assert not risky, risky
     ignored = (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
     assert {".env", ".env.*", "*.pem", "*.key"} <= {line.strip() for line in ignored}
+
+
+def test_the_one_allowed_env_template_is_named_explicitly_tracked_and_itself_holds_no_secret():
+    """Regression coverage for the D-236 exception itself: it names exactly one file, that file is real and
+    genuinely tracked by git (not merely believed to exist), and — independently of the suffix-based scan
+    above, which does cover it — its content holds no real secret shape. Growing ``_ALLOWED_ENV_FILES``
+    without this holding is exactly the loophole D-236 must not reopen."""
+    assert _ALLOWED_ENV_FILES == {"frontend/.env.local.example"}
+    template = ROOT / "frontend" / ".env.local.example"
+    assert template.is_file()
+    tracked = subprocess.run(["git", "ls-files", "--error-unmatch", "frontend/.env.local.example"], cwd=ROOT, capture_output=True, text=True)
+    assert tracked.returncode == 0, "the allowed template must actually be tracked by git, not just present on disk"
+    text = template.read_text(encoding="utf-8")
+    for label, pattern in _SECRET_SHAPES.items():
+        assert not pattern.search(text), label
+    assert not _URL_WITH_PASSWORD.search(text)
 
 
 def test_the_production_source_holds_no_literal_secret_and_reads_its_configuration_from_the_environment_only():
