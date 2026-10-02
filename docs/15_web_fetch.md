@@ -36,7 +36,11 @@ The result of every page together is bounded by the allowlist entry (48 KB of te
 
 It does not render a page, take a screenshot, run JavaScript, log in, search the web, crawl, honour `robots.txt`, cache, or judge a page's quality. A model reading the text can describe it; EIDOS records that as the model's output, not a measurement (invariants 13, 17; D-146).
 
-## 15.5 Operating it
+## 15.5 A known problem with a proposed fix awaiting the owner (D-239)
+
+A fetched page is cited by its reference, `tool:web/fetch:<64 hex>:<host>-<hash>`, which a model must copy exactly. In the one real run, a small local model copied it correctly several times and dropped one character once, and the verifier — correctly — failed the mission for citing a source that does not exist. The page was fetched and the answer was grounded; the reference format is the weak point, and shortening it is proposed in decisions.md D-239 (Open).
+
+## 15.6 Operating it
 
 - **Turn it on:** add `web_fetch` to `EIDOS_ALLOWED_ACTIONS` (comma separated). `render.yaml` does. Remove it to turn the tool off; missions that name it are then refused at creation (`invalid_spec`).
 - **Egress:** the backend needs outbound HTTPS and DNS. Its own database and the Groq API are reached the same way.
