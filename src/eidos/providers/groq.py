@@ -28,6 +28,9 @@ from dataclasses import dataclass
 from eidos.agents import MeasuredFacts, ModelFailure, ModelFailureKind, ModelRequest, ModelResponse, ModelResult
 
 _PATH = "/chat/completions"
+# Groq's front door (Cloudflare) refuses Python's default "Python-urllib/3.x" identity with a 403 "Error 1010: Access denied" before the request reaches Groq at all, whatever the key. An adapter
+# that names itself is let through (and a wrong key then gets the normal 401). Found on the first real use; no scripted test could have shown it.
+USER_AGENT = "EIDOS-model-adapter/1"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -57,7 +60,7 @@ class GroqModel:
         http_request = urllib.request.Request(
             self.base_url.rstrip("/") + _PATH,
             data=json.dumps(body).encode("utf-8"),
-            headers={"Content-Type": "application/json", "Authorization": f"Bearer {self.api_key}"},
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {self.api_key}", "User-Agent": USER_AGENT},
             method="POST",
         )
         started = time.monotonic()

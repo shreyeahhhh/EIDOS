@@ -74,6 +74,8 @@ def test_the_request_carries_exactly_the_explicit_settings_as_openai_shaped_mess
     assert path == "/chat/completions"
     assert headers["content-type"] == "application/json"
     assert headers["authorization"] == f"Bearer {API_KEY}"
+    # Groq's Cloudflare answers Python's default identity with 403 "Error 1010" before the request reaches Groq: the adapter must name itself.
+    assert headers["user-agent"].startswith("EIDOS-") and "python-urllib" not in headers["user-agent"].lower()
     assert body == {
         "model": "a-test-model",
         "messages": [{"role": "system", "content": "Be brief."}, {"role": "user", "content": "Say hello."}],
