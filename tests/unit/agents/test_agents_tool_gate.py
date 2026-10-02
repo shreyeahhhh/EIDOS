@@ -16,6 +16,7 @@ import pytest
 from pydantic import ValidationError
 
 from eidos.agents import (
+    Artifact,
     InMemoryArtifactStore,
     ToolDocument,
     ToolFailure,
@@ -27,8 +28,9 @@ from eidos.agents import (
     parse_tool_document_ref,
     tool_document_ref,
 )
+from eidos.agents.tool_gate import REFERENCE_DIGEST_CHARS
 from eidos.contracts import ArtifactRef, AutonomyLevel
-from eidos.policy import ToolAdmission, ToolDecision, ToolDenialCode
+from eidos.policy import ToolAdmission, ToolDecision, ToolDenialCode, args_digest
 
 from eidos_search_fixture import (
     FIXTURE_MAX_RESULT_BYTES,
@@ -86,12 +88,36 @@ def test_each_document_becomes_its_own_artifact_under_a_reference_naming_the_too
     state, _, store, gate = rig()
     outcome = ask(gate, state, Q1)
     digest = outcome.admission.args_digest
+    short = digest[:REFERENCE_DIGEST_CHARS]  # D-239: the reference carries the start of the digest, short enough for a model to copy exactly
     assert [d.document_id for d in outcome.documents] == ["doc-replay", "doc-events"]
-    assert outcome.refs == tuple(ArtifactRef(f"tool:{TOOL_ID}:{digest}:{d.document_id}") for d in outcome.documents)
+    assert outcome.refs == tuple(ArtifactRef(f"tool:{TOOL_ID}:{short}:{d.document_id}") for d in outcome.documents)
     for ref, document in zip(outcome.refs, outcome.documents):
         artifact = store.get(state.execution_id, ref)
         assert (artifact.content, artifact.content_type, artifact.source_refs) == (document.content, "text/plain", ())
-        assert parse_tool_document_ref(ref) == (TOOL_ID, digest, document.document_id)
+        assert parse_tool_document_ref(ref) == (TOOL_ID, short, document.document_id)
+
+
+def test_a_reference_is_short_enough_to_copy_and_still_names_its_call_by_the_start_of_the_digest():
+    assert REFERENCE_DIGEST_CHARS == 12
+    state, _, store, gate = rig()
+    first, second = ask(gate, state, Q1), ask(gate, state, Q2)
+    for outcome in (first, second):
+        for ref in outcome.refs:
+            _, prefix, _ = parse_tool_document_ref(ref)
+            assert len(prefix) == REFERENCE_DIGEST_CHARS and outcome.admission.args_digest.startswith(prefix)
+    assert {r for r in first.refs} & {r for r in second.refs} == set()  # two different requests never share a reference here
+    assert {parse_tool_document_ref(r)[1] for r in first.refs} != {parse_tool_document_ref(r)[1] for r in second.refs}
+
+
+def test_two_requests_whose_digests_start_alike_are_a_refused_call_never_a_wrong_source():
+    # Not reachable with real digests in practice (48 bits, a handful of calls per execution); forced here by taking the reference first.
+    state, port, store, gate = rig()
+    digest = args_digest({"query": Q1})
+    taken = tool_document_ref(TOOL_ID, digest, "doc-replay")
+    store.put_supplied(state.execution_id, Artifact(ref=taken, content_type="text/plain", content="something else"))
+    outcome = ask(gate, state, Q1)
+    assert isinstance(outcome.result, ToolFailure) and outcome.result.kind is ToolFailureKind.MALFORMED_RESULT and "already taken" in outcome.result.message
+    assert outcome.refs == () and store.get(state.execution_id, taken).content == "something else"  # the earlier document is untouched
 
 
 def test_retrieved_documents_are_the_sources_the_unchanged_verification_counts():
@@ -110,7 +136,8 @@ def test_a_result_that_matched_nothing_is_a_real_stored_result_and_is_served_emp
 
 def test_a_document_reference_round_trips_and_a_stranger_is_not_one():
     ref = tool_document_ref(TOOL_ID, "ab" * 32, "doc-1")
-    assert parse_tool_document_ref(ref) == (TOOL_ID, "ab" * 32, "doc-1")
+    assert ref == f"tool:{TOOL_ID}:{'ab' * 6}:doc-1"  # the full digest is cut to REFERENCE_DIGEST_CHARS (D-239)
+    assert parse_tool_document_ref(ref) == (TOOL_ID, "ab" * 6, "doc-1")
     for stranger in ("artifact:gather", "tool:", "tool:a:b", "tool:a/b:digest:bad id", "supplied:doc:1", ""):
         assert parse_tool_document_ref(stranger) is None
 

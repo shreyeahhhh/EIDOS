@@ -9,8 +9,8 @@ implementation that composes the pieces the earlier steps built, in a fixed orde
    answered from the artifacts it became. No tool is invoked and no invocation budget is consumed.
 3. **Only then a request is built and the port is called**, with the timeout and result-size bound of the allowlist entry and nothing else.
 4. **A result is normalised and stored.** Each document becomes its own artifact in the store, with a reference that names the tool, the request
-   digest and the document (``tool:<tool_id>:<args_digest>:<document_id>``), so distinct documents are distinct sources and a reference alone says
-   where a piece of evidence came from. Text a tool returns is data: it is stored as text and never read as an instruction (invariant 3).
+   digest and the document (``tool:<tool_id>:<start of args_digest>:<document_id>``; the digest is cut to 12 characters so a model can copy the reference exactly,
+   D-239), so distinct documents are distinct sources and a reference alone says where a piece of evidence came from. Text a tool returns is data: it is stored as text and never read as an instruction (invariant 3).
 
 The gate never raises for a tool outcome. A port that raises, answers in a shape it did not promise, exceeds the size bound or names a document with
 an id that could not be cited is turned into a typed ``ToolFailure`` and still counts as an invocation, because a tool was reached.
@@ -44,13 +44,19 @@ TOOL_DOCUMENT_CONTENT_TYPE = "text/plain"
 _DOCUMENT_ID = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
 
 
+# A model has to copy a reference exactly (``[[reference]]``), and 64 random hex characters is what a small model gets wrong: in the one real run of the web-fetch tool it dropped one, and the verifier
+# rightly failed a correct answer for citing a source that did not exist (D-239). The reference carries only this many characters of the request digest. The full digest stays in the recorded
+# ``ToolCallFacts`` and in duplicate detection; the reference is only ever read within one execution (a few calls, bounded by ``max_tool_calls``), and a reference already taken is a typed failure.
+REFERENCE_DIGEST_CHARS = 12
+
+
 def tool_document_ref(tool_id: str, args_digest: str, document_id: str) -> ArtifactRef:
-    """The reference a retrieved document is stored under: it names the tool, the request digest and the document."""
-    return ArtifactRef(f"tool:{tool_id}:{args_digest}:{document_id}")
+    """The reference a retrieved document is stored under: it names the tool, the start of the request digest (``REFERENCE_DIGEST_CHARS`` characters) and the document."""
+    return ArtifactRef(f"tool:{tool_id}:{args_digest[:REFERENCE_DIGEST_CHARS]}:{document_id}")
 
 
 def parse_tool_document_ref(ref: str) -> tuple[str, str, str] | None:
-    """``(tool_id, args_digest, document_id)`` for a reference ``tool_document_ref`` made, else ``None``."""
+    """``(tool_id, digest_prefix, document_id)`` for a reference ``tool_document_ref`` made, else ``None``. The middle part is the *start* of the request digest: ``args_digest.startswith(prefix)``."""
     parts = str(ref).split(":", 3)
     if len(parts) != 4 or parts[0] != "tool" or not parts[1] or not parts[2] or not _DOCUMENT_ID.fullmatch(parts[3]):
         return None

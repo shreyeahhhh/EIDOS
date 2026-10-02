@@ -4,7 +4,7 @@
 
 ## 15.1 What it is
 
-One tool, `web/fetch`, that lets a mission read the public web pages its goal names. It implements the existing `ToolPort` (`eidos.agents.tool`) in a new package, `eidos.tools`, and is reached through the V1.2 tool gate unchanged: pinned allowlist entry, deterministic admission, a per-plan call budget, recorded call facts, and each page stored as its own citable artifact (`tool:web/fetch:<args digest>:<host>-<hash>`). It is **not** an agent, a plan step, an MCP server or a model.
+One tool, `web/fetch`, that lets a mission read the public web pages its goal names. It implements the existing `ToolPort` (`eidos.agents.tool`) in a new package, `eidos.tools`, and is reached through the V1.2 tool gate unchanged: pinned allowlist entry, deterministic admission, a per-plan call budget, recorded call facts, and each page stored as its own citable artifact (`tool:web/fetch:<12 hex of the args digest>:<host>-<hash>`). It is **not** an agent, a plan step, an MCP server or a model.
 
 It exists only where a deployer lists the `web_fetch` action in `EIDOS_ALLOWED_ACTIONS`; a mission may use it only if it lists the same action, has a `max_tool_calls` budget and autonomy of at least 1 (read-only). Any of those missing is a recorded denial and nothing is fetched.
 
@@ -36,9 +36,9 @@ The result of every page together is bounded by the allowlist entry (48 KB of te
 
 It does not render a page, take a screenshot, run JavaScript, log in, search the web, crawl, honour `robots.txt`, cache, or judge a page's quality. A model reading the text can describe it; EIDOS records that as the model's output, not a measurement (invariants 13, 17; D-146).
 
-## 15.5 A known problem with a proposed fix awaiting the owner (D-239)
+## 15.5 The reference a model has to copy (D-239)
 
-A fetched page is cited by its reference, `tool:web/fetch:<64 hex>:<host>-<hash>`, which a model must copy exactly. In the one real run, a small local model copied it correctly several times and dropped one character once, and the verifier — correctly — failed the mission for citing a source that does not exist. The page was fetched and the answer was grounded; the reference format is the weak point, and shortening it is proposed in decisions.md D-239 (Open).
+A fetched page is cited by its reference, `tool:web/fetch:<12 hex>:<host>-<hash>`, which a model must copy exactly. The first version carried the full 64-hex request digest; in the first real run a small local model dropped one character once, and the verifier — correctly — failed the mission for citing a source that does not exist. The digest part is now the first 12 hex characters (the full digest stays in the recorded call facts), per the owner's ruling D-239.
 
 ## 15.6 Operating it
 

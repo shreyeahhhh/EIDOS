@@ -105,7 +105,7 @@ collection, and producing them from admission decisions and tool results is Step
 **The flow.** `ResearchAgent` asks a `ToolAccess` (in practice the `ToolGate`, wrapped for recording by `RecordingToolAccess`) for documents matching the mission goal → admission (§4a) decides first; a denial is
 returned typed and **no request reaches the port** → an exact duplicate in the execution is answered from the artifacts it became, with no invocation and no budget → otherwise the budget of this plan attempt is
 reserved and a `ToolRequest`, carrying only the allowlist entry's timeout and size bound, goes to a `ToolPort` → the answer is size-bounded and each document is stored as its own artifact,
-`tool:<tool_id>:<args_digest>:<document_id>`, so it is a source the unchanged verifier counts → the recording wrapper adds one fact per call (§4b). The gate raises nothing for a tool outcome.
+`tool:<tool_id>:<args_digest>:<document_id>` (**amended by D-239: `<args_digest>` in the reference is the first 12 hex characters of the digest, so a model can copy the reference exactly; the full digest stays in the recorded facts and in duplicate detection**), so it is a source the unchanged verifier counts → the recording wrapper adds one fact per call (§4b). The gate raises nothing for a tool outcome.
 
 **The client.** `StdioMcpToolPort` implements `ToolPort` and holds no policy. Revision `2026-07-28` is stateless: there is no `initialize`; every request carries `_meta` with the protocol version and client
 capabilities, and `server/discover` is the mandatory first request, so the client learns that the server speaks this revision before sending anything else. It then lists tools (paged, bounded) and requires every tool

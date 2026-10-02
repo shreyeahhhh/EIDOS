@@ -258,7 +258,7 @@ def test_through_the_gate_the_page_is_stored_as_a_citable_artifact_that_names_th
     outcome = gate.call(context, WEB_FETCH_TOOL_ID, {"query": state.task_genome.goal})
     assert isinstance(outcome.result, ToolResult) and len(outcome.refs) == 1
     tool_id, digest, document_id = parse_tool_document_ref(outcome.refs[0])
-    assert tool_id == WEB_FETCH_TOOL_ID and len(digest) == 64 and document_id.startswith("example.com-")
+    assert tool_id == WEB_FETCH_TOOL_ID and len(digest) == 12 and document_id.startswith("example.com-")  # D-239: 12 characters a model can copy exactly, not the 64-hex digest
     assert "Hi" in store.get(context.execution_id, outcome.refs[0]).content
 
 

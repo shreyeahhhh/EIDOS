@@ -26,6 +26,7 @@ from eidos.agents import (
     VerificationAgent,
     parse_tool_document_ref,
 )
+from eidos.agents.tool_gate import REFERENCE_DIGEST_CHARS
 from eidos.contracts import AutonomyLevel, MissionEventType, MissionStatus, StepId
 from eidos.recording import ModelCallTracker, RecordingModel, RecordingToolAccess, record_baseline
 from eidos.runtime import NodeStatus, RunOutcome, SequentialExecutor, VerificationVerdict
@@ -174,7 +175,10 @@ def test_end_to_end_evidence_is_traceable_from_the_conclusion_to_the_tool_invoca
     for ref in evidence:
         artifact = path.store.get(path.state.execution_id, ref)  # evidence -> the stored tool result
         tool_id, digest, document_id = parse_tool_document_ref(ref)
-        assert (tool_id, digest) == (fact.tool_id, fact.args_digest)  # -> the invocation and its request digest, from the reference alone
+        # -> the invocation and its request digest, from the reference alone. D-239: the reference carries the *start* of the digest (12 characters, so a model can copy it exactly), which names
+        # the recorded call just as the whole digest did: it is a prefix of the fact's full digest, and of no other call's here.
+        assert tool_id == fact.tool_id and len(digest) == REFERENCE_DIGEST_CHARS and fact.args_digest.startswith(digest)
+        assert [c for s in execution_record(path.log.records).steps for c in s.tool_calls if c.args_digest.startswith(digest)] == [fact]
         assert artifact.content == dict(keyword_search(GOAL))[document_id]
     record = execution_record(path.log.records)
     assert [c.args_digest for s in record.steps for c in s.tool_calls] == [fact.args_digest]  # the recorded fact, found in the step record
