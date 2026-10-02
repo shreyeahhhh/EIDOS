@@ -48,8 +48,9 @@ services:
       - key: GROQ_API_KEY
         sync: false # enter as a Render "secret" value — never in this file, never in git
       - key: EIDOS_MODEL_NAME
-        sync: false # a real Groq model id, e.g. llama-3.3-70b-versatile — confirm against Groq's
-        # current model list before setting this; none is assumed here
+        sync: false # a real, CURRENT Groq model id, e.g. openai/gpt-oss-120b — Groq retires models on a published
+        # schedule (console.groq.com/docs/deprecations): a retired one answers 404 "does not exist". Confirm against
+        # Groq's current list before setting this; none is assumed here
       - key: EIDOS_MODEL_TEMPERATURE
         sync: false # e.g. 0.0
       - key: EIDOS_MODEL_SEED

@@ -117,6 +117,14 @@ OpenAI-compatible API instead. This was a full architectural addition (a second 
 not a deployment hack — see decisions.md D-235 for the complete account. Ollama remains exactly what it
 was: the local-development adapter, unused and untouched in production.
 
+**Choosing the Groq model, and what a refusal means.** `EIDOS_MODEL_NAME` must be a current Groq model id; none is assumed anywhere in this repository. Groq retires models on a published schedule (`https://console.groq.com/docs/deprecations`). A retired or inaccessible one is refused with `404 The model … does not exist or you do not have access to it`, which a failed mission now shows word for word (D-242). Groq's deprecation list gave `llama-3.3-70b-versatile` a shutdown date of 2026-08-16 (replacement `openai/gpt-oss-120b`), and Groq itself refused it for the owner on 2026-10-02. To see the ids an account may use, from the machine that holds the key (the key is read from the environment and never printed):
+
+```powershell
+(Invoke-RestMethod https://api.groq.com/openai/v1/models -Headers @{ Authorization = "Bearer $env:GROQ_API_KEY"; "User-Agent" = "EIDOS" }).data.id | Sort-Object
+```
+
+Other refusals read the same way: `401 Invalid API Key` is the key; `404 Unknown request URL: POST /chat/completions` is a base URL missing `/openai/v1`. A reasoning model (`openai/gpt-oss-*`) spends output tokens thinking before it answers, so leave `EIDOS_MODEL_MAX_OUTPUT_TOKENS` generous (4096 or more) if a call ends at the output limit with no answer; and Groq's per-minute token allowances differ by account tier, so a fetched page that is large for the tier may be refused as too large — the message will say. **Not verified:** a successful completion from any Groq model with this adapter (no key was used here); the opt-in `python -m pytest -m groq tests/integration/providers/test_groq_real.py` (with `GROQ_API_KEY` and `EIDOS_REAL_GROQ_MODEL` set) is the check.
+
 ## 14.7 Known deployment limitations (stated, not hidden)
 
 - **One process only.** See 14.2. A second Render instance pointed at the same database is not safe.
