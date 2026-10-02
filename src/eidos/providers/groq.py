@@ -24,6 +24,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
+from typing import Callable
 
 from eidos.agents import MeasuredFacts, ModelFailure, ModelFailureKind, ModelRequest, ModelResponse, ModelResult
 
@@ -33,12 +34,17 @@ _PATH = "/chat/completions"
 # Groq's front door (Cloudflare) refuses Python's default "Python-urllib/3.x" identity with a 403 "Error 1010: Access denied" before the request reaches Groq at all, whatever the key. An adapter
 # that names itself is let through (and a wrong key then gets the normal 401). Found on the first real use; no scripted test could have shown it.
 USER_AGENT = "EIDOS-model-adapter/1"
+# A rate limit (HTTP 429) is a request to wait. A free account's per-minute token allowance is small enough that one mission's own calls can use it up (D-244): the adapter waits as long as the provider
+# asks, up to this many times and this long each, always inside the call's own timeout, and only then reports the refusal.
+MAX_RATE_LIMIT_RETRIES = 3
+MAX_RATE_LIMIT_WAIT_SECONDS = 30.0
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class GroqModel:
     base_url: str  # required, no default: e.g. https://api.groq.com/openai/v1
     api_key: str  # required, no default: the caller's own GROQ_API_KEY, read once at the composition root
+    sleep: Callable[[float], None] = time.sleep  # how a rate-limit wait is made; a test hands in one that does not really wait
 
     def __post_init__(self) -> None:
         parsed = urllib.parse.urlsplit(self.base_url)
@@ -66,27 +72,55 @@ class GroqModel:
             method="POST",
         )
         started = time.monotonic()
-        try:
-            with urllib.request.urlopen(http_request, timeout=request.settings.timeout_seconds) as response:
-                raw = response.read()
-        except urllib.error.HTTPError as error:
-            # Covers a bad/expired key (401), a model the account cannot use (404), and rate limiting (429)
-            # alike: all are "the provider answered with an error", which is exactly what UNAVAILABLE means.
-            return _failure(ModelFailureKind.UNAVAILABLE, http_failure_message("the provider answered", error, secrets=(self.api_key,)))  # with Groq's own explanation (D-242)
-        except urllib.error.URLError as error:
-            if isinstance(error.reason, (socket.timeout, TimeoutError)):
+        deadline = started + request.settings.timeout_seconds  # one bound over every attempt and every wait
+        retries = 0
+        while True:
+            try:
+                with urllib.request.urlopen(http_request, timeout=max(deadline - time.monotonic(), 0.001)) as response:
+                    raw = response.read()
+                break
+            except urllib.error.HTTPError as error:
+                if error.code == 429:
+                    # D-244: a rate limit is the provider saying "not yet", and it says how long. Wait that long (bounded) and ask again, rather than failing the whole mission step at once.
+                    wait = _rate_limit_wait(error, retries)
+                    if wait is not None and retries < MAX_RATE_LIMIT_RETRIES and time.monotonic() + wait < deadline:
+                        self.sleep(wait)
+                        retries += 1
+                        continue
+                # Covers a bad/expired key (401), a model the account cannot use (404), and a rate limit that outlasted the retries (429)
+                # alike: all are "the provider answered with an error", which is exactly what UNAVAILABLE means.
+                detail = http_failure_message("the provider answered", error, secrets=(self.api_key,))  # with Groq's own explanation (D-242)
+                return _failure(ModelFailureKind.UNAVAILABLE, detail + (f" (after waiting and retrying {retries} time{'s' if retries != 1 else ''})" if retries else ""))
+            except urllib.error.URLError as error:
+                if isinstance(error.reason, (socket.timeout, TimeoutError)):
+                    return _failure(ModelFailureKind.TIMEOUT, f"no answer within {request.settings.timeout_seconds} seconds")
+                return _failure(ModelFailureKind.UNAVAILABLE, f"the provider could not be reached: {error.reason}")
+            except (socket.timeout, TimeoutError):
                 return _failure(ModelFailureKind.TIMEOUT, f"no answer within {request.settings.timeout_seconds} seconds")
-            return _failure(ModelFailureKind.UNAVAILABLE, f"the provider could not be reached: {error.reason}")
-        except (socket.timeout, TimeoutError):
-            return _failure(ModelFailureKind.TIMEOUT, f"no answer within {request.settings.timeout_seconds} seconds")
-        except http.client.RemoteDisconnected:
-            return _failure(ModelFailureKind.UNAVAILABLE, "the provider closed the connection without answering")
-        except http.client.HTTPException as error:
-            return _failure(ModelFailureKind.MALFORMED_RESPONSE, f"the answer was not well-formed HTTP: {type(error).__name__}")
-        except OSError as error:
-            return _failure(ModelFailureKind.UNAVAILABLE, f"the connection failed: {error}")
-        elapsed = time.monotonic() - started
+            except http.client.RemoteDisconnected:
+                return _failure(ModelFailureKind.UNAVAILABLE, "the provider closed the connection without answering")
+            except http.client.HTTPException as error:
+                return _failure(ModelFailureKind.MALFORMED_RESPONSE, f"the answer was not well-formed HTTP: {type(error).__name__}")
+            except OSError as error:
+                return _failure(ModelFailureKind.UNAVAILABLE, f"the connection failed: {error}")
+        elapsed = time.monotonic() - started  # the whole call, waits included: what the caller actually waited
         return _interpret(raw, elapsed)
+
+
+def _rate_limit_wait(error: urllib.error.HTTPError, retries_so_far: int) -> float | None:
+    """How long to wait before asking again after a 429, or ``None`` if it is not worth waiting.
+
+    Groq sends ``Retry-After`` (seconds). A value above ``MAX_RATE_LIMIT_WAIT_SECONDS`` means "not soon": the failure is returned at once rather than holding a mission step for minutes. With no
+    usable header the wait doubles from two seconds (2, 4, 8), capped the same way.
+    """
+    header = error.headers.get("retry-after") if error.headers is not None else None
+    try:
+        seconds = float(header) if header is not None else None
+    except ValueError:
+        seconds = None
+    if seconds is not None and seconds == seconds and seconds >= 0:  # (a NaN is not a wait)
+        return seconds if seconds <= MAX_RATE_LIMIT_WAIT_SECONDS else None
+    return min(2.0 * (2**retries_so_far), MAX_RATE_LIMIT_WAIT_SECONDS)
 
 
 def _interpret(raw: bytes, elapsed_seconds: float) -> ModelResult:

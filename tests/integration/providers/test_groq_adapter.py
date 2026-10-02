@@ -6,6 +6,7 @@ only the wire shape (OpenAI-style chat completions) differs. No real Groq API is
 here says anything about a model's speed or quality.
 """
 
+import json
 import socket
 import threading
 import time
@@ -22,6 +23,7 @@ from eidos.agents import (
     ModelSettings,
 )
 from eidos.providers import GroqModel
+from eidos.providers.groq import MAX_RATE_LIMIT_RETRIES, MAX_RATE_LIMIT_WAIT_SECONDS
 
 from eidos_fake_runtime import (
     FakeRuntime,
@@ -153,6 +155,107 @@ def test_the_providers_own_explanation_of_a_refusal_is_in_the_message_and_the_ke
 
     echoing = failure_of(lambda handler, body: send_json(handler, {"error": {"message": f"Invalid API Key: {API_KEY}"}}, status=401))
     assert API_KEY not in echoing.message and "[redacted]" in echoing.message
+
+
+# --- a rate limit is a request to wait (D-244) ---------------------------------------------------------------------------------
+
+
+EXPLANATION = "Rate limit reached for model `m` on tokens per minute (TPM): Limit 8000, Used 5997, Requested 4073. Please try again in 4.2s."
+
+
+def rate_limited(retry_after=None):
+    def behavior(handler, body):
+        payload = json.dumps({"error": {"message": EXPLANATION, "type": "tokens", "code": "rate_limit_exceeded"}}).encode("utf-8")
+        handler.send_response(429)
+        handler.send_header("Content-Type", "application/json")
+        if retry_after is not None:
+            handler.send_header("Retry-After", str(retry_after))
+        handler.send_header("Content-Length", str(len(payload)))
+        handler.end_headers()
+        handler.wfile.write(payload)
+
+    return behavior
+
+
+def in_turn(*behaviors):
+    """The first behaviour answers the first request, the second the second, and the last one every request after."""
+    calls = []
+
+    def behavior(handler, body):
+        calls.append(1)
+        behaviors[min(len(calls), len(behaviors)) - 1](handler, body)
+
+    return behavior
+
+
+def complete_with_waits(behavior, **overrides):
+    waits: list[float] = []
+    with FakeRuntime(behavior) as runtime:
+        result = GroqModel(base_url=runtime.url, api_key=API_KEY, sleep=waits.append).complete(request(**overrides))
+    return result, waits, runtime.requests
+
+
+def test_a_rate_limit_is_waited_out_for_as_long_as_the_provider_asks_and_then_the_call_succeeds():
+    result, waits, requests = complete_with_waits(in_turn(rate_limited(retry_after=4), replies("hello")))
+    assert isinstance(result, ModelResponse) and result.text == "hello"
+    assert waits == [4.0] and len(requests) == 2  # it asked again once, after the wait it was told to make
+    assert requests[0][2] == requests[1][2]  # the same request, not a changed one
+
+
+def test_a_provider_that_gives_no_wait_gets_a_doubling_one():
+    result, waits, requests = complete_with_waits(in_turn(rate_limited(), rate_limited(), rate_limited(), replies("hello")), timeout_seconds=60.0)
+    assert isinstance(result, ModelResponse) and waits == [2.0, 4.0, 8.0] and len(requests) == 4
+    result, waits, _ = complete_with_waits(in_turn(rate_limited("soon"), replies("hello")), timeout_seconds=60.0)  # a value that is not a number is no wait at all
+    assert isinstance(result, ModelResponse) and waits == [2.0]
+
+
+def test_a_wait_that_does_not_fit_in_the_calls_own_timeout_ends_the_retries_even_with_tries_left():
+    # (the test's sleep does not advance the clock, so only the length of each wait is judged against the 5 s: 2 and 4 fit, the third wait, 8, does not)
+    result, waits, requests = complete_with_waits(rate_limited(), timeout_seconds=5.0)
+    assert isinstance(result, ModelFailure) and waits == [2.0, 4.0] and len(requests) == 3
+    assert "after waiting and retrying 2 times" in result.message
+
+
+def test_a_rate_limit_that_does_not_lift_is_reported_after_a_bounded_number_of_tries_with_the_providers_reason():
+    result, waits, requests = complete_with_waits(rate_limited(retry_after=1))
+    assert isinstance(result, ModelFailure) and result.kind is ModelFailureKind.UNAVAILABLE
+    assert len(requests) == 1 + MAX_RATE_LIMIT_RETRIES and waits == [1.0] * MAX_RATE_LIMIT_RETRIES  # never retried forever
+    assert "HTTP status 429" in result.message and "Limit 8000, Used 5997, Requested 4073" in result.message  # what the owner needs to see
+    assert f"after waiting and retrying {MAX_RATE_LIMIT_RETRIES} times" in result.message
+
+
+def test_a_wait_longer_than_is_worth_holding_a_step_for_is_not_made():
+    result, waits, requests = complete_with_waits(rate_limited(retry_after=MAX_RATE_LIMIT_WAIT_SECONDS + 1), timeout_seconds=600.0)  # a timeout long enough that only the cap can be what stops it
+    assert isinstance(result, ModelFailure) and waits == [] and len(requests) == 1
+    at_the_cap, waits, _ = complete_with_waits(in_turn(rate_limited(retry_after=MAX_RATE_LIMIT_WAIT_SECONDS), replies("hello")), timeout_seconds=600.0)
+    assert isinstance(at_the_cap, ModelResponse) and waits == [MAX_RATE_LIMIT_WAIT_SECONDS]  # exactly the cap is still waited
+    assert "retrying" not in result.message  # it did not retry, and does not say it did
+
+
+def test_a_wait_that_would_outlast_the_calls_own_timeout_is_not_made():
+    result, waits, requests = complete_with_waits(rate_limited(retry_after=10), timeout_seconds=2.0)
+    assert isinstance(result, ModelFailure) and waits == [] and len(requests) == 1
+
+
+def test_the_wait_is_made_for_real_by_default_and_only_as_long_as_asked():
+    started = time.monotonic()
+    with FakeRuntime(in_turn(rate_limited(retry_after=0.3), replies("hello"))) as runtime:
+        result = GroqModel(base_url=runtime.url, api_key=API_KEY).complete(request(timeout_seconds=10.0))
+    elapsed = time.monotonic() - started
+    assert isinstance(result, ModelResponse) and 0.25 <= elapsed < 3.0  # (a coarse Windows timer can return a sleep a few milliseconds early)
+    assert result.measured.elapsed_seconds >= 0.25  # the call's elapsed time is what the caller waited, the pause included
+
+
+@pytest.mark.parametrize("status", [400, 401, 403, 404, 500, 503])
+def test_no_other_refusal_is_ever_retried(status):
+    result, waits, requests = complete_with_waits(lambda handler, body: send_json(handler, {"error": {"message": "no"}}, status=status))
+    assert isinstance(result, ModelFailure) and waits == [] and len(requests) == 1
+
+
+def test_a_rate_limit_message_never_carries_the_key():
+    behavior = lambda handler, body: send_json(handler, {"error": {"message": f"slow down {API_KEY}"}}, status=429)  # noqa: E731
+    result, waits, _ = complete_with_waits(behavior, timeout_seconds=0.5)
+    assert isinstance(result, ModelFailure) and API_KEY not in result.message
 
 
 def test_a_call_that_outlasts_its_timeout_is_a_timeout_and_returns_promptly():
