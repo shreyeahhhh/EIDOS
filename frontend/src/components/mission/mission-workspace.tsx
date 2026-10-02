@@ -38,10 +38,12 @@ export function MissionWorkspace({ missionId }: { missionId: string }) {
   const mission = missionState.status === "ready" ? missionState.mission : null;
   const hasEvents = (mission?.last_sequence ?? 0) > 0;
   const runKey = mission ? `${mission.last_sequence}-${mission.run_status}` : undefined;
+  // While the run is in flight there is no result to ask for: the backend would answer 409 `not_finished` every time, so the page says so itself and asks only once the run has ended.
+  const runIsActive = mission !== null && (mission.run_status === "queued" || mission.run_status === "running");
 
   const execution = useApiResource(() => getExecution(missionId), { enabled: hasEvents, key: runKey, notReadyCodes: ["no_events"] });
   const events = useApiResource(() => getEvents(missionId, { limit: 500 }), { enabled: hasEvents, key: runKey });
-  const result = useApiResource(() => getResult(missionId), { enabled: hasEvents, key: runKey, notReadyCodes: ["not_finished"] });
+  const result = useApiResource(() => getResult(missionId), { enabled: hasEvents && !runIsActive, key: runKey, notReadyCodes: ["not_finished"] });
   const evidence = useApiResource(() => getEvidence(missionId), { enabled: hasEvents, key: runKey, notReadyCodes: ["no_events"] });
 
   useEffect(() => {
@@ -162,10 +164,16 @@ export function MissionWorkspace({ missionId }: { missionId: string }) {
       <Section id="result" title="Result">
         {!hasEvents ? (
           <EmptyState title="No result yet">A result appears here once the mission finishes.</EmptyState>
+        ) : runIsActive ? (
+          <EmptyState title="Not finished yet">This mission is still running.</EmptyState>
         ) : result.status === "loading" ? (
           <Skeleton className="h-32 w-full" />
         ) : result.status === "not_ready" ? (
-          <EmptyState title="Not finished yet">This mission is still running.</EmptyState>
+          <EmptyState title="No result was recorded">
+            {mission.run_status === "interrupted" || mission.run_status === "error"
+              ? "This run ended before it produced a result."
+              : "This mission has no result yet."}
+          </EmptyState>
         ) : result.status === "error" ? (
           <ErrorState message={result.error.message} onRetry={result.reload} />
         ) : result.status === "ready" ? (

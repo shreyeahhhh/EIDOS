@@ -15,6 +15,10 @@ export type ApiResourceState<T> =
  * ready (a documented 409 like `no_events`/`not_finished` — not an error, just "ask again later"),
  * an error, or the real data. `notReadyCodes` names which `ApiError.code`s mean "not ready" rather
  * than "failed"; everything else becomes `error`. Re-fetches whenever `enabled` becomes true or `key` changes.
+ *
+ * A change of `key` refreshes in the background: what was already shown stays on screen until the new answer
+ * arrives, so a page that updates as a run progresses does not blank out into placeholders on every event. Only
+ * `enabled` flipping or an explicit `reload()` goes back to "loading" — those mean "this is a different request".
  */
 export function useApiResource<T>(
   fetcher: () => Promise<T>,
@@ -23,15 +27,17 @@ export function useApiResource<T>(
   const [state, setState] = useState<ApiResourceState<T>>({ status: "loading" });
   const [reloadToken, setReloadToken] = useState(0);
 
-  // Resetting to "loading" the instant `enabled`/`key` changes is a render-time adjustment, not an
-  // effect: computing it here (React's own pattern for "state that resets when a prop changes")
-  // avoids an extra render pass and a synchronous setState inside the effect below.
-  const identity = JSON.stringify([enabled, key, reloadToken]);
-  const [trackedIdentity, setTrackedIdentity] = useState(identity);
-  if (identity !== trackedIdentity) {
-    setTrackedIdentity(identity);
+  // Resetting to "loading" the instant `enabled` flips or a reload is asked for is a render-time
+  // adjustment, not an effect: computing it here (React's own pattern for "state that resets when a prop
+  // changes") avoids an extra render pass and a synchronous setState inside the effect below. A change of
+  // `key` alone is not a reset: it only re-runs the fetch (`identity` below) and the old answer stays.
+  const resetIdentity = JSON.stringify([enabled, reloadToken]);
+  const [trackedResetIdentity, setTrackedResetIdentity] = useState(resetIdentity);
+  if (resetIdentity !== trackedResetIdentity) {
+    setTrackedResetIdentity(resetIdentity);
     setState({ status: "loading" });
   }
+  const identity = JSON.stringify([enabled, key, reloadToken]);
 
   useEffect(() => {
     if (!enabled) return;
