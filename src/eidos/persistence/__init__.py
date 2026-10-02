@@ -8,7 +8,22 @@ and by no service module, and the one composition module in ``eidos.api`` wires 
     repositories = storage.repositories()
 """
 
-from .migrate import apply_migrations, available
+from typing import TYPE_CHECKING, Any
+
 from .postgres import PostgresArtifacts, PostgresStorage
 
+if TYPE_CHECKING:
+    from .migrate import apply_migrations, available
+
 __all__ = ["PostgresArtifacts", "PostgresStorage", "apply_migrations", "available"]
+
+_MIGRATE_NAMES = frozenset({"apply_migrations", "available"})
+
+
+def __getattr__(name: str) -> Any:
+    """Resolve the two migration names on first use: importing ``.migrate`` eagerly here made ``python -m eidos.persistence.migrate`` find the module already in ``sys.modules`` and warn."""
+    if name in _MIGRATE_NAMES:
+        from . import migrate
+
+        return getattr(migrate, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
