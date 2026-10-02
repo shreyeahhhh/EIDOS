@@ -7,7 +7,7 @@ import { NextResponse, type NextRequest } from "next/server";
  * 1. Refresh an expiring session and rewrite its cookies, so a signed-in visitor is
  *    never silently logged out mid-session.
  * 2. Redirect an unauthenticated visitor away from a protected route to `/login`, and
- *    a signed-in visitor away from `/login` back into the app.
+ *    a signed-in visitor away from `/login` and `/signup` back into the app.
  *
  * This never talks to FastAPI and never decides EIDOS-level authorization (tenant
  * membership, resource ownership): it only establishes *whether Supabase has a session*.
@@ -15,7 +15,7 @@ import { NextResponse, type NextRequest } from "next/server";
  */
 
 const PROTECTED_PREFIXES = ["/missions"];
-const AUTH_PREFIXES = ["/login"];
+const AUTH_PREFIXES = ["/login", "/signup"];
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });

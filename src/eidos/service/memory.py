@@ -25,6 +25,7 @@ from .ports import (
     RunStatus,
     SequenceConflict,
     UserId,
+    personal_workspace_id,
 )
 
 _NIL = "00000000-0000-0000-0000-000000000000"
@@ -104,6 +105,15 @@ class InMemoryStorage:
     def memberships_of(self, user_id: UserId) -> tuple[Membership, ...]:
         with self._lock:
             return tuple(sorted(self._members.get(user_id, ()), key=lambda m: str(m.tenant_id)))
+
+    def provision_personal_workspace(self, user_id: UserId, name: str) -> tuple[Membership, ...]:
+        with self._lock:
+            tenant_id = personal_workspace_id(user_id)
+            self._tenants.setdefault(tenant_id, name)
+            members = self._members.setdefault(user_id, [])
+            if not any(m.tenant_id == tenant_id for m in members):
+                members.append(Membership(tenant_id=tenant_id, role=Role.OWNER))
+            return self.memberships_of(user_id)
 
     # --- MissionRepository --------------------------------------------------------------------------------------------------------
 

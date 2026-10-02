@@ -6,7 +6,6 @@ const PRODUCT_LINKS = [
   { href: "/#product", label: "Product" },
   { href: "/#how-it-works", label: "How it works" },
   { href: "/#architecture", label: "Architecture" },
-  { href: "/#principles", label: "Engineering principles" },
 ];
 
 export function SiteFooter() {
@@ -44,6 +43,11 @@ export function SiteFooter() {
               <li>
                 <Link href="/login" className="text-ink-muted transition-colors hover:text-ink">
                   Sign in
+                </Link>
+              </li>
+              <li>
+                <Link href="/signup" className="text-ink-muted transition-colors hover:text-ink">
+                  Create account
                 </Link>
               </li>
             </ul>

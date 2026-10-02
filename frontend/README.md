@@ -54,6 +54,8 @@ the backend by deploying it.
 ```
 /                    landing — the loop, the manifesto
 /login               Supabase email+password sign-in
+/signup              Supabase email sign-up (a workspace is created on first use — D-237)
+/auth/callback       where the sign-up confirmation email's link lands (route handler)
 /missions            dashboard — a local navigation index, not a source of truth
 /missions/new        mission creation (protected)
 /missions/[id]        the mission workspace — ONE page, not five routes or tabs
@@ -72,6 +74,8 @@ src/
   app/
     page.tsx                       landing / product explanation
     login/page.tsx                  Supabase email+password sign-in
+    signup/page.tsx                 Supabase email sign-up
+    auth/callback/route.ts          exchanges the confirmation code for a session
     missions/page.tsx               the dashboard (a local navigation index)
     missions/new/page.tsx           mission creation (protected)
     missions/[id]/page.tsx          the mission workspace (protected)
@@ -80,14 +84,14 @@ src/
     ui/                            shared primitives (Button, Card, Badge, Field, Callout, Skeleton, EmptyState, ErrorState)
     layout/                        PageHeader, Section — the workspace's only structure
     site/                          header (marketing nav signed-out, app nav signed-in) / footer, sign-out
-    auth/                          the login form
+    auth/                          the login and sign-up forms
     mission/                       creation form, dashboard, MissionCard, MissionHeader, MissionStatusPair, ExecutionMetrics, the workspace itself, and the two shared access states (no-workspace-access, tenant-required)
     execution/                     ExecutionTimeline (plain-language event descriptions, raw payload behind a disclosure)
     plan/                          PlanGraph (a hand-built SVG DAG, no graph library) and ReplanLineage
     evidence/                      EvidencePanel
     result/                        ResultPanel, VerificationPanel, ArtifactCard
     landing/                       the landing page's own sections (Reveal, MissionLoopVisual, ProductThesis, HowItWorks,
-                                    WhyEidos, ProductPreview, ModelIndependent, Principles, BuildWithEidos) — composed only
+                                    ProductPreview, ModelIndependent) — composed only
                                     by `app/page.tsx`, never imported into the authenticated app
   lib/
     supabase/                      browser and server Supabase clients

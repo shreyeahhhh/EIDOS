@@ -43,6 +43,7 @@ from .ports import (
     StorageError,
     TenancyRepository,
     UserId,
+    personal_workspace_id,
 )
 from .runner import INTERRUPTED_REASON, RunManager
 from .service import MissionService, RequestContext
@@ -66,5 +67,5 @@ __all__ = [
     "IntegrityFailure", "InvalidRequest", "InvalidSpec", "KnowledgeProvision", "Membership", "MissionFailure", "MissionRecord", "MissionRepository", "MissionResult", "MissionService",
     "MissionSpec", "MissionSummary", "NoEvents", "NoTenantMembership", "NotFinished", "NotFound", "NotStartable", "PayloadTooLarge", "PreparedRun", "ReliabilitySpec", "Repositories",
     "RequestContext", "ResultArtifact", "Role", "RunManager", "RunPersistence", "RunStatus", "RunnerConfig", "SequenceConflict", "ServiceConfig", "ServiceError", "StartedMission",
-    "StorageError", "StorageUnavailable", "SuppliedDocument", "TenancyRepository", "TenantRequired", "TenantRunLimit", "UserId", "WriteThroughArtifactStore", "provisional_system_limits",
+    "StorageError", "StorageUnavailable", "SuppliedDocument", "TenancyRepository", "TenantRequired", "TenantRunLimit", "UserId", "WriteThroughArtifactStore", "personal_workspace_id", "provisional_system_limits",
 ]

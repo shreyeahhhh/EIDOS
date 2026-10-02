@@ -5,6 +5,7 @@ request under it is a conflict; a resource of another tenant is indistinguishabl
 stored log that does not replay is a fault of the store and never a mission outcome.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
@@ -31,6 +32,7 @@ from eidos.service import (
     StorageUnavailable,
     TenantRequired,
     UserId,
+    personal_workspace_id,
 )
 from eidos.service.views import replayed_state
 from eidos.state import CitationKind, audit_evidence, execution_record
@@ -97,6 +99,71 @@ def test_a_tenancy_store_that_is_down_is_an_unavailable_service_not_a_missing_me
     service = MissionService(repositories=replace(repositories, tenancy=Down()), runner=rig.runner, composition=rig.composition, config=rig.config)
     with pytest.raises(StorageUnavailable):
         service.resolve_context(ALICE, None)
+
+
+# --- identity: a workspace of one's own for a user who has none (D-237) --------------------------------------------------------------------
+
+
+def auto_provisioning_service(rig):
+    return MissionService(
+        repositories=rig.storage.repositories(), runner=rig.runner, composition=rig.composition, config=replace(rig.config, auto_provision_workspaces=True)
+    )
+
+
+def test_a_user_with_no_tenant_is_given_a_workspace_of_their_own_when_the_deployment_allows_it():
+    rig = make_rig()
+    service = auto_provisioning_service(rig)
+    context = service.resolve_context(DAVE, None)
+    assert (context.user_id, context.tenant_id, context.role) == (DAVE, personal_workspace_id(DAVE), Role.OWNER)
+    assert context.tenant_id not in (TENANT_A, TENANT_B)
+    assert service.resolve_context(DAVE, None) == context  # the second request reads it, it does not make another
+    assert [m.tenant_id for m in rig.storage.repositories().tenancy.memberships_of(DAVE)] == [context.tenant_id]
+
+
+def test_a_user_who_already_has_a_tenant_keeps_exactly_it_and_gets_no_extra_workspace():
+    rig = make_rig()
+    service = auto_provisioning_service(rig)
+    assert service.resolve_context(ALICE, None).tenant_id == TENANT_A
+    assert [m.tenant_id for m in rig.storage.repositories().tenancy.memberships_of(ALICE)] == [TENANT_A]
+    assert [m.tenant_id for m in rig.storage.repositories().tenancy.memberships_of(CAROL)] == sorted([TENANT_A, TENANT_B], key=str)
+    assert service.resolve_context(CAROL, str(TENANT_B)).tenant_id == TENANT_B  # and several tenants still means naming one
+
+
+def test_each_new_user_gets_a_different_workspace_and_may_not_name_anothers():
+    rig = make_rig()
+    service = auto_provisioning_service(rig)
+    stranger = UserId(UUID(int=0xABCDEF))
+    mine, theirs = service.resolve_context(DAVE, None), service.resolve_context(stranger, None)
+    assert mine.tenant_id != theirs.tenant_id
+    with pytest.raises(NotFound):
+        service.resolve_context(DAVE, str(theirs.tenant_id))
+
+
+def test_workspaces_made_by_racing_first_requests_are_one_workspace():
+    rig = make_rig()
+    service = auto_provisioning_service(rig)
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        contexts = list(pool.map(lambda _: service.resolve_context(DAVE, None), range(16)))
+    assert {c.tenant_id for c in contexts} == {personal_workspace_id(DAVE)}
+    assert len(rig.storage.repositories().tenancy.memberships_of(DAVE)) == 1
+
+
+def test_a_store_that_is_down_while_giving_a_workspace_is_an_unavailable_service():
+    rig = make_rig()
+
+    class Down:
+        def memberships_of(self, user_id):
+            return ()
+
+        def provision_personal_workspace(self, user_id, name):
+            raise StorageError("down")
+
+    service = MissionService(
+        repositories=replace(rig.storage.repositories(), tenancy=Down()), runner=rig.runner, composition=rig.composition,
+        config=replace(rig.config, auto_provision_workspaces=True),
+    )
+    with pytest.raises(StorageUnavailable):
+        service.resolve_context(DAVE, None)
 
 
 # --- create: no event, server-assigned identity, the documents kept ------------------------------------------------------------------------

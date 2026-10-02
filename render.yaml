@@ -32,6 +32,10 @@ services:
       - key: EIDOS_JWKS_URL
         sync: false # https://<project-ref>.supabase.co/auth/v1/.well-known/jwks.json
 
+      # --- workspaces: a user who signs up is given a workspace of their own (D-237). Remove this to go back to provisioning by hand. ---
+      - key: EIDOS_AUTO_PROVISION_WORKSPACES
+        value: "true"
+
       # --- model provider: Groq for production (Ollama has nothing to run on here) ---
       - key: EIDOS_MODEL_PROVIDER
         value: groq

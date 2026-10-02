@@ -69,6 +69,7 @@ a Render-specific field wrong; verify it in the dashboard after the first deploy
 |---|---|---|
 | `EIDOS_DATABASE_URL` | secret (embeds the Postgres password) | Render |
 | `EIDOS_JWKS_URL` | not secret (a public discovery URL) but real per-project | Render |
+| `EIDOS_AUTO_PROVISION_WORKSPACES` | config (`true` in `render.yaml`; D-237) | Render |
 | `EIDOS_MODEL_PROVIDER` | config (`groq` in production) | Render |
 | `EIDOS_MODEL_BASE_URL` | config (`https://api.groq.com/openai/v1` in production) | Render |
 | `GROQ_API_KEY` | **secret** | Render — entered directly in Render's dashboard, never in this repository, never in a commit, never pasted into chat |
@@ -92,6 +93,16 @@ environment-driven). Steps: import this repository into Vercel, set **Root Direc
 (it is a subdirectory, not the repository root), set the three variables above, deploy. Vercel's own
 production cookies are HTTPS-only by default, matching `@supabase/ssr`'s expectations with no extra
 configuration.
+
+### Sign-up and workspaces (D-237)
+
+The app has `/signup`. To let people use it, in the Supabase dashboard (the owner's settings, not made by this repository):
+
+1. **Authentication → Providers → Email:** sign-ups enabled, and **Confirm email kept ON** (a session is only issued after the address is confirmed).
+2. **Authentication → URL Configuration:** set **Site URL** to the Vercel URL and add `https://<your-vercel-domain>/auth/callback` (and `http://localhost:3000/auth/callback` for local work) to **Redirect URLs**.
+3. Keep `EIDOS_AUTO_PROVISION_WORKSPACES=true` on Render: the first request from a new account then creates their own workspace. Existing accounts keep the workspace they already have.
+
+Known limit: there is no per-user rate limit, quota or billing. Anyone who can sign up can start missions on the deployment's Groq key, bounded only by the per-tenant active-run limit, the queue cap and the request ceilings — watch Groq usage, and rotate or remove the setting if it is abused.
 
 ## 14.6 Production model provider
 

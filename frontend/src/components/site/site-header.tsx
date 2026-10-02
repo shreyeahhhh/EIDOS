@@ -8,7 +8,6 @@ const MARKETING_LINKS = [
   { href: "/#product", label: "Product" },
   { href: "/#how-it-works", label: "How it works" },
   { href: "/#architecture", label: "Architecture" },
-  { href: "/#build", label: "Docs" },
 ];
 
 export async function SiteHeader() {
@@ -48,8 +47,8 @@ export async function SiteHeader() {
               <Link href="/login" className="hidden text-sm font-medium text-ink-muted transition-colors hover:text-ink sm:inline">
                 Sign in
               </Link>
-              <Link href="/login" className={buttonClassName("primary", "sm")}>
-                Open EIDOS →
+              <Link href="/signup" className={buttonClassName("primary", "sm")}>
+                Get started →
               </Link>
             </div>
           </nav>

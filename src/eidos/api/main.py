@@ -95,6 +95,7 @@ def create_app_from_environment(environ: Mapping[str, str] | None = None) -> Fas
     config = ServiceConfig(
         limits=provisional_system_limits(), model_settings=model_settings, runner=runner_config,
         allowed_actions=frozenset(item.strip() for item in environ.get("EIDOS_ALLOWED_ACTIONS", "").split(",") if item.strip()),
+        auto_provision_workspaces=environ.get("EIDOS_AUTO_PROVISION_WORKSPACES", "").strip().lower() in ("1", "true", "yes"),  # D-237; absent means off
     )
     verifier = build_verifier(environ)
     storage = PostgresStorage.open(_required(environ, "EIDOS_DATABASE_URL"))

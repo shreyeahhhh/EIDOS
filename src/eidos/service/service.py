@@ -44,6 +44,9 @@ from .views import (
 )
 
 
+PERSONAL_WORKSPACE_NAME = "Personal workspace"
+
+
 @dataclass(frozen=True, slots=True)
 class RequestContext:
     user_id: UserId
@@ -70,6 +73,11 @@ class MissionService:
             memberships = self._repositories.tenancy.memberships_of(user_id)
         except StorageError as error:
             raise StorageUnavailable(str(error)) from error
+        if not memberships and self._config.auto_provision_workspaces:  # D-237: only a user with no tenant at all; anyone who already has one keeps exactly those
+            try:
+                memberships = self._repositories.tenancy.provision_personal_workspace(user_id, PERSONAL_WORKSPACE_NAME)
+            except StorageError as error:
+                raise StorageUnavailable(str(error)) from error
         if not memberships:
             raise NoTenantMembership("this user belongs to no tenant")
         if requested_tenant is not None:

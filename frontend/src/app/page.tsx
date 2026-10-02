@@ -6,19 +6,16 @@ import { Reveal } from "@/components/landing/reveal";
 import { MissionLoopVisual } from "@/components/landing/mission-loop-visual";
 import { ProductThesis } from "@/components/landing/product-thesis";
 import { HowItWorks } from "@/components/landing/how-it-works";
-import { WhyEidos } from "@/components/landing/why-eidos";
 import { ProductPreview } from "@/components/landing/product-preview";
 import { ModelIndependent } from "@/components/landing/model-independent";
-import { Principles } from "@/components/landing/principles";
-import { BuildWithEidos } from "@/components/landing/build-with-eidos";
 
 export default async function HomePage() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const primaryHref = user ? "/missions" : "/login";
-  const primaryLabel = user ? "Open EIDOS →" : "Open EIDOS →";
+  const primaryHref = user ? "/missions" : "/signup";
+  const primaryLabel = user ? "Open EIDOS →" : "Get started →";
 
   return (
     <div className="mx-auto max-w-6xl px-6">
@@ -36,6 +33,11 @@ export default async function HomePage() {
             <Link href={primaryHref} className={buttonClassName("primary", "md")}>
               {primaryLabel}
             </Link>
+            {!user && (
+              <Link href="/login" className="text-sm font-medium text-ink-muted hover:text-ink">
+                Sign in
+              </Link>
+            )}
             <a href="#how-it-works" className="text-sm font-medium text-ink-muted hover:text-ink">
               See how it works ↓
             </a>
@@ -64,14 +66,6 @@ export default async function HomePage() {
         </Reveal>
       </section>
 
-      {/* Why EIDOS */}
-      <section className="border-t border-border py-20">
-        <Reveal>
-          <h2 className="mb-2 font-display text-3xl text-ink">Why EIDOS</h2>
-          <WhyEidos />
-        </Reveal>
-      </section>
-
       {/* Product preview */}
       <section id="preview" className="scroll-mt-20 border-t border-border py-20">
         <Reveal>
@@ -92,29 +86,13 @@ export default async function HomePage() {
         </Reveal>
       </section>
 
-      {/* Engineering principles */}
-      <section id="principles" className="scroll-mt-20 border-t border-border py-20">
-        <Reveal>
-          <h2 className="mb-2 font-display text-3xl text-ink">Engineering principles</h2>
-          <p className="mb-6 max-w-xl text-sm leading-relaxed text-ink-muted">The rules the runtime is held to, not just described by.</p>
-          <Principles />
-        </Reveal>
-      </section>
-
-      {/* Build with EIDOS */}
-      <section id="build" className="scroll-mt-20 border-t border-border py-20">
-        <Reveal>
-          <BuildWithEidos />
-        </Reveal>
-      </section>
-
       {/* Final CTA */}
       <section className="border-t border-border py-24 text-center">
         <Reveal>
           <h2 className="font-display text-4xl text-ink sm:text-5xl">Give EIDOS a mission.</h2>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-5">
             <Link href={primaryHref} className={buttonClassName("primary", "md")}>
-              Open EIDOS →
+              {primaryLabel}
             </Link>
             <a href="#architecture" className="text-sm font-medium text-ink-muted hover:text-ink">
               Explore the architecture →

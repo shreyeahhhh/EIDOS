@@ -34,6 +34,7 @@ from eidos.service import (
     SequenceConflict,
     StorageError,
     UserId,
+    personal_workspace_id,
 )
 from eidos.state import EventRecord
 
@@ -114,6 +115,15 @@ class PostgresStorage:
         with self._transaction() as connection:
             rows = connection.execute("select tenant_id, role from eidos.tenant_members where user_id = %s order by tenant_id", (user_id,)).fetchall()
         return tuple(Membership(tenant_id=TenantId(tenant_id), role=Role(role)) for tenant_id, role in rows)
+
+    def provision_personal_workspace(self, user_id: UserId, name: str) -> tuple[Membership, ...]:
+        tenant_id = personal_workspace_id(user_id)
+        with self._transaction() as connection:  # both inserts are no-ops on a repeat, so two racing first requests end with the same one tenant and one membership
+            connection.execute("insert into eidos.tenants (tenant_id, name) values (%s, %s) on conflict (tenant_id) do nothing", (tenant_id, name))
+            connection.execute(
+                "insert into eidos.tenant_members (tenant_id, user_id, role) values (%s, %s, %s) on conflict (tenant_id, user_id) do nothing", (tenant_id, user_id, Role.OWNER.value)
+            )
+        return self.memberships_of(user_id)
 
     # --- MissionRepository --------------------------------------------------------------------------------------------------------
 

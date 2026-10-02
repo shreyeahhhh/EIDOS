@@ -161,6 +161,23 @@ def test_runner_bounds_come_from_the_environment_only_when_given(monkeypatch):
     assert (captured["worker_pool_size"], captured["max_queued_runs"], captured["max_active_runs_per_tenant"]) == (5, 9, 3)
 
 
+@pytest.mark.parametrize(("value", "expected"), [(None, False), ("", False), ("false", False), ("0", False), ("true", True), (" TRUE ", True), ("1", True), ("yes", True)])
+def test_automatic_workspaces_are_off_unless_the_environment_turns_them_on(monkeypatch, value, expected):
+    seen = {}
+    original = main.ServiceConfig
+
+    def spy(**kwargs):
+        config = original(**kwargs)
+        seen["flag"] = config.auto_provision_workspaces
+        return config
+
+    monkeypatch.setattr(main.PostgresStorage, "open", classmethod(lambda cls, url, **kwargs: type("S", (), {"repositories": lambda self: InMemoryStorage().repositories(), "close": lambda self: None})()))
+    monkeypatch.setattr(main, "ServiceConfig", spy)
+    environment = dict(GOOD) if value is None else {**GOOD, "EIDOS_AUTO_PROVISION_WORKSPACES": value}
+    create_app_from_environment(environment)
+    assert seen["flag"] is expected
+
+
 def test_the_module_reads_the_environment_only_through_its_argument_and_logs_and_prints_nothing():
     import ast
     import inspect

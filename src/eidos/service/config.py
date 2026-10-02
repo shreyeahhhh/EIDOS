@@ -71,3 +71,4 @@ class ServiceConfig:
     ceilings: ApiCeilings = field(default_factory=ApiCeilings)
     runner: RunnerConfig = field(default_factory=RunnerConfig)
     max_candidates: int = 3
+    auto_provision_workspaces: bool = False  # D-237: a signed-in user with no tenant is given one of their own instead of ``no_tenant_membership``; off unless the deployer turns it on

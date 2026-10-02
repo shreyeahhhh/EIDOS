@@ -1,9 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useState, type ChangeEvent, type FormEvent } from "react";
 
 import { ApiError } from "@/lib/api/errors";
+import { ACCEPTED_EXTENSIONS, addDocument, MAX_DOCUMENTS, toSuppliedDocuments, type PickedDocument } from "@/lib/documents";
 import { createMission } from "@/lib/api/client";
 import type { MissionSpec, RiskLevel } from "@/lib/api/types";
 import { KNOWN_CAPABILITIES } from "@/lib/api/types";
@@ -43,7 +44,8 @@ export function CreateMissionForm() {
   const [minQuality, setMinQuality] = useState(0);
   const [maxRiskLevel, setMaxRiskLevel] = useState<RiskLevel>("medium");
   const [minIndependentEvidence, setMinIndependentEvidence] = useState(1);
-  const [supportingDocument, setSupportingDocument] = useState("");
+  const [documents, setDocuments] = useState<PickedDocument[]>([]);
+  const [uploadErrors, setUploadErrors] = useState<string[]>([]);
 
   const [stage, setStage] = useState<Stage>({ name: "form" });
   const [submitting, setSubmitting] = useState(false);
@@ -68,10 +70,35 @@ export function CreateMissionForm() {
         max_risk_level: maxRiskLevel,
         min_independent_evidence: minIndependentEvidence,
       },
-      supplied_documents: supportingDocument.trim()
-        ? [{ ref: "doc:1", content_type: "text/plain", content: supportingDocument }]
-        : [],
+      supplied_documents: toSuppliedDocuments(documents),
     };
+  }
+
+  /** Reads every chosen file as text in the browser; each one is checked against the backend's limits before it is kept. */
+  async function handleFiles(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = ""; // so choosing the same file again after removing it still fires
+    let next = documents;
+    const problems: string[] = [];
+    for (const file of files) {
+      let text: string;
+      try {
+        text = await file.text();
+      } catch {
+        problems.push(`${file.name}: could not be read.`);
+        continue;
+      }
+      const result = addDocument(next, file.name, text);
+      if ("error" in result) problems.push(result.error);
+      else next = result.documents;
+    }
+    setDocuments(next);
+    setUploadErrors(problems);
+  }
+
+  function removeDocument(ref: string) {
+    setDocuments((current) => current.filter((document) => document.ref !== ref));
+    setUploadErrors([]);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -192,6 +219,50 @@ export function CreateMissionForm() {
         )}
       </fieldset>
 
+      <fieldset className="flex flex-col gap-2">
+        <legend className="text-sm font-medium text-ink">Documents (optional)</legend>
+        <p id="documents-hint" className="text-xs text-ink-faint">
+          EIDOS works only from what you give it here — it cannot open links. Add text files ({ACCEPTED_EXTENSIONS.join(", ")}), up to{" "}
+          {MAX_DOCUMENTS} files, 32 KB each.
+        </p>
+        <input
+          id="documents"
+          type="file"
+          aria-label="Choose text files to attach"
+          multiple
+          accept={ACCEPTED_EXTENSIONS.join(",")}
+          aria-describedby="documents-hint"
+          onChange={handleFiles}
+          className="block w-full cursor-pointer text-sm text-ink-muted file:mr-4 file:cursor-pointer file:rounded-md file:border file:border-border-strong file:bg-surface-raised file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-ink hover:file:bg-surface-sunken"
+        />
+        {uploadErrors.length > 0 && (
+          <ul role="alert" className="list-disc space-y-1 pl-4 text-xs text-error">
+            {uploadErrors.map((message) => (
+              <li key={message}>{message}</li>
+            ))}
+          </ul>
+        )}
+        {documents.length > 0 && (
+          <ul className="mt-1 flex flex-col divide-y divide-border rounded-md border border-border">
+            {documents.map((document) => (
+              <li key={document.ref} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                <span className="min-w-0 truncate text-ink">
+                  {document.name} <span className="font-mono text-xs text-ink-faint">{Math.max(1, Math.round(document.bytes / 1024))} KB</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => removeDocument(document.ref)}
+                  aria-label={`Remove ${document.name}`}
+                  className="shrink-0 text-xs font-medium text-ink-muted hover:text-ink"
+                >
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </fieldset>
+
       {/* A quiet reminder of the shape every mission takes, not a preview of this one's actual plan —
           EIDOS decides the real plan only once this mission is created. */}
       <div className="flex items-center gap-2 rounded-md border border-border bg-surface-sunken px-4 py-3 font-mono text-xs text-ink-faint">
@@ -289,17 +360,6 @@ export function CreateMissionForm() {
             </Field>
           </fieldset>
 
-          <Field label="Supporting document (optional)" hint="Plain text EIDOS may cite while researching.">
-            {(id) => (
-              <textarea
-                id={id}
-                value={supportingDocument}
-                onChange={(event) => setSupportingDocument(event.target.value)}
-                rows={4}
-                className={fieldInputClassName(false)}
-              />
-            )}
-          </Field>
         </div>
       </details>
 

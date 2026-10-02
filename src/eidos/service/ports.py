@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 from typing import Literal, NewType, Protocol
-from uuid import UUID
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 from pydantic import Field
 
@@ -95,8 +95,16 @@ class DuplicateIdempotencyKey(Exception):
     """A mission with this ``(tenant, idempotency key)`` already exists."""
 
 
+def personal_workspace_id(user_id: UserId) -> TenantId:
+    """The tenant a user's automatically created workspace takes: a pure function of the user id, so creating it twice (two requests racing on a first visit) names the same row."""
+    return TenantId(uuid5(NAMESPACE_URL, f"eidos:personal-workspace:{user_id}"))
+
+
 class TenancyRepository(Protocol):
     def memberships_of(self, user_id: UserId) -> tuple[Membership, ...]: ...
+
+    def provision_personal_workspace(self, user_id: UserId, name: str) -> tuple[Membership, ...]:
+        """Give a user who belongs to no tenant one of their own (D-237) and return their memberships. Idempotent and safe under concurrency; never touches a tenant the user already has."""
 
 
 class MissionRepository(Protocol):

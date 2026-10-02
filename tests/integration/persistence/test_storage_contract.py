@@ -11,7 +11,7 @@ import pytest
 
 from eidos.agents import ArtifactConflict
 from eidos.contracts import ArtifactRef, StepId, TenantId
-from eidos.service import ArtifactWrite, DuplicateIdempotencyKey, InMemoryStorage, Role, RunStatus, SequenceConflict
+from eidos.service import ArtifactWrite, DuplicateIdempotencyKey, InMemoryStorage, Role, RunStatus, SequenceConflict, personal_workspace_id
 from eidos.state import replay
 
 from eidos.service.spec import without_documents
@@ -53,6 +53,15 @@ def test_memberships_are_the_tenants_a_user_belongs_to_with_their_role(seeded):
     assert (alice.tenant_id, alice.role.value) == (TENANT_A, "owner")
     assert [m.tenant_id for m in seeded.tenancy.memberships_of(CAROL)] == sorted([TENANT_A, TENANT_B], key=str)
     assert seeded.tenancy.memberships_of(DAVE) == ()
+
+
+def test_a_personal_workspace_is_made_once_for_a_user_with_none_and_never_changes_anothers(seeded):
+    first = seeded.tenancy.provision_personal_workspace(DAVE, "Personal workspace")
+    assert [(m.tenant_id, m.role) for m in first] == [(personal_workspace_id(DAVE), Role.OWNER)]
+    assert seeded.tenancy.provision_personal_workspace(DAVE, "Personal workspace") == first  # idempotent
+    assert seeded.tenancy.memberships_of(DAVE) == first
+    assert [m.tenant_id for m in seeded.tenancy.memberships_of(ALICE)] == [TENANT_A]  # nobody else's membership moved
+    assert seeded.tenancy.memberships_of(BOB)[0].tenant_id == TENANT_B
 
 
 def test_the_nil_tenant_is_reserved_and_can_never_be_a_real_tenant(storage):
