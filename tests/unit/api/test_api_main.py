@@ -178,6 +178,29 @@ def test_automatic_workspaces_are_off_unless_the_environment_turns_them_on(monke
     assert seen["flag"] is expected
 
 
+@pytest.mark.parametrize(
+    ("actions", "wired"),
+    [(None, False), ("", False), ("read_documents", False), ("web_fetch", True), ("read_documents, web_fetch", True), ("WEB_FETCH", False), ("web_fetch_all", False)],
+)
+def test_the_web_fetch_tool_is_wired_only_where_the_deployer_listed_its_action(monkeypatch, actions, wired):
+    seen = {}
+    original = main.Composition
+
+    def spy(**kwargs):
+        seen["tools"] = kwargs.get("tools")
+        return original(**kwargs)
+
+    monkeypatch.setattr(main.PostgresStorage, "open", classmethod(lambda cls, url, **kwargs: type("S", (), {"repositories": lambda self: InMemoryStorage().repositories(), "close": lambda self: None})()))
+    monkeypatch.setattr(main, "Composition", spy)
+    environment = dict(GOOD) if actions is None else {**GOOD, "EIDOS_ALLOWED_ACTIONS": actions}
+    create_app_from_environment(environment)
+    if wired:
+        assert seen["tools"] is not None and seen["tools"].tool_id == "web/fetch"
+        assert seen["tools"].registry.resolve("web/fetch") is not None and len(seen["tools"].registry.tools) == 1
+    else:
+        assert seen["tools"] is None
+
+
 def test_the_module_reads_the_environment_only_through_its_argument_and_logs_and_prints_nothing():
     import ast
     import inspect

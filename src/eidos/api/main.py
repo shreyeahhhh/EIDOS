@@ -22,7 +22,8 @@ from fastapi import FastAPI
 from eidos.agents import GenerationParameters, ModelSettings
 from eidos.persistence import PostgresStorage
 from eidos.providers import model_port
-from eidos.service import Composition, MissionService, RunManager, RunnerConfig, ServiceConfig, provisional_system_limits
+from eidos.service import Composition, MissionService, RunManager, RunnerConfig, ServiceConfig, ToolProvision, provisional_system_limits
+from eidos.tools import WEB_FETCH_ACTION, WEB_FETCH_TOOL_ID, WebFetchTool, web_fetch_registry
 
 from .app import create_app
 from .auth import ASYMMETRIC_ALGORITHMS, SYMMETRIC_ALGORITHMS, JwksKeys, JwtSettings, JwtVerifier, StaticKey
@@ -100,7 +101,11 @@ def create_app_from_environment(environ: Mapping[str, str] | None = None) -> Fas
     verifier = build_verifier(environ)
     storage = PostgresStorage.open(_required(environ, "EIDOS_DATABASE_URL"))
     repositories = storage.repositories()
-    composition = Composition(config=config, model=model, events=repositories.events)
+    # D-238: the web-fetch tool exists only where the deployer listed its action. A mission may use it only if it names the action too (the per-mission permission) and has a tool-call budget.
+    tools = (
+        ToolProvision(registry=web_fetch_registry(), port=WebFetchTool(), tool_id=WEB_FETCH_TOOL_ID) if WEB_FETCH_ACTION in config.allowed_actions else None
+    )
+    composition = Composition(config=config, model=model, events=repositories.events, tools=tools)
     runner = RunManager(repositories=repositories, composition=composition, config=config.runner)
     service = MissionService(repositories=repositories, runner=runner, composition=composition, config=config)
     return create_app(service=service, verifier=verifier, max_body_bytes=config.ceilings.max_request_body_bytes, closers=(storage.close,))

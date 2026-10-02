@@ -8,7 +8,7 @@ The layer between the HTTP boundary and the unchanged EIDOS runtime: it validate
 ``eidos.api`` is the only HTTP boundary. Nothing in the core imports this package.
 """
 
-from .composition import AlwaysAdmit, Composition, InMemoryExperienceStore, KnowledgeProvision, PreparedRun
+from .composition import AlwaysAdmit, Composition, InMemoryExperienceStore, KnowledgeProvision, PreparedRun, ToolProvision
 from .config import ANALYSIS_AGENT_ID, RESEARCH_AGENT_ID, ApiCeilings, RunnerConfig, ServiceConfig, provisional_system_limits
 from .durable import DurableEventLog, RunPersistence, WriteThroughArtifactStore
 from .errors import (
@@ -67,5 +67,5 @@ __all__ = [
     "IntegrityFailure", "InvalidRequest", "InvalidSpec", "KnowledgeProvision", "Membership", "MissionFailure", "MissionRecord", "MissionRepository", "MissionResult", "MissionService",
     "MissionSpec", "MissionSummary", "NoEvents", "NoTenantMembership", "NotFinished", "NotFound", "NotStartable", "PayloadTooLarge", "PreparedRun", "ReliabilitySpec", "Repositories",
     "RequestContext", "ResultArtifact", "Role", "RunManager", "RunPersistence", "RunStatus", "RunnerConfig", "SequenceConflict", "ServiceConfig", "ServiceError", "StartedMission",
-    "StorageError", "StorageUnavailable", "SuppliedDocument", "TenancyRepository", "TenantRequired", "TenantRunLimit", "UserId", "WriteThroughArtifactStore", "personal_workspace_id", "provisional_system_limits",
+    "StorageError", "StorageUnavailable", "SuppliedDocument", "TenancyRepository", "TenantRequired", "TenantRunLimit", "ToolProvision", "UserId", "WriteThroughArtifactStore", "personal_workspace_id", "provisional_system_limits",
 ]

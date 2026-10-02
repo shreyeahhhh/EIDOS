@@ -67,6 +67,37 @@ describe("CreateMissionForm — documents", () => {
     await waitFor(() => expect(push).toHaveBeenCalledWith("/missions/m1"));
   });
 
+  it("asks for web access only when the box is ticked: the action and a tool budget, and nothing otherwise", async () => {
+    createMission.mockResolvedValue({ mission_id: "m3", created_at: "2026-10-02T00:00:00Z" });
+    render(<CreateMissionForm />);
+    fireEvent.change(screen.getByLabelText(/what do you want eidos/i), { target: { value: "Review https://example.com/ for faults" } });
+    fireEvent.click(screen.getByLabelText("Research"));
+    fireEvent.click(screen.getByRole("button", { name: "Create mission" }));
+    await waitFor(() => expect(createMission).toHaveBeenCalledTimes(1));
+    expect(createMission.mock.calls[0][0].allowed_actions).toEqual([]);
+    expect(createMission.mock.calls[0][0].reliability.max_tool_calls).toBeUndefined();
+  });
+
+  it("sends the web_fetch action and a budget of three tool calls when the box is ticked", async () => {
+    createMission.mockResolvedValue({ mission_id: "m4", created_at: "2026-10-02T00:00:00Z" });
+    render(<CreateMissionForm />);
+    fireEvent.change(screen.getByLabelText(/what do you want eidos/i), { target: { value: "Review https://example.com/ for faults" } });
+    fireEvent.click(screen.getByLabelText("Research"));
+    fireEvent.click(screen.getByLabelText("Let EIDOS read the web pages named in my goal"));
+    fireEvent.click(screen.getByRole("button", { name: "Create mission" }));
+    await waitFor(() => expect(createMission).toHaveBeenCalledTimes(1));
+    expect(createMission.mock.calls[0][0].allowed_actions).toEqual(["web_fetch"]);
+    expect(createMission.mock.calls[0][0].reliability.max_tool_calls).toBe(3);
+  });
+
+  it("tells the visitor, before sending, when the goal names no address to read", () => {
+    render(<CreateMissionForm />);
+    fireEvent.change(screen.getByLabelText(/what do you want eidos/i), { target: { value: "Review my portfolio" } });
+    expect(screen.queryByRole("status")).toBeNull();
+    fireEvent.click(screen.getByLabelText("Let EIDOS read the web pages named in my goal"));
+    expect(screen.getByRole("status")).toHaveTextContent(/full https:\/\/ address/);
+  });
+
   it("sends no documents when none were chosen", async () => {
     createMission.mockResolvedValue({ mission_id: "m2", created_at: "2026-10-02T00:00:00Z" });
     render(<CreateMissionForm />);

@@ -36,6 +36,10 @@ services:
       - key: EIDOS_AUTO_PROVISION_WORKSPACES
         value: "true"
 
+      # --- tools: listing web_fetch wires the one web-reading tool in (D-238, docs/15); a mission must name the action too. Remove it to turn the tool off. ---
+      - key: EIDOS_ALLOWED_ACTIONS
+        value: web_fetch
+
       # --- model provider: Groq for production (Ollama has nothing to run on here) ---
       - key: EIDOS_MODEL_PROVIDER
         value: groq

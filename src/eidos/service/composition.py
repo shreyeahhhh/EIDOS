@@ -12,7 +12,8 @@ What the composition supplies, and what it does not:
 - a per-mission in-memory experience store: nothing is learned across missions and nothing leaks across tenants (strategy memory persistence is a later decision);
 - **an always-admit admission guard that enforces no budget** (D-127, D-156). It exists because ``run_with_replanning`` needs one and none ships; it is not budget enforcement and nothing
   here claims it is;
-- **no tool and no MCP server** (deferred). **Knowledge is optional** (D-234, D-227): when a ``KnowledgeProvision`` is given, Research reaches it through the existing ``KnowledgeGate``; the
+- **no MCP server** (deferred). **A tool is optional** (D-238): when a ``ToolProvision`` is given, Research reaches it through the existing ``ToolGate`` (admission, the mission's own allowed action and
+  budget, recorded calls, citable results), which is built per run. **Knowledge is optional** (D-234, D-227): when a ``KnowledgeProvision`` is given, Research reaches it through the existing ``KnowledgeGate``; the
   service ships no loader and makes no production knowledge-base choice.
 """
 
@@ -32,9 +33,11 @@ from eidos.agents import (
     ModelRequest,
     ModelResponse,
     ResearchAgent,
+    ToolGate,
+    ToolPort,
     VerificationAgent,
 )
-from eidos.capabilities import AgentDescriptor, CapabilityRegistry
+from eidos.capabilities import AgentDescriptor, CapabilityRegistry, ToolRegistry
 from eidos.memory import ExecutionExperience
 from eidos.planning import DeterministicSelector, RuleBasedCandidateGenerator
 from eidos.recording import (
@@ -43,6 +46,7 @@ from eidos.recording import (
     RecordingCitations,
     RecordingKnowledgePort,
     RecordingModel,
+    RecordingToolAccess,
     SystemClock,
     UuidEventIds,
     UuidPlanIds,
@@ -114,6 +118,16 @@ class RetrievalPort(Protocol):
 
 
 @dataclass(frozen=True, slots=True)
+class ToolProvision:
+    """An optional tool a deployer supplies (D-238): the pinned allowlist, the port behind it and the id of the tool Research reaches it by. Every run gets its own ``ToolGate`` over it, so the
+    call ledger, the stored results and the budget are the run's alone; only the port is shared, and it is thread-safe by contract."""
+
+    registry: ToolRegistry
+    port: ToolPort
+    tool_id: str
+
+
+@dataclass(frozen=True, slots=True)
 class KnowledgeProvision:
     """An optional knowledge base a deployer supplies: its descriptor and a retriever behind the knowledge port. The service makes no choice of knowledge base (D-234)."""
 
@@ -133,9 +147,10 @@ class PreparedRun:
 
 class Composition:
     def __init__(
-        self, *, config: ServiceConfig, model: ModelPort, events: EventStore, knowledge: KnowledgeProvision | None = None, clock: Clock | None = None, sleep=None
+        self, *, config: ServiceConfig, model: ModelPort, events: EventStore, knowledge: KnowledgeProvision | None = None, tools: ToolProvision | None = None,
+        clock: Clock | None = None, sleep=None,
     ) -> None:
-        self._config, self._model, self._events, self._knowledge = config, model, events, knowledge
+        self._config, self._model, self._events, self._knowledge, self._tools = config, model, events, knowledge, tools
         self._clock = clock if clock is not None else SystemClock()
         self._sleep = sleep
         self.registry = CapabilityRegistry(
@@ -168,8 +183,14 @@ class Composition:
         if self._knowledge is not None:
             port = RecordingKnowledgePort(self._knowledge.port, tracker, clock)
             knowledge = KnowledgeGate(descriptor=self._knowledge.descriptor, port=port, ledger=EvidenceLedger(), store=store)
+        tool_arguments: dict = {}
+        if self._tools is not None:
+            gate = ToolGate(registry=self._tools.registry, port=self._tools.port, store=store)
+            tool_arguments = {"tools": RecordingToolAccess(gate, tracker, clock), "search_tool_id": self._tools.tool_id}
         model = RecordingModel(StorableModel(self._model), tracker)
-        research = ResearchAgent(model=model, settings=config.model_settings, store=store, **({} if knowledge is None else {"knowledge": knowledge}))
+        research = ResearchAgent(
+            model=model, settings=config.model_settings, store=store, **tool_arguments, **({} if knowledge is None else {"knowledge": knowledge})
+        )
         analysis = AnalysisAgent(model=model, settings=config.model_settings, store=store)
         agents = {
             RESEARCH_AGENT_ID: RecordingCitations(research, tracker, store),

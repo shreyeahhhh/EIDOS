@@ -13,7 +13,7 @@ is validated, never constructed around its validators) and ``audit_evidence`` re
 import json
 from uuid import UUID
 
-from eidos.agents import ArtifactStore
+from eidos.agents import ArtifactStore, parse_tool_document_ref
 from eidos.contracts import (
     ArtifactRef,
     EidosModel,
@@ -195,7 +195,9 @@ def evidence_of(records: tuple[EventRecord, ...], artifacts: ArtifactStore) -> E
     audit = audit_evidence(record)
     seen: dict[ArtifactRef, None] = {}
     for trace in audit.traces:
-        if trace.kind is CitationKind.RESOLVED:
+        # Retrieved evidence (D-228), and — D-238 — the text of a web page a tool fetched that an answer cited, so a reader can see what was read. The audit is unchanged: a fetched page is still
+        # ``not_evidence`` there (it was not retrieved from a knowledge base); only its text is shown. A supplied document can never take a ``tool:`` reference (spec.RESERVED_REF_PREFIXES).
+        if trace.kind is CitationKind.RESOLVED or (trace.kind is CitationKind.NOT_EVIDENCE and parse_tool_document_ref(trace.ref) is not None):
             seen.setdefault(trace.ref, None)
     items = []
     for ref in seen:

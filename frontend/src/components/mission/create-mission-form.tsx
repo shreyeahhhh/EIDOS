@@ -5,6 +5,7 @@ import { useState, type ChangeEvent, type FormEvent } from "react";
 
 import { ApiError } from "@/lib/api/errors";
 import { ACCEPTED_EXTENSIONS, addDocument, MAX_DOCUMENTS, toSuppliedDocuments, type PickedDocument } from "@/lib/documents";
+import { MAX_WEB_ADDRESSES, WEB_FETCH_ACTION, WEB_FETCH_MAX_TOOL_CALLS, webAccessNote } from "@/lib/web-access";
 import { createMission } from "@/lib/api/client";
 import type { MissionSpec, RiskLevel } from "@/lib/api/types";
 import { KNOWN_CAPABILITIES } from "@/lib/api/types";
@@ -44,6 +45,7 @@ export function CreateMissionForm() {
   const [minQuality, setMinQuality] = useState(0);
   const [maxRiskLevel, setMaxRiskLevel] = useState<RiskLevel>("medium");
   const [minIndependentEvidence, setMinIndependentEvidence] = useState(1);
+  const [readWeb, setReadWeb] = useState(false);
   const [documents, setDocuments] = useState<PickedDocument[]>([]);
   const [uploadErrors, setUploadErrors] = useState<string[]>([]);
 
@@ -64,11 +66,12 @@ export function CreateMissionForm() {
       required_capabilities: capabilities,
       risk_level: riskLevel,
       autonomy_level: autonomyLevel as MissionSpec["autonomy_level"],
-      allowed_actions: [],
+      allowed_actions: readWeb ? [WEB_FETCH_ACTION] : [],
       reliability: {
         min_quality: minQuality,
         max_risk_level: maxRiskLevel,
         min_independent_evidence: minIndependentEvidence,
+        ...(readWeb ? { max_tool_calls: WEB_FETCH_MAX_TOOL_CALLS } : {}),
       },
       supplied_documents: toSuppliedDocuments(documents),
     };
@@ -157,6 +160,8 @@ export function CreateMissionForm() {
         setGeneralErrors([error.message]);
     }
   }
+
+  const webNote = readWeb ? webAccessNote(goal) : null;
 
   if (stage.name === "no_membership") return <NoWorkspaceAccess />;
 
@@ -260,6 +265,29 @@ export function CreateMissionForm() {
               </li>
             ))}
           </ul>
+        )}
+      </fieldset>
+
+      <fieldset className="flex flex-col gap-2">
+        <legend className="text-sm font-medium text-ink">Web pages (optional)</legend>
+        <label className="flex items-start gap-2 text-sm text-ink-muted">
+          <input
+            type="checkbox"
+            checked={readWeb}
+            onChange={(event) => setReadWeb(event.target.checked)}
+            aria-describedby="web-hint"
+            className="mt-0.5 h-4 w-4 rounded border-border-strong accent-[var(--color-accent)]"
+          />
+          <span>Let EIDOS read the web pages named in my goal</span>
+        </label>
+        <p id="web-hint" className="text-xs text-ink-faint">
+          Reads the https:// addresses written in your goal (up to {MAX_WEB_ADDRESSES}) as text and cites them. It never logs in, runs scripts, follows links
+          inside a page, or opens private or internal addresses, and it cannot see how a page looks.
+        </p>
+        {readWeb && webNote && (
+          <p role="status" className="text-xs text-warning">
+            {webNote}
+          </p>
         )}
       </fieldset>
 

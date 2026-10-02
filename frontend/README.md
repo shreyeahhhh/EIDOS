@@ -118,8 +118,14 @@ src/
   by which agents this backend build wires up (`KNOWN_CAPABILITIES` in `lib/api/types.ts`), not a
   platform-wide, discoverable vocabulary. Update that constant by hand if the backend's agents change.
 - **`allowed_actions`' real vocabulary is operator configuration** on the backend
-  (`EIDOS_ALLOWED_ACTIONS`) and defaults to empty; the mission-creation form does not expose it and
-  always sends `[]`.
+  (`EIDOS_ALLOWED_ACTIONS`) and defaults to empty; the mission-creation form has no free-form picker
+  and sends `[]`, except for one known action: ticking "Let EIDOS read the web pages named in my goal"
+  sends `["web_fetch"]` and `max_tool_calls: 3` (D-238, `docs/15_web_fetch.md`). A server that has not
+  listed the action refuses the mission with a plain `invalid_spec` message.
+- **Documents are uploaded as files, not pasted** (`lib/documents.ts`): text types only, read in the
+  browser and sent as the same `supplied_documents`, within the backend's own limits (8 files, 32 KB each,
+  128 KB total). A fetched web page is shown in the Evidence section as a "Web page" with the text EIDOS
+  read; the audit still calls it "not evidence" because it was not retrieved from a knowledge base.
 - **No "strategy" is ever shown**, because the backend never exposes one (candidate generation and
   selection are not recorded events). The workspace shows the executed *plan* (`PlanGraph`) and, across
   a replan, why the previous one was abandoned (`ReplanLineage`, read from `PLAN_GENERATED` and

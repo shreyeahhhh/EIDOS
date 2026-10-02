@@ -70,7 +70,7 @@ class ServiceRig:
 
 
 def make_rig(*, respond=cite_every_document, config: ServiceConfig | None = None, runner: RunnerConfig | None = None, ceilings: ApiCeilings | None = None, knowledge=None,
-             sleep=lambda seconds: None, storage: InMemoryStorage | None = None, events=None, allowed_actions=frozenset({"read_documents"})) -> ServiceRig:
+             sleep=lambda seconds: None, storage: InMemoryStorage | None = None, events=None, allowed_actions=frozenset({"read_documents"}), tools=None) -> ServiceRig:
     storage = storage if storage is not None else InMemoryStorage()
     for tenant in (TENANT_A, TENANT_B):
         try:
@@ -92,7 +92,7 @@ def make_rig(*, respond=cite_every_document, config: ServiceConfig | None = None
         from dataclasses import replace
 
         repositories = replace(repositories, events=events)
-    composition = Composition(config=config, model=model, events=repositories.events, knowledge=knowledge, sleep=sleep)
+    composition = Composition(config=config, model=model, events=repositories.events, knowledge=knowledge, tools=tools, sleep=sleep)
     manager = RunManager(repositories=repositories, composition=composition, config=config.runner, sleep=sleep)
     service = MissionService(repositories=repositories, runner=manager, composition=composition, config=config)
     rig = ServiceRig(service=service, storage=storage, runner=manager, model=model, composition=composition, config=config)

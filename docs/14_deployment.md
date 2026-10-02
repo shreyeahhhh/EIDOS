@@ -70,6 +70,7 @@ a Render-specific field wrong; verify it in the dashboard after the first deploy
 | `EIDOS_DATABASE_URL` | secret (embeds the Postgres password) | Render |
 | `EIDOS_JWKS_URL` | not secret (a public discovery URL) but real per-project | Render |
 | `EIDOS_AUTO_PROVISION_WORKSPACES` | config (`true` in `render.yaml`; D-237) | Render |
+| `EIDOS_ALLOWED_ACTIONS` | config (`web_fetch` in `render.yaml` turns the web-reading tool on; D-238, `docs/15`) | Render |
 | `EIDOS_MODEL_PROVIDER` | config (`groq` in production) | Render |
 | `EIDOS_MODEL_BASE_URL` | config (`https://api.groq.com/openai/v1` in production) | Render |
 | `GROQ_API_KEY` | **secret** | Render — entered directly in Render's dashboard, never in this repository, never in a commit, never pasted into chat |
@@ -103,6 +104,10 @@ The app has `/signup`. To let people use it, in the Supabase dashboard (the owne
 3. Keep `EIDOS_AUTO_PROVISION_WORKSPACES=true` on Render: the first request from a new account then creates their own workspace. Existing accounts keep the workspace they already have.
 
 Known limit: there is no per-user rate limit, quota or billing. Anyone who can sign up can start missions on the deployment's Groq key, bounded only by the per-tenant active-run limit, the queue cap and the request ceilings — watch Groq usage, and rotate or remove the setting if it is abused.
+
+### Reading web pages (D-238)
+
+With `EIDOS_ALLOWED_ACTIONS=web_fetch` the backend can read the public `https` pages a mission's goal names (see `docs/15_web_fetch.md` for what it will and will not fetch). It needs outbound HTTPS and DNS from Render, nothing else, and no secret. The mission form's "Let EIDOS read the web pages named in my goal" option asks for it per mission.
 
 ## 14.6 Production model provider
 
