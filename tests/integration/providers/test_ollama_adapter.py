@@ -126,6 +126,11 @@ def test_an_error_status_is_unavailable_and_names_the_status(status):
     assert failure.kind is ModelFailureKind.UNAVAILABLE and str(status) in failure.message
 
 
+def test_the_runtimes_own_explanation_of_a_refusal_is_in_the_message():
+    failure = failure_of(lambda handler, body: send_json(handler, {"error": "model 'a-test-model' not found"}, status=404))
+    assert failure.message == "the runtime answered HTTP status 404: model 'a-test-model' not found"  # a model that was never pulled, told apart from a wrong address
+
+
 def test_a_call_that_outlasts_its_timeout_is_a_timeout_and_returns_promptly():
     started = time.monotonic()
     failure = failure_of(sleeps_then(3.0, answers("too late")), timeout_seconds=0.3)

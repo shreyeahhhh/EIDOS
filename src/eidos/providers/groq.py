@@ -27,6 +27,8 @@ from dataclasses import dataclass
 
 from eidos.agents import MeasuredFacts, ModelFailure, ModelFailureKind, ModelRequest, ModelResponse, ModelResult
 
+from ._http_error import http_failure_message
+
 _PATH = "/chat/completions"
 # Groq's front door (Cloudflare) refuses Python's default "Python-urllib/3.x" identity with a 403 "Error 1010: Access denied" before the request reaches Groq at all, whatever the key. An adapter
 # that names itself is let through (and a wrong key then gets the normal 401). Found on the first real use; no scripted test could have shown it.
@@ -70,7 +72,7 @@ class GroqModel:
         except urllib.error.HTTPError as error:
             # Covers a bad/expired key (401), a model the account cannot use (404), and rate limiting (429)
             # alike: all are "the provider answered with an error", which is exactly what UNAVAILABLE means.
-            return _failure(ModelFailureKind.UNAVAILABLE, f"the provider answered HTTP status {error.code}")
+            return _failure(ModelFailureKind.UNAVAILABLE, http_failure_message("the provider answered", error, secrets=(self.api_key,)))  # with Groq's own explanation (D-242)
         except urllib.error.URLError as error:
             if isinstance(error.reason, (socket.timeout, TimeoutError)):
                 return _failure(ModelFailureKind.TIMEOUT, f"no answer within {request.settings.timeout_seconds} seconds")

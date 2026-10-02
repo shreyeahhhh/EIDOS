@@ -146,6 +146,15 @@ def test_an_error_status_is_unavailable_and_names_the_status_whatever_it_means(s
     assert failure.kind is ModelFailureKind.UNAVAILABLE and str(status) in failure.message
 
 
+def test_the_providers_own_explanation_of_a_refusal_is_in_the_message_and_the_key_never_is():
+    explanation = "The model `qwen3:4b` does not exist or you do not have access to it."
+    failure = failure_of(lambda handler, body: send_json(handler, {"error": {"message": explanation, "type": "invalid_request_error", "code": "model_not_found"}}, status=404))
+    assert failure.message == f"the provider answered HTTP status 404: {explanation}"  # a wrong model name is now told apart from a wrong URL or a bad key
+
+    echoing = failure_of(lambda handler, body: send_json(handler, {"error": {"message": f"Invalid API Key: {API_KEY}"}}, status=401))
+    assert API_KEY not in echoing.message and "[redacted]" in echoing.message
+
+
 def test_a_call_that_outlasts_its_timeout_is_a_timeout_and_returns_promptly():
     started = time.monotonic()
     failure = failure_of(sleeps_then(3.0, replies("too late")), timeout_seconds=0.3)

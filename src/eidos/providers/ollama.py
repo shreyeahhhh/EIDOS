@@ -26,6 +26,8 @@ from dataclasses import dataclass
 
 from eidos.agents import MeasuredFacts, ModelFailure, ModelFailureKind, ModelRequest, ModelResponse, ModelResult
 
+from ._http_error import http_failure_message
+
 _PATH = "/api/generate"
 
 
@@ -58,7 +60,7 @@ class OllamaModel:
             with urllib.request.urlopen(http_request, timeout=request.settings.timeout_seconds) as response:
                 raw = response.read()
         except urllib.error.HTTPError as error:
-            return _failure(ModelFailureKind.UNAVAILABLE, f"the runtime answered HTTP status {error.code}")
+            return _failure(ModelFailureKind.UNAVAILABLE, http_failure_message("the runtime answered", error))  # with the runtime's own explanation, e.g. a model that was never pulled (D-242)
         except urllib.error.URLError as error:
             if isinstance(error.reason, (socket.timeout, TimeoutError)):
                 return _failure(ModelFailureKind.TIMEOUT, f"no answer within {request.settings.timeout_seconds} seconds")
