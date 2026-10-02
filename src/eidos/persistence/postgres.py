@@ -72,7 +72,14 @@ class PostgresStorage:
     def open(cls, connection_string: str, *, min_size: int = 1, max_size: int = 8, statement_timeout_ms: int = 10_000, connect_timeout_seconds: int = 10) -> "PostgresStorage":
         pool = ConnectionPool(
             connection_string, min_size=min_size, max_size=max_size, open=False,
-            kwargs={"prepare_threshold": None, "connect_timeout": connect_timeout_seconds, "options": f"-c statement_timeout={statement_timeout_ms}"},
+            # D-241: a connection the remote end (or a NAT, or a sleeping laptop's network) dropped while idle looks open until it is used, and then the first request waits for the operating system to give up
+            # (about 20 s) before failing 503. ``check`` makes the pool test a connection as it is handed out and quietly replace a dead one (one cheap round trip per checkout); the keepalives stop an idle
+            # connection being dropped in the first place; ``tcp_user_timeout`` bounds how long a send to a dead peer can wait. All of these are libpq connection parameters, set by the client alone.
+            check=ConnectionPool.check_connection,
+            kwargs={
+                "prepare_threshold": None, "connect_timeout": connect_timeout_seconds, "options": f"-c statement_timeout={statement_timeout_ms}",
+                "keepalives": 1, "keepalives_idle": 30, "keepalives_interval": 10, "keepalives_count": 3, "tcp_user_timeout": 10_000,
+            },
         )
         try:
             pool.open(wait=True, timeout=float(connect_timeout_seconds))
