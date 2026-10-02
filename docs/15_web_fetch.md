@@ -1,6 +1,6 @@
 # 15. Web fetch (D-238)
 
-**Status:** DERIVED. Built and verified (unit, mutation, a real-network opt-in suite and one real end-to-end run — see decisions.md D-238 for what was and was not verified). No contract, agent, runtime or API schema change.
+**Status:** DERIVED. Built and verified (unit, mutation, a real-network opt-in suite and a real end-to-end run that completed and verified — see decisions.md D-238 for what was and was not verified). No contract, agent, runtime or API schema change.
 
 ## 15.1 What it is
 
