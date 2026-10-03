@@ -142,6 +142,168 @@
   }
 }
 
+/*
+  The landing page's explainer video (`components/landing/how-it-works-video.tsx`): a motion piece made of real
+  text and shapes, not a video file — so it is sharp at any size, in the page's own colours, and every word in it
+  is text a screen reader or a translator can read. Each scene's parts rise, pop, slide or draw in on a stagger
+  (delays are set inline). The progress segment of the scene on screen is itself an animation, and its end moves
+  the video on, so pausing — which freezes every animation in the frame — pauses the clock too. `data-static`
+  shows every part at rest: the poster, a part chosen while paused, and the whole video when the device asks for
+  less motion. Keyframes with only a `from` animate *to* the element's own style, so "at rest" is simply that style.
+*/
+@keyframes hiw-rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.9rem);
+  }
+}
+@keyframes hiw-pop {
+  0% {
+    opacity: 0;
+    transform: rotate(var(--hiw-tilt, 0deg)) scale(0.4);
+  }
+  70% {
+    opacity: 1;
+    transform: rotate(var(--hiw-tilt, 0deg)) scale(1.08);
+  }
+}
+@keyframes hiw-slide {
+  from {
+    opacity: 0;
+    transform: translateX(2.5rem) rotate(var(--hiw-tilt, 0deg));
+  }
+}
+@keyframes hiw-swipe {
+  from {
+    transform: scaleX(0);
+  }
+}
+@keyframes hiw-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+}
+@keyframes hiw-type {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+}
+@keyframes hiw-caret {
+  50% {
+    opacity: 0;
+  }
+}
+@keyframes hiw-shake {
+  15%,
+  45%,
+  75% {
+    transform: translateX(-0.4rem) rotate(-1deg);
+  }
+  30%,
+  60%,
+  90% {
+    transform: translateX(0.4rem) rotate(1deg);
+  }
+}
+@keyframes hiw-stamp {
+  from {
+    opacity: 0;
+    transform: rotate(-30deg) scale(1.9);
+  }
+}
+@keyframes hiw-fill {
+  from {
+    transform: scaleX(0);
+  }
+}
+@keyframes hiw-marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+@keyframes hiw-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes hiw-glide {
+  from {
+    left: 0%;
+  }
+}
+
+@layer utilities {
+  .hiw-rise {
+    animation: hiw-rise 0.6s var(--ease-standard) both;
+  }
+  .hiw-pop {
+    transform: rotate(var(--hiw-tilt, 0deg)) scale(1);
+    animation: hiw-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+  .hiw-slide {
+    transform: translateX(0) rotate(var(--hiw-tilt, 0deg));
+    animation: hiw-slide 0.7s var(--ease-standard) both;
+  }
+  .hiw-swipe {
+    transform-origin: left;
+    animation: hiw-swipe 0.5s var(--ease-standard) both;
+  }
+  .hiw-draw {
+    stroke-dasharray: 1;
+    animation: hiw-draw 0.7s ease-out both;
+  }
+  .hiw-type {
+    display: inline-block;
+    white-space: nowrap;
+    animation: hiw-type 1.4s steps(30, end) both;
+  }
+  .hiw-caret {
+    animation: hiw-caret 1s steps(1) infinite;
+  }
+  .hiw-shake {
+    animation: hiw-shake 0.6s ease-in-out both;
+  }
+  .hiw-stamp {
+    transform: rotate(-9deg) scale(1);
+    animation: hiw-stamp 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+  }
+  .hiw-fill {
+    transform-origin: left;
+    animation: hiw-fill linear both;
+  }
+  .hiw-marquee {
+    animation: hiw-marquee 24s linear infinite;
+  }
+  .hiw-fade {
+    animation: hiw-fade 0.8s ease-out both;
+  }
+  .hiw-glide {
+    left: 100%;
+    animation: hiw-glide 3.2s linear both;
+  }
+
+  /* Paused: every animation in the frame holds where it is, the scene clock included. */
+  .hiw-frame[data-paused] *,
+  .hiw-frame[data-paused] *::before,
+  .hiw-frame[data-paused] *::after {
+    animation-play-state: paused !important;
+  }
+  /* At rest: no animation at all, so every part shows as it ends up. The same for the scenes not on screen, which are
+     laid out (invisibly) only so that the frame is as tall as its tallest scene and never jumps between them. */
+  .hiw-frame[data-static] *,
+  .hiw-frame[data-static] *::before,
+  .hiw-frame[data-static] *::after,
+  .hiw-still *,
+  .hiw-still *::before,
+  .hiw-still *::after {
+    animation: none !important;
+  }
+  /* Paper grain: a little plum-tinted noise, drawn once, inline (no image request). */
+  .hiw-grain {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.25 0 0 0 0 0.12 0 0 0 0 0.27 0 0 0 0.55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

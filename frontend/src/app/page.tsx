@@ -5,7 +5,8 @@ import { buttonClassName } from "@/components/ui/button";
 import { Reveal } from "@/components/landing/reveal";
 import { MissionLoopVisual } from "@/components/landing/mission-loop-visual";
 import { ProductThesis } from "@/components/landing/product-thesis";
-import { HowItWorks } from "@/components/landing/how-it-works";
+import { HowItWorksVideo } from "@/components/landing/how-it-works-video";
+import { TOTAL_MS, formatClock } from "@/components/landing/how-it-works-scenes";
 import { ProductPreview } from "@/components/landing/product-preview";
 import { ModelIndependent } from "@/components/landing/model-independent";
 
@@ -53,16 +54,19 @@ export default async function HomePage() {
         </Reveal>
       </section>
 
-      {/* How it works */}
+      {/* How it works — a short video (a motion piece in the page itself) */}
       <section id="how-it-works" className="scroll-mt-20 border-t border-border py-20">
         <Reveal>
-          <div className="mb-10 max-w-xl">
-            <h2 className="font-display text-3xl text-ink">How EIDOS works</h2>
-            <p className="mt-3 text-sm leading-relaxed text-ink-muted">
-              Every mission moves through the same bounded loop, whether it succeeds on the first plan or takes two.
-            </p>
+          <div className="mb-8 flex flex-wrap items-end justify-between gap-x-10 gap-y-3">
+            <div className="max-w-2xl">
+              <p className="font-mono text-xs font-semibold tracking-[0.2em] text-accent-strong uppercase">{formatClock(TOTAL_MS)} · zero jargon</p>
+              <h2 className="mt-2 font-display text-4xl leading-[1.05] tracking-tight text-ink sm:text-5xl">
+                How EIDOS works, <em>in under a minute</em>.
+              </h2>
+            </div>
+            <p className="max-w-xs text-sm leading-relaxed text-ink-muted">One question, start to finish — and how you can check every step of its work.</p>
           </div>
-          <HowItWorks />
+          <HowItWorksVideo ctaHref={primaryHref} ctaLabel={user ? "Open EIDOS →" : "Try it yourself →"} />
         </Reveal>
       </section>
 

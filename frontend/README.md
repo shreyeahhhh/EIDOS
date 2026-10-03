@@ -127,7 +127,7 @@ src/
     cockpit/                       the mission page: MissionCockpit (state and layout), StoryBand, RunCanvas (a hand-built, adaptive SVG-and-buttons flow, no graph library), Filmstrip (replay), StepInspector, AnswerPaper, AnswerText (a safe Markdown-ish reader; never inserts HTML), SourcesShelf, TechnicalDetails
     execution/                     ExecutionTimeline (plain-language event descriptions, raw payload behind a disclosure) — now inside Technical details
     evidence/                      EvidencePanel — the citation audit, inside Technical details
-    landing/                       the landing page's own sections (Reveal, MissionLoopVisual, ProductThesis, HowItWorks,
+    landing/                       the landing page's own sections (Reveal, MissionLoopVisual, ProductThesis, HowItWorksVideo + its script how-it-works-scenes,
                                     ProductPreview, ModelIndependent) — composed only
                                     by `app/page.tsx`, never imported into the authenticated app
   lib/
@@ -196,6 +196,17 @@ readable. Tangerine is a mid-tone, so text *on* it is a deep plum, and where the
 darker `accent-strong` is used (tangerine on oat reads about 2.2:1). Done (`success`) is the tangerine family,
 in progress (`info`) is plum; only `error` (crimson) and `warning` (amber) keep a colour of their own, so
 that a failure is never mistaken for a finished step — and every state also carries a word or a glyph.
+
+*How it works* on the landing page is a short video (`HowItWorksVideo`, about 40 seconds, six parts) in a Gen Z
+editorial style — big serif headlines with a highlighter swipe, tilted stickers, cut-out cards with hard plum
+shadows, a ticker band, paper grain — in the same three colours. It is a motion piece made of real text and
+shapes, not a video file: sharp at any size, every word readable and translatable, no media download, no new
+dependency (the animations are `hiw-*` in `globals.css`). It plays like a story: a progress segment per part, it
+starts once it is mostly on screen and pauses when it scrolls away (never overruling a viewer who paused it), and
+the viewer can pause (click it, or Space), step (the arrows), jump to a part, or read it all as text. When the
+device asks for less motion it never plays by itself and shows each part at rest. The script
+(`how-it-works-scenes.ts`) claims only what a mission does today — including, out loud, that the final check is of
+the receipts, not of whether the answer is right — and a test keeps it from mentioning learning, which is deferred.
 
 The mission cockpit's layout follows what trace-viewer and observability tools for agent runs converge on — a
 canvas or tree beside a details panel, a replay strip you can scrub or play, aggregated views with the detail
