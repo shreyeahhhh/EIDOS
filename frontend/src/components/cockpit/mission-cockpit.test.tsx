@@ -37,17 +37,20 @@ describe("MissionCockpit — a finished, verified mission", () => {
 
   it("shows the answer as readable text with numbered source chips, not raw markup", () => {
     cockpit();
-    const answer = screen.getByRole("article");
-    expect(within(answer).getByText("What the page says")).toBeInTheDocument();
-    expect(answer).not.toHaveTextContent("[[");
-    expect(answer).not.toHaveTextContent("# ");
-    expect(within(answer).getAllByRole("button", { name: "Source 1: Web page, example.com" })).toHaveLength(3);
+    const answer = within(screen.getByTestId("answer-body"));
+    expect(answer.getByText("What the page says")).toBeInTheDocument();
+    expect(screen.getByTestId("answer-body").textContent).not.toMatch(/\[\[|\*\*|\||###/);
+    // the example's table has three rows: each card names its source, and each folded evidence repeats the chip
+    expect(answer.getAllByRole("button", { name: "Source 1: Web page, example.com" })).toHaveLength(6);
+    expect(answer.getAllByText("Show the evidence")).toHaveLength(3);
   });
 
   it("keeps everything technical folded away until it is asked for", () => {
     cockpit();
-    const technical = screen.getByText("Technical details").closest("details")!;
-    expect(technical).not.toHaveAttribute("open");
+    // the page's own drawer and the inspector's (now open on the last step that ran by default) are both folded
+    const technical = screen.getAllByText("Technical details").map((summary) => summary.closest("details")!);
+    expect(technical.length).toBeGreaterThanOrEqual(2);
+    expect(technical.every((fold) => !fold.hasAttribute("open"))).toBe(true);
     expect(screen.getByText("More about this mission").closest("details")).not.toHaveAttribute("open");
     expect(screen.getByText("How was this checked?").closest("details")).not.toHaveAttribute("open");
     expect(screen.getByText("Every recorded event").closest("details")).not.toHaveAttribute("open");
@@ -58,6 +61,12 @@ describe("MissionCockpit — a finished, verified mission", () => {
     const checks = screen.getByText("How was this checked?").closest("details")!;
     expect(checks.textContent).toContain("every source it cites really exists");
     expect(checks.textContent).toMatch(/does not judge whether the answer is correct/);
+  });
+
+  it("opens the inspector on the last step that ran when nothing has gone wrong, instead of an empty prompt", () => {
+    cockpit();
+    expect(screen.queryByText("Pick a step")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Verify" })).toBeInTheDocument();
   });
 
   it("explains the step you pick, and which steps it needs", () => {

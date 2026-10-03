@@ -108,7 +108,9 @@ export function MissionCockpit({ mission, events, execution, result, resultLoadi
   // Until one is picked, the inspector explains the step at the centre of the moment being shown (and, once a step has failed, that failure first).
   const inPlan = (id: string | null | undefined) => (id && snapshot.plan?.steps.some((step) => step.id === id) ? id : null);
   const failedStep = snapshot.plan?.steps.find((step) => snapshot.steps[step.id]?.state === "failed")?.id ?? null;
-  const stepId = inPlan(selectedId) ?? failedStep ?? inPlan(snapshot.moment?.stepId);
+  // (a moment such as "Finished" names no step, so look back to the last one that did)
+  const lastStepMoment = model.moments.slice(0, Math.max(cursor + 1, 0)).reverse().find((moment) => moment.stepId && inPlan(moment.stepId) && moment.planId === snapshot.plan?.planId);
+  const stepId = inPlan(selectedId) ?? failedStep ?? inPlan(snapshot.moment?.stepId) ?? inPlan(lastStepMoment?.stepId);
   // A plan that EIDOS gave up on says why, once the replay has reached the point it did.
   const replacedBecause = snapshot.plan ? (model.moments.find((moment) => moment.kind === "replan" && moment.planId === snapshot.plan?.planId && moment.index <= cursor)?.reason ?? null) : null;
   const record = execution && snapshot.plan && execution.plan_id === snapshot.plan.planId ? (execution.steps.find((step) => step.step_id === stepId) ?? null) : null;
@@ -172,7 +174,7 @@ export function MissionCockpit({ mission, events, execution, result, resultLoadi
         ))}
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] lg:items-start">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:items-start">
         <div id="panel-plan" role="tabpanel" aria-labelledby="tab-plan" className={cn("flex-col gap-4 lg:flex", tab === "plan" ? "flex" : "hidden")}>
           <section aria-labelledby="plan-title" className="flex flex-col gap-4 rounded-2xl border border-border bg-surface-raised p-4 shadow-[var(--shadow-card)] sm:p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -236,7 +238,7 @@ export function MissionCockpit({ mission, events, execution, result, resultLoadi
           )}
         </div>
 
-        <div className="flex flex-col gap-5 lg:sticky lg:top-20">
+        <div className="flex flex-col gap-5">
           <div id="panel-answer" role="tabpanel" aria-labelledby="tab-answer" className={cn("lg:block", tab === "answer" ? "block" : "hidden")}>
             <AnswerPaper mission={mission} result={result} loading={resultLoading} numbers={allNumbers} activeRef={openRef} onCite={openSource} />
           </div>

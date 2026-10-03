@@ -97,7 +97,20 @@ export const EXAMPLE_RESULT: MissionResult = {
   artifacts: [
     {
       ref: "artifact:p2_analysis", content_type: "text/markdown", source_refs: [EXAMPLE_PAGE_REF],
-      content: `# What the page says\n\nThe page is titled “Example Domain” and says it is meant to be used for illustrative examples in documents [[${EXAMPLE_PAGE_REF}]].\n\nIt adds that the domain may be used in examples without any prior coordination or asking permission [[${EXAMPLE_PAGE_REF}]], and it links to one further page for more information [[${EXAMPLE_PAGE_REF}]].\n\n## In short\n\nIt is a deliberately plain reference page, not a product or a service.`,
+      content: [
+        "**What the page says**",
+        "",
+        "| Area | What it says | Evidence |",
+        "|------|--------------|----------|",
+        `| **Title** | The page is titled “Example Domain”. | “Example Domain” [[${EXAMPLE_PAGE_REF}]] |`,
+        `| **Purpose** | It says the domain is for use in illustrative examples in documents. | “This domain is for use in illustrative examples in documents.” [[${EXAMPLE_PAGE_REF}]] |`,
+        `| **Reuse** | It adds that the domain may be used in examples without prior coordination or asking permission. | “You may use this domain in literature without prior coordination or asking for permission.” [[${EXAMPLE_PAGE_REF}]] |`,
+        "",
+        "### In short",
+        "",
+        "1. **It is a reference page** – deliberately plain, not a product or a service.",
+        "2. **There is nothing to act on** – it links to one further page for more information, and nothing else.",
+      ].join("\n"),
     },
   ],
   failure: null,

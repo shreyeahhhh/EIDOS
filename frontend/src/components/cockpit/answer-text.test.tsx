@@ -54,10 +54,11 @@ describe("AnswerText", () => {
     const { container } = show('<script>alert(1)</script> <img src=x onerror="alert(1)"> **<b>bold</b>** [link](javascript:alert(1))');
     expect(container.querySelector("script")).toBeNull();
     expect(container.querySelector("img")).toBeNull();
-    expect(container.querySelector("a")).toBeNull();
+    expect(container.querySelector("a")).toBeNull(); // a link that is not plain http(s) is only its text
     expect(container.querySelector("b")).toBeNull();
     expect(container).toHaveTextContent('<script>alert(1)</script>');
-    expect(container).toHaveTextContent("[link](javascript:alert(1))");
+    expect(container).toHaveTextContent("link");
+    expect(container).not.toHaveTextContent("javascript:");
   });
 
   it("copes with an empty answer and with blank lines only", () => {

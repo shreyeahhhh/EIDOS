@@ -76,7 +76,16 @@ the whole cockpit shows how things stood at that moment, with a plain sentence f
 what happened, the recorded reason if it failed, which sources it used; ids, token counts and tool calls are in
 its own folded "Technical details"), *numbered sources* (`lib/citations.ts` turns `[[reference]]` into
 footnote-style chips; opening one shows the text EIDOS read where the backend keeps it — fetched pages and
-retrieved evidence — and says plainly when it does not, for example a document you uploaded). While a run is
+retrieved evidence — and says plainly when it does not, for example a document you uploaded).
+
+*The answer is set for reading, never shown as Markdown* (`lib/answer-markdown.ts`, `AnswerText`, `AnswerPaper`): a parser for what models
+actually write — headings (a line that is only bold is a heading), nested lists, **GitHub-style tables**, quotes, rules, code, and inline bold,
+italic, strike, code, `[links](https://…)` (plain http/https only; anything else is just its text) and citations — builds a data model, and
+elements are built from that model only, so nothing in an answer can become markup. A table becomes *cards*, one per row (the first column is
+the title, the other columns are labelled fields, an evidence/source column is folded behind "Show the evidence" while the row's source chips stay
+visible), with a switch to the plain table; numbered recommendations that open with a bold phrase become *steps*; an outline links the answer's
+sections; "Copy answer" copies clean text with sources as `[n]`; "Original text" holds exactly what was written, folded. A marker with no partner
+(a lone `**`) is dropped rather than printed. While a run is
 live the cockpit follows its newest moment ("Live"); scrub back and "Jump to live" returns. `run_status` and
 `mission_status` are never merged — `MissionStatusPair` shows RUN and MISSION as two distinct facts in "More
 about this mission".
