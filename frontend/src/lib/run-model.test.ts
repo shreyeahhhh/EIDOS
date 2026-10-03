@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { describeSource, numberCitations, splitCitations } from "./citations";
+import { describeSource, isRecognisedReference, numberCitations, splitCitations } from "./citations";
 import { EXAMPLE_EVENTS, EXAMPLE_MISSION, EXAMPLE_PAGE_REF, EXAMPLE_RESULT } from "./example-run";
 import { buildRunModel, formatDuration, formatOffset, plainReason, plansAt, snapshotAt, storyOf } from "./run-model";
 
@@ -202,6 +202,12 @@ describe("citations", () => {
     expect(describeSource("artifact:p2_research")).toMatchObject({ kind: "notes" });
     expect(describeSource("tool:docs/search_documents:abc:doc-1")).toEqual({ kind: "other", label: "doc-1", kindLabel: "Tool result" });
     expect(describeSource("whatever")).toEqual({ kind: "other", label: "whatever", kindLabel: "Source" });
+  });
+
+  it("recognises every form EIDOS issues, and none it does not", () => {
+    for (const ref of [EXAMPLE_PAGE_REF, "doc:index.html", "evidence:0123456789abcdef", "artifact:p2_research", "tool:docs/search_documents:abc:doc-1"]) expect(isRecognisedReference(ref), ref).toBe(true);
+    // what a model wrote instead, seen on a real mission: a bare number, and a tool reference with its "tool:" front cut off
+    for (const ref of ["1", "b837a4efce56:portfolio-g9av.onrender.com-f83a719872", "web/fetch:b837a4efce56:portfolio-g9av.onrender.com-f83a719872", "", "whatever"]) expect(isRecognisedReference(ref), ref).toBe(false);
   });
 
   it("numbers the example answer's one source", () => {

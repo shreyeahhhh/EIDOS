@@ -32,6 +32,8 @@ export interface SourceInfo {
   kindLabel: string;
 }
 
+const UNRECOGNISED_KIND_LABEL = "Source";
+
 /** A source's number and meaning, from its reference alone. */
 export function describeSource(ref: string): SourceInfo {
   if (ref.startsWith("tool:")) {
@@ -46,7 +48,16 @@ export function describeSource(ref: string): SourceInfo {
   if (ref.startsWith("doc:")) return { kind: "document", label: ref.slice(4) || ref, kindLabel: "Your document" };
   if (ref.startsWith("evidence:")) return { kind: "knowledge", label: "Knowledge base", kindLabel: "Knowledge base" };
   if (ref.startsWith("artifact:")) return { kind: "notes", label: "Notes from an earlier step", kindLabel: "Earlier step" };
-  return { kind: "other", label: ref, kindLabel: "Source" };
+  return { kind: "other", label: ref, kindLabel: UNRECOGNISED_KIND_LABEL };
+}
+
+/**
+ * False for a reference EIDOS cannot place: a string a model wrote that is in none of the forms EIDOS issues (`1`, or a tool reference with its
+ * `tool:` front cut off). The answer's own citations are shown whatever they are; this is for the lists of what steps "used", where such a string
+ * is noise that opens nothing.
+ */
+export function isRecognisedReference(ref: string): boolean {
+  return describeSource(ref).kindLabel !== UNRECOGNISED_KIND_LABEL;
 }
 
 /** The distinct references an answer cites, in the order they first appear, numbered from 1. */

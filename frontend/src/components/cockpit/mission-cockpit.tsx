@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 
 import { cn } from "@/lib/cn";
-import { numberCitations } from "@/lib/citations";
+import { isRecognisedReference, numberCitations } from "@/lib/citations";
 import type { EventRecord, EvidenceView, ExecutionRecord, MissionResult, MissionSummary } from "@/lib/api/types";
 import { buildRunModel, plansAt, snapshotAt, storyOf } from "@/lib/run-model";
 import { stepKindLabel } from "@/lib/status";
@@ -123,7 +123,9 @@ export function MissionCockpit({ mission, events, execution, result, resultLoadi
     ...executionSteps.flatMap((step) => step.citations),
     ...(evidence?.audit.traces.map((trace) => trace.ref) ?? []),
   ];
-  const refs = [...numbers.keys(), ...[...new Set(extras)].filter((ref) => !numbers.has(ref))];
+  // Whatever the answer cites stays (its numbered chips must open something); a string a step merely recorded is listed only if EIDOS recognises it.
+  const refs = [...numbers.keys(), ...[...new Set(extras)].filter((ref) => !numbers.has(ref) && isRecognisedReference(ref))];
+  const listed = new Set(refs);
   const allNumbers = new Map(refs.map((ref, index) => [ref, index + 1]));
   const texts = new Map((evidence?.evidence ?? []).map((item) => [item.ref, item.content]));
   const readBy = new Map<string, string[]>();
@@ -237,7 +239,7 @@ export function MissionCockpit({ mission, events, execution, result, resultLoadi
         </section>
 
         {hasRun && snapshot.plan && (
-          <StepInspector plan={snapshot.plan} stepId={stepId} steps={snapshot.steps} record={record} onSelect={setSelectedId} onOpenSource={openSource} />
+          <StepInspector plan={snapshot.plan} stepId={stepId} steps={snapshot.steps} record={record} listedSources={listed} onSelect={setSelectedId} onOpenSource={openSource} />
         )}
       </div>
 

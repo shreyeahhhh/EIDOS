@@ -33,6 +33,8 @@ interface StepInspectorProps {
   steps: Record<string, StepSnapshot>;
   /** The recorded detail for this step, when the step belongs to the current plan (earlier plans' details are not kept by the backend). */
   record: StepRecord | null;
+  /** The sources the page lists; a step's other recorded citations are not offered here, as there would be nothing to open. */
+  listedSources: ReadonlySet<string>;
   onSelect: (stepId: string) => void;
   onOpenSource: (ref: string) => void;
 }
@@ -41,7 +43,7 @@ interface StepInspectorProps {
  * One step, explained: what it is for, what it did at the moment being shown, what went wrong if something did, and which sources it used.
  * Everything technical (ids, token counts, tool calls) is behind one collapsed disclosure.
  */
-export function StepInspector({ plan, stepId, steps, record, onSelect, onOpenSource }: StepInspectorProps) {
+export function StepInspector({ plan, stepId, steps, record, listedSources, onSelect, onOpenSource }: StepInspectorProps) {
   const step = plan.steps.find((candidate) => candidate.id === stepId);
   if (!step || !stepId) {
     return (
@@ -56,6 +58,8 @@ export function StepInspector({ plan, stepId, steps, record, onSelect, onOpenSou
   const duration = formatDuration(snapshot?.durationMs ?? null);
   const dependencies = step.dependsOn.map((id) => plan.steps.find((candidate) => candidate.id === id)).filter((dependency) => dependency !== undefined);
   const blockedBy = dependencies.filter((dependency) => ["failed", "skipped"].includes(steps[dependency.id]?.state ?? "pending"));
+  // Only sources the page lists, so every chip here opens something (a string a step recorded that EIDOS cannot place is left to the citation audit).
+  const used = [...new Set(record?.citations ?? [])].filter((ref) => listedSources.has(ref));
   const started = formatClock(snapshot?.startedAt ?? null);
   const settled = formatClock(snapshot?.settledAt ?? null);
 
@@ -103,11 +107,11 @@ export function StepInspector({ plan, stepId, steps, record, onSelect, onOpenSou
         </p>
       )}
 
-      {record && record.citations.length > 0 && (
+      {used.length > 0 && (
         <div>
           <p className="mb-2 text-xs font-medium tracking-wide text-ink-faint uppercase">Sources it used</p>
           <div className="flex flex-wrap gap-2">
-            {[...new Set(record.citations)].map((ref) => {
+            {used.map((ref) => {
               const info = describeSource(ref);
               return (
                 <button key={ref} type="button" onClick={() => onOpenSource(ref)} className="rounded-full border border-border px-3 py-1 text-xs text-ink-muted transition-colors hover:border-accent hover:text-accent-strong">

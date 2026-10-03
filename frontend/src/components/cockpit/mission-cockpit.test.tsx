@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PORTFOLIO_ANSWER } from "@/lib/__fixtures__/portfolio-answer";
-import type { MissionResult, MissionSummary } from "@/lib/api/types";
+import type { ExecutionRecord, MissionResult, MissionSummary } from "@/lib/api/types";
 import { EXAMPLE_EVENTS, EXAMPLE_EVIDENCE, EXAMPLE_EXECUTION, EXAMPLE_MISSION, EXAMPLE_RESULT } from "@/lib/example-run";
 import { MissionCockpit, type MissionCockpitProps } from "./mission-cockpit";
 
@@ -164,6 +164,46 @@ describe("MissionCockpit — how the page is laid out, so a long answer leaves n
     unmount();
     cockpit({ mission: { ...EXAMPLE_MISSION, run_status: "running", mission_status: null }, events: EXAMPLE_EVENTS.slice(0, 11), execution: null, result: null, evidence: null });
     expect(screen.queryByRole("link", { name: /Read the answer/ })).toBeNull();
+  });
+});
+
+describe("MissionCockpit — sources a step recorded that EIDOS cannot place", () => {
+  // as seen on a real mission: the research step's own notes carried a bare number and a tool reference with its "tool:" front cut off
+  const NOISE = ["1", "web/fetch:449a47084cc8:example.com-f83a719872"];
+  const withNoise: ExecutionRecord = {
+    ...EXAMPLE_EXECUTION,
+    steps: EXAMPLE_EXECUTION.steps.map((step) => (step.step_id === "p2_research" ? { ...step, citations: [...step.citations, ...NOISE] } : step)),
+  };
+  const shelf = () => within(document.getElementById("panel-sources")!);
+
+  it("leaves them out of the sources, so the count and the list are only what can be opened", () => {
+    cockpit({ execution: withNoise });
+    expect(screen.getByRole("heading", { name: /^Sources/ })).toHaveTextContent("Sources (1)");
+    expect(shelf().getAllByRole("listitem")).toHaveLength(1);
+    expect(shelf().getByRole("button", { name: /example\.com/ })).toBeInTheDocument();
+    expect(shelf().queryByText(NOISE[1])).toBeNull();
+  });
+
+  it("leaves them out of the step's own list of sources too, so no chip there opens nothing", () => {
+    cockpit({ execution: withNoise });
+    fireEvent.click(nodeNamed(/^Research/));
+    const used = screen.getByText("Sources it used").parentElement!;
+    expect(within(used).getAllByRole("button").map((chip) => chip.textContent)).toEqual(["Web page: example.com"]);
+  });
+
+  it("hides the step's 'Sources it used' altogether when none of what it recorded can be placed", () => {
+    const onlyNoise: ExecutionRecord = { ...withNoise, steps: withNoise.steps.map((step) => (step.step_id === "p2_research" ? { ...step, citations: NOISE } : step)) };
+    cockpit({ execution: onlyNoise, result: { ...EXAMPLE_RESULT, artifacts: [{ ...EXAMPLE_RESULT.artifacts[0], content: "Plain answer [[doc:a.txt]]." }] }, evidence: null });
+    fireEvent.click(nodeNamed(/^Research/));
+    expect(screen.queryByText("Sources it used")).toBeNull();
+  });
+
+  it("still lists one the answer itself cites, because its numbered chip has to open something", () => {
+    const cites: MissionResult = { ...EXAMPLE_RESULT, artifacts: [{ ...EXAMPLE_RESULT.artifacts[0], content: "It says so [[1]]." }] };
+    cockpit({ execution: withNoise, result: cites });
+    expect(screen.getByRole("heading", { name: /^Sources/ })).toHaveTextContent("Sources (2)"); // the cited "1" and the recognised page; the other string stays out
+    fireEvent.click(within(screen.getByTestId("answer-body")).getByRole("button", { name: /^Source 1/ }));
+    expect(within(document.getElementById("source-reader")!).getByText(/isn't available to show here/)).toBeInTheDocument();
   });
 });
 

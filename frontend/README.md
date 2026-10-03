@@ -87,7 +87,11 @@ the whole cockpit shows how things stood at that moment, with a plain sentence f
 what happened, the recorded reason if it failed, which sources it used; ids, token counts and tool calls are in
 its own folded "Technical details"), *numbered sources* (`lib/citations.ts` turns `[[reference]]` into
 footnote-style chips; opening one shows the text EIDOS read where the backend keeps it — fetched pages and
-retrieved evidence — and says plainly when it does not, for example a document you uploaded).
+retrieved evidence — and says plainly when it does not, for example a document you uploaded). A string a step
+merely *recorded* that EIDOS cannot place (a bare `1`, a tool reference with its `tool:` front cut off — both
+seen on a real mission) is left out of the Sources list and out of a step's "Sources it used", so every chip
+opens something; what the answer itself cites always stays. The page then shows those strings nowhere: they
+remain only in the execution record the backend serves (`GET .../execution`).
 
 *The answer is set for reading, never shown as Markdown* (`lib/answer-markdown.ts`, `AnswerText`, `AnswerPaper`): a parser for what models
 actually write — headings (a line that is only bold is a heading), nested lists, **GitHub-style tables**, quotes, rules, code, and inline bold,
