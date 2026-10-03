@@ -57,9 +57,10 @@ function WhatHappensNext() {
 
 /**
  * The mission workspace as a cockpit rather than a document: the story on top; the plan as a flow you can touch with a replay strip under it
- * and an inspector for the step you pick; the answer set beside it, with numbered sources that open a reader; and everything technical folded
- * away. Every part is drawn from the recorded events, the execution record, the result and the evidence — nothing is invented, and a part with
- * nothing to show says so. Below `lg` the same pieces become three tabs instead of three columns.
+ * and an inspector for the step you pick beside it; the answer below, across the width, with the numbered sources riding beside it in a rail that
+ * follows you down; and everything technical folded away. The answer is the one part whose length is not under our control, so it never shares
+ * a row with something shorter — a long answer only lengthens its own band. Every part is drawn from the recorded events, the execution record,
+ * the result and the evidence — nothing is invented, and a part with nothing to show says so. Below `lg` the same pieces become three tabs.
  */
 export function MissionCockpit({ mission, events, execution, result, resultLoading, evidence, starting, startError, onStart }: MissionCockpitProps) {
   const model = useMemo(() => buildRunModel(events ?? []), [events]);
@@ -174,77 +175,79 @@ export function MissionCockpit({ mission, events, execution, result, resultLoadi
         ))}
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:items-start">
-        <div id="panel-plan" role="tabpanel" aria-labelledby="tab-plan" className={cn("flex-col gap-4 lg:flex", tab === "plan" ? "flex" : "hidden")}>
-          <section aria-labelledby="plan-title" className="flex flex-col gap-4 rounded-2xl border border-border bg-surface-raised p-4 shadow-[var(--shadow-card)] sm:p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 id="plan-title" className="font-display text-xl text-ink">
-                How EIDOS went about it
-              </h2>
-              {versions.length > 1 && (
-                <div role="group" aria-label="Plan versions" className="flex gap-1.5">
-                  {versions.map((version) => {
-                    const shown = snapshot.plan?.planId === version.planId;
-                    return (
-                      <button
-                        key={version.planId}
-                        type="button"
-                        aria-pressed={shown}
-                        onClick={() => setPlanChoice(version.planId === versions[versions.length - 1].planId ? null : version.planId)}
-                        className={cn("rounded-full border px-3 py-1 text-xs font-medium transition-colors", shown ? "border-accent bg-accent-soft text-accent-strong" : "border-border text-ink-muted hover:border-border-strong hover:text-ink")}
-                      >
-                        Plan {version.version}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {snapshot.plan && snapshot.plan.replanReason && (
-              <p className="text-sm text-ink-muted">
-                <span className="font-medium text-ink">Why a new plan:</span> {snapshot.plan.replanReason}.
-              </p>
-            )}
-            {replacedBecause && (
-              <p className="text-sm text-ink-muted">
-                <span className="font-medium text-ink">Why this plan was replaced:</span> {replacedBecause}.
-              </p>
-            )}
-
-            {hasRun && snapshot.plan ? (
-              <RunCanvas plan={snapshot.plan} steps={snapshot.steps} selectedId={stepId} onSelect={setSelectedId} highlighted={highlighted} />
-            ) : hasRun ? (
-              <p className="rounded-lg border border-dashed border-border-strong p-6 text-center text-sm text-ink-muted">The plan is being drawn up.</p>
-            ) : mission.last_sequence > 0 ? (
-              // the run has events but they have not arrived yet: say so, rather than showing what a mission that has not started looks like
-              <div aria-live="polite" className="flex flex-col gap-3 rounded-lg border border-dashed border-border-strong p-6">
-                <p className="text-sm text-ink-muted">Loading how it went…</p>
-                <div aria-hidden="true" className="flex gap-3">
-                  {[0, 1, 2].map((index) => (
-                    <div key={index} className="h-16 flex-1 animate-pulse rounded-xl bg-surface-sunken" />
-                  ))}
-                </div>
+      {/* Two bands, so no column is ever left empty beside a longer one. The first (how it went: the flow, and the step you picked) is short whatever the
+          answer says — side by side once the flow has the width to stay left-to-right (`xl`), stacked before that; the answer sits below it across the
+          width, and only the sources — a short list — ride beside it. */}
+      <div id="panel-plan" role="tabpanel" aria-labelledby="tab-plan" className={cn("flex-col gap-4 lg:flex xl:grid xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] xl:items-start xl:gap-5", tab === "plan" ? "flex" : "hidden")}>
+        <section aria-labelledby="plan-title" className={cn("flex flex-col gap-4 rounded-2xl border border-border bg-surface-raised p-4 shadow-[var(--shadow-card)] sm:p-5", !(hasRun && snapshot.plan) && "xl:col-span-2")}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 id="plan-title" className="font-display text-xl text-ink">
+              How EIDOS went about it
+            </h2>
+            {versions.length > 1 && (
+              <div role="group" aria-label="Plan versions" className="flex gap-1.5">
+                {versions.map((version) => {
+                  const shown = snapshot.plan?.planId === version.planId;
+                  return (
+                    <button
+                      key={version.planId}
+                      type="button"
+                      aria-pressed={shown}
+                      onClick={() => setPlanChoice(version.planId === versions[versions.length - 1].planId ? null : version.planId)}
+                      className={cn("rounded-full border px-3 py-1 text-xs font-medium transition-colors", shown ? "border-accent bg-accent-soft text-accent-strong" : "border-border text-ink-muted hover:border-border-strong hover:text-ink")}
+                    >
+                      Plan {version.version}
+                    </button>
+                  );
+                })}
               </div>
-            ) : (
-              <WhatHappensNext />
             )}
+          </div>
 
-            {hasRun && <Filmstrip moments={model.moments} cursor={cursor} onScrub={scrub} playing={isPlaying} onTogglePlay={togglePlay} live={live} canGoLive={active && !live} onGoLive={goLive} />}
-          </section>
-
-          {hasRun && snapshot.plan && (
-            <StepInspector plan={snapshot.plan} stepId={stepId} steps={snapshot.steps} record={record} onSelect={setSelectedId} onOpenSource={openSource} />
+          {snapshot.plan && snapshot.plan.replanReason && (
+            <p className="text-sm text-ink-muted">
+              <span className="font-medium text-ink">Why a new plan:</span> {snapshot.plan.replanReason}.
+            </p>
           )}
-        </div>
+          {replacedBecause && (
+            <p className="text-sm text-ink-muted">
+              <span className="font-medium text-ink">Why this plan was replaced:</span> {replacedBecause}.
+            </p>
+          )}
 
-        <div className="flex flex-col gap-5">
-          <div id="panel-answer" role="tabpanel" aria-labelledby="tab-answer" className={cn("lg:block", tab === "answer" ? "block" : "hidden")}>
-            <AnswerPaper mission={mission} result={result} loading={resultLoading} numbers={allNumbers} activeRef={openRef} onCite={openSource} />
-          </div>
-          <div id="panel-sources" role="tabpanel" aria-labelledby="tab-sources" className={cn("lg:block", tab === "sources" ? "block" : "hidden")}>
-            <SourcesShelf refs={refs} texts={texts} readBy={readBy} openRef={openRef} onOpen={setOpenRef} />
-          </div>
+          {hasRun && snapshot.plan ? (
+            <RunCanvas plan={snapshot.plan} steps={snapshot.steps} selectedId={stepId} onSelect={setSelectedId} highlighted={highlighted} />
+          ) : hasRun ? (
+            <p className="rounded-lg border border-dashed border-border-strong p-6 text-center text-sm text-ink-muted">The plan is being drawn up.</p>
+          ) : mission.last_sequence > 0 ? (
+            // the run has events but they have not arrived yet: say so, rather than showing what a mission that has not started looks like
+            <div aria-live="polite" className="flex flex-col gap-3 rounded-lg border border-dashed border-border-strong p-6">
+              <p className="text-sm text-ink-muted">Loading how it went…</p>
+              <div aria-hidden="true" className="flex gap-3">
+                {[0, 1, 2].map((index) => (
+                  <div key={index} className="h-16 flex-1 animate-pulse rounded-xl bg-surface-sunken" />
+                ))}
+              </div>
+            </div>
+          ) : (
+            <WhatHappensNext />
+          )}
+
+          {hasRun && <Filmstrip moments={model.moments} cursor={cursor} onScrub={scrub} playing={isPlaying} onTogglePlay={togglePlay} live={live} canGoLive={active && !live} onGoLive={goLive} />}
+        </section>
+
+        {hasRun && snapshot.plan && (
+          <StepInspector plan={snapshot.plan} stepId={stepId} steps={snapshot.steps} record={record} onSelect={setSelectedId} onOpenSource={openSource} />
+        )}
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_17rem] lg:items-start xl:grid-cols-[minmax(0,1fr)_21rem]">
+        <div id="panel-answer" role="tabpanel" aria-labelledby="tab-answer" className={cn("scroll-mt-20 lg:block", tab === "answer" ? "block" : "hidden")}>
+          <AnswerPaper mission={mission} result={result} loading={resultLoading} numbers={allNumbers} activeRef={openRef} onCite={openSource} />
+        </div>
+        {/* the sources follow the reader down a long answer; the cap keeps the bottom of a tall open source reachable by scrolling inside it */}
+        <div id="panel-sources" role="tabpanel" aria-labelledby="tab-sources" className={cn("lg:sticky lg:top-20 lg:block lg:max-h-[calc(100dvh-6rem)] lg:overflow-y-auto", tab === "sources" ? "block" : "hidden")}>
+          <SourcesShelf refs={refs} texts={texts} readBy={readBy} openRef={openRef} onOpen={setOpenRef} />
         </div>
       </div>
 

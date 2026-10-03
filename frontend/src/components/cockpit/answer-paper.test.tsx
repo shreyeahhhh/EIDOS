@@ -50,6 +50,14 @@ describe("AnswerPaper — a real answer from a model", () => {
     expect(within(body()).getAllByText("Source")).toHaveLength(3);
   });
 
+  it("lets the cards flow into two columns once the answer itself is wide, so a long table is not a long scroll", () => {
+    paper();
+    const cards = body().querySelector("h5")!.closest("ol")!;
+    expect(cards.className).toContain("@2xl:grid-cols-2"); // by the answer's own width (a container query), not the screen's
+    expect(cards.className).toContain("@2xl:items-start"); // opening one card's evidence does not stretch its neighbour
+    expect(body().querySelector("[class~='@container']")).not.toBeNull(); // the element whose width that query reads
+  });
+
   it("folds the evidence away on each card, and opens it for one card or for all", () => {
     paper();
     const folds = [...document.querySelectorAll("details[data-evidence]")] as HTMLDetailsElement[];

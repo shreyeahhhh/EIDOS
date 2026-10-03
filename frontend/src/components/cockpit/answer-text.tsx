@@ -180,7 +180,8 @@ function TableView({ table, cite }: { table: TableBlock; cite: CiteProps }) {
   return (
     <div className="flex flex-col gap-3">
       {toggle}
-      <ol className="flex flex-col gap-3">
+      {/* one column while the answer is narrow; two once it has the room (the answer's own width, not the screen's), so a long table does not become a long scroll */}
+      <ol className="grid gap-3 @2xl:grid-cols-2 @2xl:items-start">
         {table.rows.map((row, rowIndex) => {
           const sources = [...new Set(row.flatMap((cell) => citationsIn(cell)))];
           const evidence = evidenceColumn >= 0 ? row[evidenceColumn] : undefined;
@@ -260,7 +261,7 @@ function BlockView({ block, cite, first }: { block: Block; cite: CiteProps; firs
 
 export function AnswerBlocks({ blocks, ...cite }: { blocks: Block[] } & CiteProps) {
   return (
-    <div className="flex flex-col gap-4 text-[0.95rem]">
+    <div className="@container flex flex-col gap-4 text-[0.95rem]">
       {blocks.map((block, index) => (
         <BlockView key={index} block={block} cite={cite} first={index === 0} />
       ))}

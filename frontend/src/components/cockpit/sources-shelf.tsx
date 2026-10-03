@@ -54,14 +54,15 @@ export function SourcesShelf({ refs, texts, readBy, openRef, onOpen }: SourcesSh
           const info = describeSource(ref);
           const active = ref === open;
           return (
-            <li key={ref}>
+            <li key={ref} className="max-w-full">
               <button
                 type="button"
                 onClick={() => onOpen(active ? null : ref)}
                 aria-expanded={active}
                 aria-controls="source-reader"
+                title={info.label}
                 className={cn(
-                  "flex items-center gap-2 rounded-xl border px-3 py-2 text-left text-sm transition-colors",
+                  "flex max-w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-sm transition-colors",
                   active ? "border-accent bg-accent-soft text-accent-strong" : "border-border text-ink-muted hover:border-accent hover:text-ink",
                 )}
               >

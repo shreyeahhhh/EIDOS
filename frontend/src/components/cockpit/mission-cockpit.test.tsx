@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { PORTFOLIO_ANSWER } from "@/lib/__fixtures__/portfolio-answer";
 import type { MissionResult, MissionSummary } from "@/lib/api/types";
 import { EXAMPLE_EVENTS, EXAMPLE_EVIDENCE, EXAMPLE_EXECUTION, EXAMPLE_MISSION, EXAMPLE_RESULT } from "@/lib/example-run";
 import { MissionCockpit, type MissionCockpitProps } from "./mission-cockpit";
@@ -106,6 +107,63 @@ describe("MissionCockpit — a finished, verified mission", () => {
     cockpit({ result: withDocument, evidence: { audit: { traces: [], cited: [] }, evidence: [] }, execution: { ...EXAMPLE_EXECUTION, steps: [] } });
     fireEvent.click(screen.getByRole("button", { name: /^Source 1: Your document/ }));
     expect(within(document.getElementById("source-reader")!).getByText(/You supplied this document/)).toBeInTheDocument();
+  });
+});
+
+describe("MissionCockpit — how the page is laid out, so a long answer leaves nothing blank", () => {
+  const panel = (name: "plan" | "answer" | "sources") => document.getElementById(`panel-${name}`)!;
+  const stage = () => panel("plan").querySelector("section")!;
+
+  /** The nearest element that holds both: where the two stop being siblings in one row. */
+  const sharedAncestor = (a: HTMLElement, b: HTMLElement) => {
+    let node: HTMLElement | null = a;
+    while (node && !node.contains(b)) node = node.parentElement;
+    return node!;
+  };
+
+  it("keeps the answer out of the plan's band, so its length cannot leave an empty column beside the plan", () => {
+    cockpit();
+    expect(panel("plan").contains(panel("answer"))).toBe(false);
+    // they meet only in the page's own stack, one band under the other — never in a grid row where the taller one leaves the shorter's side empty
+    expect(sharedAncestor(panel("plan"), panel("answer")).className).not.toContain("grid-cols");
+    expect(panel("plan").className).toContain("xl:grid"); // the flow and the step inspector share the first band (stacked below `xl`)
+    expect(panel("plan").contains(screen.getByRole("heading", { name: "Verify" }))).toBe(true);
+  });
+
+  it("lets only the sources ride beside the answer, and follow the reader down", () => {
+    cockpit();
+    expect(sharedAncestor(panel("answer"), panel("sources")).className).toContain("lg:grid-cols"); // one row: the answer and, beside it, the sources
+    expect(panel("sources").className).toContain("lg:sticky");
+    expect(panel("sources").className).toContain("lg:overflow-y-auto"); // a tall open source can still be scrolled to its end
+    expect(panel("answer").className).not.toContain("sticky"); // the long part is never pinned: its bottom could not be reached
+  });
+
+  it("gives the flow the whole width while there is no step inspector beside it, and shares the band once there is one", () => {
+    const created: MissionSummary = { ...EXAMPLE_MISSION, run_status: "created", mission_status: null, verified: null, counters: null, last_sequence: 0 };
+    const { unmount } = cockpit({ mission: created, events: [], execution: null, result: null, evidence: null });
+    expect(stage().className).toContain("xl:col-span-2");
+    unmount();
+    cockpit();
+    expect(stage().className).not.toContain("xl:col-span-2");
+  });
+
+  it("sets a long answer in the same layout, with its length only in its own band", () => {
+    const long: MissionResult = { ...EXAMPLE_RESULT, artifacts: [{ ...EXAMPLE_RESULT.artifacts[0], content: PORTFOLIO_ANSWER }] };
+    cockpit({ result: long });
+    expect(panel("answer").querySelectorAll("h5")).toHaveLength(3); // one card per row of the answer's table
+    expect(panel("plan").querySelector("[data-testid='answer-body']")).toBeNull();
+  });
+
+  it("points a finished mission at its answer, which now sits below the plan, and a mission without one at nothing", () => {
+    const { unmount } = cockpit();
+    const link = screen.getByRole("link", { name: /Read the answer/ });
+    expect(link).toHaveAttribute("href", "#panel-answer");
+    expect(document.getElementById("panel-answer")).not.toBeNull(); // the link has somewhere to go
+    expect(link.parentElement!.className).toMatch(/\bhidden\b.*\blg:block\b/); // shown only where the answer is a section; below `lg` it is a tab
+    expect(link.className).not.toMatch(/\bhidden\b/); // (a `hidden` here would lose to the button's own `display`)
+    unmount();
+    cockpit({ mission: { ...EXAMPLE_MISSION, run_status: "running", mission_status: null }, events: EXAMPLE_EVENTS.slice(0, 11), execution: null, result: null, evidence: null });
+    expect(screen.queryByRole("link", { name: /Read the answer/ })).toBeNull();
   });
 });
 

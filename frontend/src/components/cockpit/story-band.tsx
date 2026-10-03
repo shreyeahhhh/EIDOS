@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button";
+import { Button, buttonClassName } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { ExecutionMetrics } from "@/components/mission/execution-metrics";
 import { MissionStatusPair } from "@/components/mission/mission-status-pair";
@@ -90,6 +90,15 @@ export function StoryBand({ mission, story, snapshot, planCount, webPagesRead, s
           <Button onClick={onStart} disabled={starting} className="shrink-0 self-start px-6 sm:self-center">
             {starting ? "Starting…" : "Start mission"}
           </Button>
+        )}
+        {mission.mission_status === "completed" && (
+          // The answer sits below the plan, so a finished mission points at it. Only where the page shows it as a section: below `lg` it is the Answer tab.
+          // (The wrapper hides it: a button's own classes set `display`, and class names here are not merged, so `hidden` on the link itself would lose.)
+          <div className="hidden shrink-0 self-center lg:block">
+            <a href="#panel-answer" className={buttonClassName("secondary")}>
+              Read the answer <span aria-hidden="true">↓</span>
+            </a>
+          </div>
         )}
       </div>
 

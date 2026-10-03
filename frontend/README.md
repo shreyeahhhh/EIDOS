@@ -63,11 +63,22 @@ the backend by deploying it.
 
 A mission's page is a **cockpit**, not a document (`components/cockpit/`): the story of the run on top (your
 goal, one sentence about how it went, a progress bar, a few facts, the rest folded into "More about this
-mission"); beneath it a stage and a page side by side — the plan as a flow of steps you can touch with a
-replay strip under it and an inspector for the step you pick, and the answer set like a page with numbered
-sources that open a reader — and, folded away at the bottom, "Technical details" (every recorded event, the
-citation audit). Below `lg` the same three panels (Plan, Answer, Sources) become tabs. It is all one page and
-one set of fetches: splitting it into routes would fragment one story into several loading states.
+mission"); beneath it **two bands, one under the other** — first the stage and the step inspector (the plan as a
+flow of steps you can touch with a replay strip under it, beside an inspector for the step you pick; stacked
+below `xl`, where the flow would not have the width to stay left-to-right), then the answer set like a page,
+across the width, with the numbered sources in a rail beside it that follows you down (`lg` and up) — and,
+folded away at the bottom, "Technical details" (every recorded event, the citation audit). Below `lg` the
+three panels (Plan, Answer, Sources) become tabs. It is all one page and one set of fetches: splitting it
+into routes would fragment one story into several loading states.
+
+*Why two bands* (owner-reported fault): the answer is the one part whose length nobody controls. Beside the plan
+in a shared grid row, a long answer made its column thousands of pixels tall and left the other column empty
+beneath the plan — measured on a real answer at 1280 px: the answer column 3,458 px tall at 544 px wide, the
+plan column 714 px. Now a long answer only lengthens its own band; it has the full width (cards flow into two
+columns once the answer itself is wide enough, by container query, so a long table is not a long scroll), and
+the sources — a short list — stay in view beside it (capped to the viewport, scrolling inside if a source is
+open and tall). The answer itself is never pinned: a pinned tall column's bottom cannot be reached. A
+finished mission's story band carries a "Read the answer" link, because the answer now sits below the plan.
 
 What the interactions are, and what they are made of — all of it derived in `lib/run-model.ts` from the
 **recorded events alone**, never invented: *replay* (a strip with one tick per event; drag it or press play and
