@@ -1,0 +1,59 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+import { describe, expect, it } from "vitest";
+
+/**
+ * WCAG AA asks 4.5:1 for normal text. The design tokens are the one place every colour in the app comes from, so this reads the real
+ * `globals.css` and measures the pairs the interface actually puts text on, in both themes. It exists because a pair that read 3.95:1 (warning text on
+ * its own soft background) went unnoticed through several releases: a token change that breaks a pair now fails here instead.
+ */
+
+const css = readFileSync(join(__dirname, "globals.css"), "utf-8");
+
+function tokens(block: string): Record<string, string> {
+  return Object.fromEntries([...block.matchAll(/--color-([a-z-]+):\s*(#[0-9a-fA-F]{6})\s*;/g)].map((match) => [match[1], match[2]]));
+}
+
+const lightBlock = css.slice(css.indexOf(":root {"), css.indexOf("@media (prefers-color-scheme: dark)"));
+const darkStart = css.indexOf("@media (prefers-color-scheme: dark)");
+const darkBlock = css.slice(darkStart, css.indexOf("@theme inline"));
+const light = tokens(lightBlock);
+const dark = { ...light, ...tokens(darkBlock) };
+
+function luminance(hex: string): number {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+function contrast(a: string, b: string): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+// [text token, background token] — each pair is one the interface really uses for small text.
+const PAIRS: [string, string][] = [
+  ["ink", "surface"], ["ink", "surface-raised"], ["ink", "surface-sunken"],
+  ["ink-muted", "surface"], ["ink-muted", "surface-raised"], ["ink-muted", "surface-sunken"], ["ink-muted", "accent-soft"],
+  ["ink-faint", "surface"], ["ink-faint", "surface-raised"],
+  ["accent-strong", "accent-soft"], ["accent-strong", "surface-raised"], ["on-accent", "accent"], ["on-accent", "accent-strong"],
+  ["success", "surface"], ["success", "surface-raised"], ["success", "success-soft"],
+  ["warning", "surface"], ["warning", "surface-raised"], ["warning", "warning-soft"],
+  ["error", "surface"], ["error", "surface-raised"], ["error", "error-soft"],
+  ["info", "surface"], ["info", "surface-raised"], ["info", "info-soft"],
+];
+
+describe("design token contrast (WCAG AA, 4.5:1 for normal text)", () => {
+  it("found the tokens in both themes", () => {
+    expect(light["ink"]).toMatch(/^#/);
+    expect(dark["ink"]).toMatch(/^#/);
+    expect(dark["ink"]).not.toBe(light["ink"]); // the dark block really overrides
+  });
+
+  for (const [themeName, theme] of [["light", light], ["dark", dark]] as const) {
+    it.each(PAIRS)(`${themeName}: %s on %s`, (text, background) => {
+      expect(theme[text], `--color-${text}`).toBeDefined();
+      expect(theme[background], `--color-${background}`).toBeDefined();
+      expect(contrast(theme[text], theme[background])).toBeGreaterThanOrEqual(4.5);
+    });
+  }
+});

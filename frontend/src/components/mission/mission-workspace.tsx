@@ -8,26 +8,19 @@ import { ApiError } from "@/lib/api/errors";
 import { forgetMission } from "@/lib/mission-index";
 import { useApiResource } from "@/lib/use-api-resource";
 import { useMissionStatus } from "@/lib/use-mission-status";
-import { Section } from "@/components/layout/section";
+import { MissionCockpit } from "@/components/cockpit/mission-cockpit";
+import { Button } from "@/components/ui/button";
+import { Callout } from "@/components/ui/callout";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ExecutionTimeline } from "@/components/execution/execution-timeline";
-import { PlanGraph } from "@/components/plan/plan-graph";
-import { ReplanLineage } from "@/components/plan/replan-lineage";
-import { EvidencePanel } from "@/components/evidence/evidence-panel";
-import { ResultPanel } from "@/components/result/result-panel";
-import { MissionHeader } from "./mission-header";
 import { NoWorkspaceAccess } from "./no-workspace-access";
 import { TenantRequiredForm } from "./tenant-required-form";
 
-const SECTIONS = [
-  { id: "timeline", label: "Timeline" },
-  { id: "plan", label: "Plan" },
-  { id: "result", label: "Result" },
-  { id: "evidence", label: "Evidence" },
-] as const;
-
+/**
+ * Fetches everything one mission is made of and hands it to the cockpit. This is where authentication, workspace access and loading failures
+ * are handled; how the mission is *shown* is the cockpit's business.
+ */
 export function MissionWorkspace({ missionId }: { missionId: string }) {
   const router = useRouter();
   const missionState = useMissionStatus(missionId);
@@ -114,84 +107,30 @@ export function MissionWorkspace({ missionId }: { missionId: string }) {
 
   if (!mission) return null;
 
+  // A part that could not be loaded is said so once, with one way to try again, and the rest of the cockpit still shows what it has.
+  const failures = [events, execution, result, evidence].filter((resource) => resource.status === "error");
+
   return (
-    <div className="flex flex-col">
-      <MissionHeader mission={mission} hasEvents={hasEvents} starting={starting} startError={startError} onStart={handleStart} />
-
-      {hasEvents && (
-        <nav aria-label="Mission sections" className="mt-6 flex gap-1 overflow-x-auto border-b border-border">
-          {SECTIONS.map((section) => (
-            <a
-              key={section.id}
-              href={`#${section.id}`}
-              className="shrink-0 border-b-2 border-transparent px-3 py-3 text-sm text-ink-muted transition-colors hover:border-border-strong hover:text-ink"
-            >
-              {section.label}
-            </a>
-          ))}
-        </nav>
+    <div className="flex flex-col gap-5">
+      {failures.length > 0 && (
+        <Callout tone="warning" title="Some details couldn't be loaded">
+          <p>The rest of the page still shows what it has. {failures.map((resource) => (resource.status === "error" ? resource.error.message : "")).filter(Boolean)[0]}</p>
+          <Button variant="secondary" size="sm" className="mt-3" onClick={() => failures.forEach((resource) => resource.reload())}>
+            Try again
+          </Button>
+        </Callout>
       )}
-
-      <Section id="timeline" title="Timeline">
-        {!hasEvents ? (
-          <EmptyState title="Nothing has happened yet">
-            {mission.run_status === "created" ? "Start the mission to see its execution here." : "This run ended before anything was recorded."}
-          </EmptyState>
-        ) : events.status === "loading" ? (
-          <Skeleton className="h-32 w-full" />
-        ) : events.status === "error" ? (
-          <ErrorState message={events.error.message} onRetry={events.reload} />
-        ) : events.status === "ready" ? (
-          <ExecutionTimeline events={events.data.events} steps={execution.status === "ready" ? execution.data.steps : []} />
-        ) : null}
-      </Section>
-
-      <Section id="plan" title="Plan" description="The steps EIDOS decided to execute, and how they depend on one another.">
-        {!hasEvents ? (
-          <EmptyState title="No plan yet">A plan appears here once the mission starts.</EmptyState>
-        ) : execution.status === "loading" ? (
-          <Skeleton className="h-40 w-full" />
-        ) : execution.status === "error" ? (
-          <ErrorState message={execution.error.message} onRetry={execution.reload} />
-        ) : execution.status === "ready" ? (
-          <div className="flex flex-col gap-6">
-            {events.status === "ready" && <ReplanLineage events={events.data.events} />}
-            <PlanGraph steps={execution.data.steps} />
-          </div>
-        ) : null}
-      </Section>
-
-      <Section id="result" title="Result">
-        {!hasEvents ? (
-          <EmptyState title="No result yet">A result appears here once the mission finishes.</EmptyState>
-        ) : runIsActive ? (
-          <EmptyState title="Not finished yet">This mission is still running.</EmptyState>
-        ) : result.status === "loading" ? (
-          <Skeleton className="h-32 w-full" />
-        ) : result.status === "not_ready" ? (
-          <EmptyState title="No result was recorded">
-            {mission.run_status === "interrupted" || mission.run_status === "error"
-              ? "This run ended before it produced a result."
-              : "This mission has no result yet."}
-          </EmptyState>
-        ) : result.status === "error" ? (
-          <ErrorState message={result.error.message} onRetry={result.reload} />
-        ) : result.status === "ready" ? (
-          <ResultPanel result={result.data} />
-        ) : null}
-      </Section>
-
-      <Section id="evidence" title="Evidence" description="Provenance for what each work step cited.">
-        {!hasEvents ? (
-          <EmptyState title="No evidence yet">Evidence appears here once the mission has run.</EmptyState>
-        ) : evidence.status === "loading" ? (
-          <Skeleton className="h-32 w-full" />
-        ) : evidence.status === "error" ? (
-          <ErrorState message={evidence.error.message} onRetry={evidence.reload} />
-        ) : evidence.status === "ready" ? (
-          <EvidencePanel evidence={evidence.data} />
-        ) : null}
-      </Section>
+      <MissionCockpit
+        mission={mission}
+        events={events.status === "ready" ? events.data.events : null}
+        execution={execution.status === "ready" ? execution.data : null}
+        result={result.status === "ready" ? result.data : null}
+        resultLoading={hasEvents && !runIsActive && result.status === "loading"}
+        evidence={evidence.status === "ready" ? evidence.data : null}
+        starting={starting}
+        startError={startError}
+        onStart={handleStart}
+      />
     </div>
   );
 }

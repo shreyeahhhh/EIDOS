@@ -58,14 +58,28 @@ the backend by deploying it.
 /auth/callback       where the sign-up confirmation email's link lands (route handler)
 /missions            dashboard — a local navigation index, not a source of truth
 /missions/new        mission creation (protected)
-/missions/[id]        the mission workspace — ONE page, not five routes or tabs
+/missions/[id]        the mission cockpit — ONE page; on a phone its three panels become tabs
 ```
 
-A mission's workspace is a single scrollable document with in-page sections (Timeline, Plan, Result,
-Evidence) and an anchor nav, not separate routes: they all derive from data that is cheap to fetch
-together, and splitting them would fragment one story into five loading states. `run_status` and
-`mission_status` are never merged — `MissionStatusPair` shows RUN and MISSION as two distinct facts
-everywhere a mission's state appears.
+A mission's page is a **cockpit**, not a document (`components/cockpit/`): the story of the run on top (your
+goal, one sentence about how it went, a progress bar, a few facts, the rest folded into "More about this
+mission"); beneath it a stage and a page side by side — the plan as a flow of steps you can touch with a
+replay strip under it and an inspector for the step you pick, and the answer set like a page with numbered
+sources that open a reader — and, folded away at the bottom, "Technical details" (every recorded event, the
+citation audit). Below `lg` the same three panels (Plan, Answer, Sources) become tabs. It is all one page and
+one set of fetches: splitting it into routes would fragment one story into several loading states.
+
+What the interactions are, and what they are made of — all of it derived in `lib/run-model.ts` from the
+**recorded events alone**, never invented: *replay* (a strip with one tick per event; drag it or press play and
+the whole cockpit shows how things stood at that moment, with a plain sentence for each), *plan versions*
+(chips for every plan the log generated, each shown exactly as it ended), *the inspector* (what a step is for,
+what happened, the recorded reason if it failed, which sources it used; ids, token counts and tool calls are in
+its own folded "Technical details"), *numbered sources* (`lib/citations.ts` turns `[[reference]]` into
+footnote-style chips; opening one shows the text EIDOS read where the backend keeps it — fetched pages and
+retrieved evidence — and says plainly when it does not, for example a document you uploaded). While a run is
+live the cockpit follows its newest moment ("Live"); scrub back and "Jump to live" returns. `run_status` and
+`mission_status` are never merged — `MissionStatusPair` shows RUN and MISSION as two distinct facts in "More
+about this mission".
 
 ## Layout
 
@@ -85,11 +99,10 @@ src/
     layout/                        PageHeader, Section — the workspace's only structure
     site/                          header (marketing nav signed-out, app nav signed-in) / footer, sign-out
     auth/                          the login and sign-up forms
-    mission/                       creation form, dashboard, MissionCard, MissionHeader, MissionStatusPair, ExecutionMetrics, the workspace itself, and the two shared access states (no-workspace-access, tenant-required)
-    execution/                     ExecutionTimeline (plain-language event descriptions, raw payload behind a disclosure)
-    plan/                          PlanGraph (a hand-built SVG DAG, no graph library) and ReplanLineage
-    evidence/                      EvidencePanel
-    result/                        ResultPanel, VerificationPanel, ArtifactCard
+    mission/                       creation form, dashboard, MissionCard, MissionStatusPair, ExecutionMetrics, the workspace (fetching, auth and load failures) and the two shared access states (no-workspace-access, tenant-required)
+    cockpit/                       the mission page: MissionCockpit (state and layout), StoryBand, RunCanvas (a hand-built, adaptive SVG-and-buttons flow, no graph library), Filmstrip (replay), StepInspector, AnswerPaper, AnswerText (a safe Markdown-ish reader; never inserts HTML), SourcesShelf, TechnicalDetails
+    execution/                     ExecutionTimeline (plain-language event descriptions, raw payload behind a disclosure) — now inside Technical details
+    evidence/                      EvidencePanel — the citation audit, inside Technical details
     landing/                       the landing page's own sections (Reveal, MissionLoopVisual, ProductThesis, HowItWorks,
                                     ProductPreview, ModelIndependent) — composed only
                                     by `app/page.tsx`, never imported into the authenticated app
@@ -127,16 +140,19 @@ src/
   128 KB total). A fetched web page is shown in the Evidence section as a "Web page" with the text EIDOS
   read; the audit still calls it "not evidence" because it was not retrieved from a knowledge base.
 - **No "strategy" is ever shown**, because the backend never exposes one (candidate generation and
-  selection are not recorded events). The workspace shows the executed *plan* (`PlanGraph`) and, across
-  a replan, why the previous one was abandoned (`ReplanLineage`, read from `PLAN_GENERATED` and
-  `REPLAN_TRIGGERED` events) — never which strategies were considered. Each plan version keeps its own
-  identity; v1 is never visually mutated into v2.
-- **The evidence view is honestly empty** in this deployment: no knowledge base is configured, so
-  every citation reads `not_evidence`, and `EvidencePanel` states that plainly rather than hiding it.
-  This is a documented backend limitation (V1.4-C), not a bug here.
-- **Result and Verification are always shown separately** (`ResultPanel`/`VerificationPanel`): an
-  artifact existing is never presented as the same fact as it having been verified, and a verdict is
-  its own reason text, never a score or a percentage.
+  selection are not recorded events). The cockpit shows each executed *plan* (`RunCanvas`) and, across a
+  replan, why the previous one was abandoned (read from `PLAN_GENERATED` and `REPLAN_TRIGGERED` events) —
+  never which strategies were considered. Each plan version keeps its own identity; v1 is never visually
+  mutated into v2. The execution record keeps model and tool detail only for the plan that ran last, and the
+  inspector says so for an earlier plan.
+- **The citation audit says "not evidence" for everything without a knowledge base** (the backend's own
+  meaning, D-228): in this deployment a cited page is a source EIDOS read, not retrieved evidence, and
+  `EvidencePanel` (inside Technical details) states that plainly. The cockpit's *Sources* show them as what
+  they are — a web page, your document, notes from an earlier step.
+- **The answer and its verification are shown together but never confused** (`AnswerPaper`): the badge is the
+  verifier's verdict word for word, "How was this checked?" says what the checks are — well-formed, cites its
+  sources, every cited source exists — and that they do **not** judge whether the answer is correct. A verdict
+  is never a score or a percentage, and a failed mission shows no answer, only the recorded reason.
 
 ## Design
 
@@ -146,12 +162,22 @@ with one restrained terracotta accent (never a generic AI purple); status shown 
 own label (`Badge`), never a filled pill; whitespace and typographic hierarchy doing the work generic
 cards used to do.
 
+The mission cockpit's layout follows what trace-viewer and observability tools for agent runs converge on — a
+canvas or tree beside a details panel, a replay strip you can scrub or play, aggregated views with the detail
+one click away — and the "unequal cells, size follows priority" idea of bento layouts (the answer is the large
+cell, the sources a small one). Sources looked at while designing it: the
+[Pinterest "Node-based UI"](https://www.pinterest.com/jwondrack/node-based-ui/) and
+[workflow](https://www.pinterest.com/swfolger/workflow-examples/) boards,
+[Evil Martians' write-up of AgentPrism](https://evilmartians.com/chronicles/debug-ai-fast-agent-prism-open-source-library-visualize-agent-traces)
+(tree + timeline + details panel, replay, collapsed repetition) and [SaaSFrame's bento-grid patterns](https://www.saasframe.io/patterns/bento-grid).
+Ideas only; nothing was copied.
+
 The landing page (`app/page.tsx`, `components/landing/`) demonstrates the product rather than describing
 it: a live Mission → Plan → Execute → Verify → Result visual in the hero, one interactive Plan/Execute/
 Verify/Learn section (not three overlapping ones — the loop is explained in exactly one place), and a
-"see it work" preview that renders the *real* `PlanGraph`/`ReplanLineage`/`ExecutionTimeline`/
-`MissionStatusPair` components against static, honestly-captioned example data — not a mockup drawn to
-look like the product, the actual product code. Engineering-principles copy is drawn from this project's
+"see it work" preview that renders the *real* `MissionCockpit` (you can press play, drag the strip and click a
+step) against static, honestly-captioned example data (`lib/example-run.ts`) — not a mockup drawn to look
+like the product, the actual product code. Engineering-principles copy is drawn from this project's
 own CLAUDE.md invariants, not invented marketing language. Scroll-reveal (`Reveal`) and the hero's
 auto-advancing stages both respect `prefers-reduced-motion`.
 

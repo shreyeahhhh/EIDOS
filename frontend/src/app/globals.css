@@ -46,9 +46,10 @@
 
   --color-success: #3d6b46;
   --color-success-soft: #e2ece2;
-  /* Darkened from #93701f during V1.5-C: read at 4.3:1 against --surface, just under WCAG AA's
-     4.5:1 for normal text (this tone's badge/status text is 12px). Same hue, minimal nudge. */
-  --color-warning: #906d1c;
+  /* Darkened from #93701f during V1.5-C (4.3:1 against --surface) and again from #906d1c with the mission cockpit: it read
+     3.95:1 on --warning-soft, the background of every warning callout, under WCAG AA's 4.5:1 for normal text. Now 4.84:1 on
+     --warning-soft and above 5.5:1 on the surfaces. Same hue, minimal nudge. */
+  --color-warning: #7f6016;
   --color-warning-soft: #f2e9d2;
   --color-error: #a23327;
   --color-error-soft: #f3ded9;
