@@ -28,12 +28,3 @@ export function setStoredTenantId(tenantId: string): void {
     // Storage may be unavailable (private browsing, quota); the app still works, it just re-asks.
   }
 }
-
-export function clearStoredTenantId(): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.removeItem(STORAGE_KEY);
-  } catch {
-    // ignore
-  }
-}

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PORTFOLIO_ANSWER } from "@/lib/__fixtures__/portfolio-answer";
 import type { ExecutionRecord, MissionResult, MissionSummary } from "@/lib/api/types";
-import { EXAMPLE_EVENTS, EXAMPLE_EVIDENCE, EXAMPLE_EXECUTION, EXAMPLE_MISSION, EXAMPLE_RESULT } from "@/lib/example-run";
+import { EXAMPLE_EVENTS, EXAMPLE_EVIDENCE, EXAMPLE_EXECUTION, EXAMPLE_MISSION, EXAMPLE_RESULT } from "@/lib/__fixtures__/example-run";
 import { MissionCockpit, type MissionCockpitProps } from "./mission-cockpit";
 
 function cockpit(overrides: Partial<MissionCockpitProps> = {}) {

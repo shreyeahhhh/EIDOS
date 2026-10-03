@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { clearStoredTenantId, getStoredTenantId, setStoredTenantId } from "./tenant";
+import { getStoredTenantId, setStoredTenantId } from "./tenant";
 
 describe("tenant id remembered per browser", () => {
   beforeEach(() => {
@@ -11,10 +11,8 @@ describe("tenant id remembered per browser", () => {
     expect(getStoredTenantId()).toBeNull();
   });
 
-  it("remembers exactly what was entered, and clearing removes it", () => {
+  it("remembers exactly what was entered", () => {
     setStoredTenantId("11111111-1111-1111-1111-111111111111");
     expect(getStoredTenantId()).toBe("11111111-1111-1111-1111-111111111111");
-    clearStoredTenantId();
-    expect(getStoredTenantId()).toBeNull();
   });
 });

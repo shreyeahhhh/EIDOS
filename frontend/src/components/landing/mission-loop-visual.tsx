@@ -66,7 +66,7 @@ export function MissionLoopVisual() {
                   />
                 )}
               </div>
-              <div className={`min-w-0 pb-6 last:pb-0 ${index === STAGES.length - 1 ? "" : ""}`}>
+              <div className="min-w-0 pb-6 last:pb-0">
                 <p
                   className={`font-mono text-xs tracking-[0.15em] uppercase transition-colors duration-500 ${
                     isActive ? "text-accent-strong" : "text-ink-faint"

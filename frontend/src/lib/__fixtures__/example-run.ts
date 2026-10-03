@@ -1,9 +1,8 @@
-import type { EventRecord, EvidenceView, ExecutionRecord, MissionResult, MissionSummary, Plan, StepRecord } from "./api/types";
+import type { EventRecord, EvidenceView, ExecutionRecord, MissionResult, MissionSummary, Plan, StepRecord } from "../api/types";
 
 /**
- * One example mission, shaped exactly like what the backend returns, with static illustrative values — it is shown on the landing page
- * (and used by the tests) and is never presented as a live run. It tells a small, real-shaped story: a research step fails once, EIDOS
- * replans, reads one web page, writes an answer that cites it, and the checks pass.
+ * One example mission for the tests, shaped exactly like what the backend returns, with static illustrative values. It tells a small,
+ * real-shaped story: a research step fails once, EIDOS replans, reads one web page, writes an answer that cites it, and the checks pass.
  */
 
 export const EXAMPLE_URL = "https://example.com/";

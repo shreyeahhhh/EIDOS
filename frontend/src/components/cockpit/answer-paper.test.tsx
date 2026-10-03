@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PORTFOLIO_ANSWER, PORTFOLIO_REF } from "@/lib/__fixtures__/portfolio-answer";
 import type { MissionResult } from "@/lib/api/types";
-import { EXAMPLE_MISSION } from "@/lib/example-run";
+import { EXAMPLE_MISSION } from "@/lib/__fixtures__/example-run";
 import { AnswerPaper } from "./answer-paper";
 
 function resultWith(content: string): MissionResult {

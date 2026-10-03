@@ -7,7 +7,6 @@ import { MissionLoopVisual } from "@/components/landing/mission-loop-visual";
 import { ProductThesis } from "@/components/landing/product-thesis";
 import { HowItWorksVideo } from "@/components/landing/how-it-works-video";
 import { TOTAL_MS, formatClock } from "@/components/landing/how-it-works-scenes";
-import { ProductPreview } from "@/components/landing/product-preview";
 import { ModelIndependent } from "@/components/landing/model-independent";
 
 export default async function HomePage() {
@@ -29,7 +28,7 @@ export default async function HomePage() {
           <h1 className="max-w-xl font-display text-5xl leading-[1.05] tracking-tight text-ink sm:text-6xl">
             Execution intelligence for AI systems.
           </h1>
-          <p className="max-w-md text-lg leading-relaxed text-ink-muted">Plan. Execute. Verify. Learn.</p>
+          <p className="max-w-md text-lg leading-relaxed text-ink-muted">Plan. Execute. Verify.</p>
           <div className="mt-2 flex flex-wrap items-center gap-5">
             <Link href={primaryHref} className={buttonClassName("primary", "md")}>
               {primaryLabel}
@@ -67,19 +66,6 @@ export default async function HomePage() {
             <p className="max-w-xs text-sm leading-relaxed text-ink-muted">One question, start to finish — and how you can check every step of its work.</p>
           </div>
           <HowItWorksVideo ctaHref={primaryHref} ctaLabel={user ? "Open EIDOS →" : "Try it yourself →"} />
-        </Reveal>
-      </section>
-
-      {/* Product preview */}
-      <section id="preview" className="scroll-mt-20 border-t border-border py-20">
-        <Reveal>
-          <div className="mb-10 max-w-xl">
-            <h2 className="font-display text-3xl text-ink">See it work</h2>
-            <p className="mt-3 text-sm leading-relaxed text-ink-muted">
-              A real EIDOS mission workspace — the same components, rendering an example run.
-            </p>
-          </div>
-          <ProductPreview />
         </Reveal>
       </section>
 

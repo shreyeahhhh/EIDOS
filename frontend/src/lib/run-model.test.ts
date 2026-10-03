@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { describeSource, isRecognisedReference, numberCitations, splitCitations } from "./citations";
-import { EXAMPLE_EVENTS, EXAMPLE_MISSION, EXAMPLE_PAGE_REF, EXAMPLE_RESULT } from "./example-run";
+import { EXAMPLE_EVENTS, EXAMPLE_MISSION, EXAMPLE_PAGE_REF, EXAMPLE_RESULT } from "./__fixtures__/example-run";
 import { buildRunModel, formatDuration, formatOffset, plainReason, plansAt, snapshotAt, storyOf } from "./run-model";
 
 const model = buildRunModel(EXAMPLE_EVENTS);

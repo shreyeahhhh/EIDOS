@@ -93,7 +93,7 @@ seen on a real mission) is left out of the Sources list and out of a step's "Sou
 opens something; what the answer itself cites always stays. The page then shows those strings nowhere: they
 remain only in the execution record the backend serves (`GET .../execution`).
 
-*The answer is set for reading, never shown as Markdown* (`lib/answer-markdown.ts`, `AnswerText`, `AnswerPaper`): a parser for what models
+*The answer is set for reading, never shown as Markdown* (`lib/answer-markdown.ts`, `AnswerBlocks`, `AnswerPaper`): a parser for what models
 actually write — headings (a line that is only bold is a heading), nested lists, **GitHub-style tables**, quotes, rules, code, and inline bold,
 italic, strike, code, `[links](https://…)` (plain http/https only; anything else is just its text) and citations — builds a data model, and
 elements are built from that model only, so nothing in an answer can become markup. A table becomes *cards*, one per row (the first column is
@@ -124,11 +124,11 @@ src/
     site/                          header (marketing nav signed-out, app nav signed-in) / footer, sign-out
     auth/                          the login and sign-up forms
     mission/                       creation form, dashboard, MissionCard, MissionStatusPair, ExecutionMetrics, the workspace (fetching, auth and load failures) and the two shared access states (no-workspace-access, tenant-required)
-    cockpit/                       the mission page: MissionCockpit (state and layout), StoryBand, RunCanvas (a hand-built, adaptive SVG-and-buttons flow, no graph library), Filmstrip (replay), StepInspector, AnswerPaper, AnswerText (a safe Markdown-ish reader; never inserts HTML), SourcesShelf, TechnicalDetails
+    cockpit/                       the mission page: MissionCockpit (state and layout), StoryBand, RunCanvas (a hand-built, adaptive SVG-and-buttons flow, no graph library), Filmstrip (replay), StepInspector, AnswerPaper, AnswerBlocks (a safe Markdown-ish reader; never inserts HTML), SourcesShelf, TechnicalDetails
     execution/                     ExecutionTimeline (plain-language event descriptions, raw payload behind a disclosure) — now inside Technical details
     evidence/                      EvidencePanel — the citation audit, inside Technical details
     landing/                       the landing page's own sections (Reveal, MissionLoopVisual, ProductThesis, HowItWorksVideo + its script how-it-works-scenes,
-                                    ProductPreview, ModelIndependent) — composed only
+                                    ModelIndependent) — composed only
                                     by `app/page.tsx`, never imported into the authenticated app
   lib/
     supabase/                      browser and server Supabase clients
@@ -218,13 +218,14 @@ cell, the sources a small one). Sources looked at while designing it: the
 (tree + timeline + details panel, replay, collapsed repetition) and [SaaSFrame's bento-grid patterns](https://www.saasframe.io/patterns/bento-grid).
 Ideas only; nothing was copied.
 
-The landing page (`app/page.tsx`, `components/landing/`) demonstrates the product rather than describing
-it: a live Mission → Plan → Execute → Verify → Result visual in the hero, one interactive Plan/Execute/
-Verify/Learn section (not three overlapping ones — the loop is explained in exactly one place), and a
-"see it work" preview that renders the *real* `MissionCockpit` (you can press play, drag the strip and click a
-step) against static, honestly-captioned example data (`lib/example-run.ts`) — not a mockup drawn to look
-like the product, the actual product code. Engineering-principles copy is drawn from this project's
-own CLAUDE.md invariants, not invented marketing language. Scroll-reveal (`Reveal`) and the hero's
+The landing page (`app/page.tsx`, `components/landing/`) is four sections and nothing else: the hero (a live
+Mission → Plan → Execute → Verify → Result visual), what EIDOS is (three steps), "How it works" (the short
+video — the one place the loop is explained), and the architecture fact it can honestly state (models, agents
+and the one tool that are actually wired today: Ollama or Groq; Research, Analysis, Verification; the web-page
+reader). The "see it work" preview of the cockpit was removed at the owner's request; its example data now
+lives with the test fixtures (`lib/__fixtures__/example-run.ts`), since only tests use it. Copy is drawn from
+this project's own CLAUDE.md invariants, not invented marketing language, and claims nothing that is not built
+(the hero says "Plan. Execute. Verify." — learning from past missions is deferred, D-202). Scroll-reveal (`Reveal`) and the hero's
 auto-advancing stages both respect `prefers-reduced-motion`.
 
 ## Status

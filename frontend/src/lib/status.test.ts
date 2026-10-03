@@ -5,7 +5,6 @@ import {
   MISSION_STATUS_LABEL,
   MISSION_STATUS_TONE,
   NODE_STATUS_LABEL,
-  NODE_STATUS_TONE,
   RUN_STATUS_LABEL,
   RUN_STATUS_TONE,
   VERDICT_LABEL,
@@ -69,13 +68,10 @@ describe("status labels and tones", () => {
     expect(formatted).toMatch(/2026/);
   });
 
-  it("has a label and a tone for every plan-node status the backend can send, distinct from mission_status", () => {
+  it("has a label for every plan-node status the backend can send, distinct from mission_status", () => {
     for (const status of NODE_STATUSES) {
       expect(NODE_STATUS_LABEL[status]).toBeTruthy();
-      expect(NODE_STATUS_TONE[status]).toBeTruthy();
     }
-    expect(NODE_STATUS_TONE.succeeded).toBe("success");
-    expect(NODE_STATUS_TONE.verification_inconclusive).toBe("warning");
   });
 
   it("labels a work step by its capability, and a control step by its role", () => {

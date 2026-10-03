@@ -4,16 +4,7 @@ import { useState, type ReactNode } from "react";
 
 import { describeSource } from "@/lib/citations";
 import { cn } from "@/lib/cn";
-import {
-  citationsIn,
-  inlineText,
-  parseAnswer,
-  splitLead,
-  type Block,
-  type Inline,
-  type ListBlock,
-  type TableBlock,
-} from "@/lib/answer-markdown";
+import { citationsIn, inlineText, splitLead, type Block, type Inline, type ListBlock, type TableBlock } from "@/lib/answer-markdown";
 
 /**
  * An answer, set for reading. It never shows Markdown: headings are headings, lists are lists, a table becomes cards (one per row, the evidence
@@ -267,9 +258,4 @@ export function AnswerBlocks({ blocks, ...cite }: { blocks: Block[] } & CiteProp
       ))}
     </div>
   );
-}
-
-/** Parses and sets one answer's text. */
-export function AnswerText({ content, ...cite }: { content: string } & CiteProps) {
-  return <AnswerBlocks blocks={parseAnswer(content)} {...cite} />;
 }

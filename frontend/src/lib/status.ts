@@ -65,17 +65,6 @@ export const NODE_STATUS_LABEL: Record<NodeStatus, string> = {
   awaiting: "Awaiting",
 };
 
-export const NODE_STATUS_TONE: Record<NodeStatus, Tone> = {
-  succeeded: "success",
-  failed: "error",
-  no_result: "error",
-  verification_failed: "error",
-  verification_inconclusive: "warning",
-  skipped: "neutral",
-  not_reached: "neutral",
-  awaiting: "info",
-};
-
 const PLAN_STEP_KIND_LABEL: Record<Exclude<PlanStepKind, "agent">, string> = {
   ROUTE: "Route",
   VERIFY: "Verify",

@@ -1,15 +1,16 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { AnswerText } from "./answer-text";
+import { parseAnswer } from "@/lib/answer-markdown";
+import { AnswerBlocks } from "./answer-text";
 
 function show(content: string, numbers: [string, number][] = [], activeRef: string | null = null) {
   const onCite = vi.fn();
-  const view = render(<AnswerText content={content} numbers={new Map(numbers)} activeRef={activeRef} onCite={onCite} />);
+  const view = render(<AnswerBlocks blocks={parseAnswer(content)} numbers={new Map(numbers)} activeRef={activeRef} onCite={onCite} />);
   return { onCite, ...view };
 }
 
-describe("AnswerText", () => {
+describe("AnswerBlocks", () => {
   it("reads headings, paragraphs, bullet and numbered lists as a person would", () => {
     show("# Title\n\nFirst line\nsecond line.\n\n## Part\n\n- one\n- two\n\n1. first\n2. second");
     expect(screen.getByRole("heading", { level: 3, name: "Title" })).toBeInTheDocument();

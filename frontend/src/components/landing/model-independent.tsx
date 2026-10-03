@@ -1,7 +1,7 @@
 const BRANCHES = [
-  { label: "Models", items: ["Ollama, today", "swapped behind one interface"] },
-  { label: "Agents", items: ["Research", "Analysis"] },
-  { label: "Tools", items: ["MCP"] },
+  { label: "Models", items: ["Ollama or Groq, today", "swapped behind one interface"] },
+  { label: "Agents", items: ["Research", "Analysis", "Verification"] },
+  { label: "Tools", items: ["Web page reader", "behind the same gate"] },
 ];
 
 /** No model, vendor or SDK name appears in planning, validation or the runtime — this is the one architectural fact this section states, honestly scoped to what's actually wired today. */
