@@ -19,7 +19,7 @@ export default async function LoginPage({
   return (
     <div className="mx-auto flex min-h-[calc(100vh-8rem)] max-w-sm flex-col justify-center gap-8 px-6 py-16">
       <div>
-        <p className="text-xs font-medium tracking-[0.2em] text-accent uppercase">EIDOS</p>
+        <p className="text-xs font-medium tracking-[0.2em] text-accent-strong uppercase">EIDOS</p>
         <h1 className="mt-3 font-display text-3xl text-ink">Sign in</h1>
         <p className="mt-2 text-sm text-ink-muted">Sign in to your workspace.</p>
       </div>

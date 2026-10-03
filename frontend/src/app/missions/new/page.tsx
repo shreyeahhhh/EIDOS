@@ -9,7 +9,7 @@ export default function NewMissionPage() {
   return (
     <div className="mx-auto max-w-2xl px-6 py-16">
       <div className="mb-10">
-        <p className="text-xs font-medium tracking-[0.2em] text-accent uppercase">New mission</p>
+        <p className="text-xs font-medium tracking-[0.2em] text-accent-strong uppercase">New mission</p>
         <h1 className="mt-3 font-display text-3xl text-ink sm:text-4xl">Create a mission</h1>
         <p className="mt-3 max-w-lg text-sm leading-relaxed text-ink-muted">
           Describe the objective in plain language. EIDOS validates it and builds a plan once you start it.

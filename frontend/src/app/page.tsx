@@ -22,7 +22,7 @@ export default async function HomePage() {
       {/* Hero */}
       <section className="grid gap-12 py-20 sm:py-28 lg:grid-cols-[1.1fr_1fr] lg:items-center lg:gap-16">
         <div className="flex flex-col gap-6">
-          <p className="text-xs font-medium tracking-[0.2em] text-accent uppercase">
+          <p className="text-xs font-medium tracking-[0.2em] text-accent-strong uppercase">
             Execution Intelligence &amp; Dynamic Orchestration System
           </p>
           <h1 className="max-w-xl font-display text-5xl leading-[1.05] tracking-tight text-ink sm:text-6xl">

@@ -3,13 +3,22 @@
 /*
   EIDOS design tokens.
 
-  Palette: a warm, editorial neutral (ink on off-white) with one controlled accent —
-  a restrained terracotta, not the default "AI product" blue or purple. Status colors
-  are muted and distinct from the accent so they always read as semantic, never decorative.
+  Palette: three given colours, one scheme — oat (PANTONE P 15-2 C, #E7D2A9) is the page, plum purple (P 95-16 C, #3F1E46)
+  is all the writing, and tangerine (P 30-8 C, #DD6E2D) is everything else that is not a surface or text: buttons, links,
+  highlights, the focus ring, the progress and replay controls. The sRGB values are third-party-published ones: Pantone's
+  own are behind a Pantone Connect login and could not be read, so swap them here if you hold the official ones.
 
-  Dark mode follows the system preference only (no manual toggle): the same tokens are
-  redefined under `prefers-color-scheme: dark`. Dark is not an inversion of light: the accent,
-  its soft backgrounds and the shadow all get their own values so both feel deliberately tuned.
+  Every other value is DERIVED from those three so text stays readable: the lighter oat for cards and the deeper oat for
+  wells and borders, the lighter plum for secondary text, a deep plum for the text that sits on tangerine, a darker
+  tangerine wherever the accent is itself text (tangerine on oat is about 2.2:1), a lighter one for a hover. The status
+  colors are mapped into the same three: done (`success`) is the tangerine family, in progress / waiting (`info`) is
+  plum. Only the two states that must never be mistaken for those keep a colour of their own — `error` (crimson, well
+  away from the tangerine) and `warning` (amber) — and every state also carries a word or a glyph, never colour alone.
+  The contrast test (`globals.contrast.test.ts`)
+  measures every pair the interface uses.
+
+  There is no dark theme: the page is oat. (An earlier dark variant, plum page and oat writing, followed the system
+  preference; it was removed because the brief is oat as the background and plum as the writing.)
 
   Type scale (a convention applied by hand at each call site — Tailwind utilities, not new
   classes — so this is documentation, not a competing system):
@@ -23,77 +32,45 @@
 */
 
 :root {
-  --color-ink: #17161c;
-  --color-ink-muted: #56534d;
-  /* Darkened from #8a867c (V1.5-B) during V1.5-C: the original read at 3.4–3.6:1 against the surface
-     colors it's actually used on (timestamps, hints, technical labels) — below WCAG AA's 4.5:1 for
-     normal text. This clears 4.5:1 against both --surface and --surface-raised, same hue. */
-  --color-ink-faint: #767268;
+  --color-ink: #3f1e46;
+  --color-ink-muted: #5a4160;
+  /* Each of the muted inks and the status colours is the lightest shade that still reads at 4.5:1 or better on the surfaces it is
+     actually used on (the test measures them); the oat page is darker than a white one, so these sit deeper than they once did. */
+  --color-ink-faint: #6b5470;
 
-  --color-surface: #faf8f3;
-  --color-surface-raised: #ffffff;
-  --color-surface-sunken: #f1ede4;
+  --color-surface: #e7d2a9; /* oat */
+  --color-surface-raised: #f5ecd6; /* cards: a lighter oat, so they lift off the page */
+  --color-surface-sunken: #dcc596; /* wells, tab bars, code: a deeper oat */
   /* A step above --surface-raised: the sticky mission-workspace header only, never a plain card. */
-  --color-surface-elevated: rgb(255 255 255 / 0.86);
+  --color-surface-elevated: rgb(245 236 214 / 0.86);
 
-  --color-border: #e4ded0;
-  --color-border-strong: #cfc7b4;
+  --color-border: #cfb784;
+  --color-border-strong: #b49b66;
 
-  --color-accent: #af4c2c;
-  --color-accent-strong: #8f3c22;
-  --color-accent-soft: #f3e2d8;
-  --color-on-accent: #fbf3ee;
+  --color-accent: #dd6e2d; /* tangerine */
+  /* Tangerine is a mid-tone: as text on oat it would read about 2.2:1. This darker shade is the one used wherever the accent is text or a
+     focus ring; the tangerine itself is a fill, with a deep plum on it. */
+  --color-accent-strong: #97390a;
+  --color-accent-hover: #e98a4d; /* the fill of a hovered primary button: lighter than the accent, so the deep plum on it reads better, not worse */
+  --color-accent-soft: #f3d3b2;
+  --color-on-accent: #2a1230;
 
-  --color-success: #3d6b46;
-  --color-success-soft: #e2ece2;
-  /* Darkened from #93701f during V1.5-C (4.3:1 against --surface) and again from #906d1c with the mission cockpit: it read
-     3.95:1 on --warning-soft, the background of every warning callout, under WCAG AA's 4.5:1 for normal text. Now 4.84:1 on
-     --warning-soft and above 5.5:1 on the surfaces. Same hue, minimal nudge. */
-  --color-warning: #7f6016;
-  --color-warning-soft: #f2e9d2;
-  --color-error: #a23327;
-  --color-error-soft: #f3ded9;
-  --color-info: #3c5a73;
-  --color-info-soft: #dfe7ec;
+  /* done is the accent's own family: tangerine as a fill, this deep shade where it is text */
+  --color-success: #97390a;
+  --color-success-soft: #f6dcc0;
+  --color-warning: #6e4f0c;
+  --color-warning-soft: #f3e3ae;
+  /* crimson, not brick red: a failed step must not be mistaken for a done (tangerine) one */
+  --color-error: #8b1a3a;
+  --color-error-soft: #f2cdd4;
+  /* in progress / waiting is plum: the writing colour, a little more violet so it reads as a state */
+  --color-info: #5b3a6e;
+  --color-info-soft: #e6d4e1;
 
-  --shadow-card: 0 1px 2px 0 rgb(23 22 28 / 0.04), 0 1px 1px 0 rgb(23 22 28 / 0.03);
-  --shadow-raised: 0 8px 24px -8px rgb(23 22 28 / 0.16), 0 2px 6px -2px rgb(23 22 28 / 0.08);
+  --shadow-card: 0 1px 2px 0 rgb(63 30 70 / 0.06), 0 1px 1px 0 rgb(63 30 70 / 0.04);
+  --shadow-raised: 0 8px 24px -8px rgb(63 30 70 / 0.22), 0 2px 6px -2px rgb(63 30 70 / 0.1);
 
   --ease-standard: cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-ink: #f1eee6;
-    --color-ink-muted: #b7b0a1;
-    /* Lightened from #7d7869 during V1.5-C for the same WCAG AA reason as the light value above. */
-    --color-ink-faint: #898475;
-
-    --color-surface: #131217;
-    --color-surface-raised: #1c1b21;
-    --color-surface-sunken: #0d0c10;
-    --color-surface-elevated: rgb(28 27 33 / 0.86);
-
-    --color-border: #33313a;
-    --color-border-strong: #454250;
-
-    --color-accent: #e17a52;
-    --color-accent-strong: #ee9670;
-    --color-accent-soft: #3a2620;
-    --color-on-accent: #1a0f0a;
-
-    --color-success: #7fb389;
-    --color-success-soft: #1c2b1f;
-    --color-warning: #d8b25c;
-    --color-warning-soft: #2e2716;
-    --color-error: #e28376;
-    --color-error-soft: #34201c;
-    --color-info: #85aac4;
-    --color-info-soft: #1c2933;
-
-    --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.3), 0 1px 1px 0 rgb(0 0 0 / 0.2);
-    --shadow-raised: 0 8px 24px -8px rgb(0 0 0 / 0.5), 0 2px 6px -2px rgb(0 0 0 / 0.3);
-  }
 }
 
 @theme inline {
@@ -111,6 +88,7 @@
 
   --color-accent: var(--color-accent);
   --color-accent-strong: var(--color-accent-strong);
+  --color-accent-hover: var(--color-accent-hover);
   --color-accent-soft: var(--color-accent-soft);
   --color-on-accent: var(--color-on-accent);
 
@@ -130,7 +108,8 @@
 
 @layer base {
   html {
-    color-scheme: light dark;
+    color-scheme: light;
+    accent-color: var(--color-accent); /* ticked checkboxes, radio buttons and the like: tangerine, not the browser's blue */
   }
 
   body {
@@ -145,7 +124,7 @@
   }
 
   :focus-visible {
-    outline: 2px solid var(--color-accent);
+    outline: 2px solid var(--color-accent-strong);
     outline-offset: 2px;
   }
 }

@@ -134,7 +134,7 @@ export function MissionDashboard() {
       <EmptyState title="No missions yet">
         <p>
           Missions you create in this browser appear here.{" "}
-          <Link href="/missions/new" className="font-medium text-accent hover:text-accent-strong">
+          <Link href="/missions/new" className="font-medium text-accent-strong underline underline-offset-4 hover:text-ink">
             Create the first one →
           </Link>
         </p>

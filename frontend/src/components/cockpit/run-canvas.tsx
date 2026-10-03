@@ -189,7 +189,7 @@ export function RunCanvas({ plan, steps, selectedId, onSelect, highlighted }: Ru
                 "absolute flex items-center gap-3 rounded-xl border px-3 text-left shadow-[var(--shadow-card)] transition-[opacity,box-shadow,transform] duration-200",
                 style.frame,
                 selected && "shadow-[var(--shadow-raised)] outline-2 outline-offset-2 outline-accent",
-                highlighted?.has(step.id) && "ring-2 ring-accent",
+                highlighted?.has(step.id) && "ring-2 ring-accent-strong",
                 dimmed(step.id) && "opacity-40",
               )}
               style={{ left: x, top: y, width: NODE_WIDTH, height: NODE_HEIGHT }}

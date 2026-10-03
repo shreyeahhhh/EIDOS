@@ -181,10 +181,21 @@ src/
 ## Design
 
 The landing page and every application page share one visual language: Fraunces for display moments
-only, Inter for interface text, JetBrains Mono for technical metadata; a warm off-white/deep-ink palette
-with one restrained terracotta accent (never a generic AI purple); status shown as a colored dot plus its
-own label (`Badge`), never a filled pill; whitespace and typographic hierarchy doing the work generic
-cards used to do.
+only, Inter for interface text, JetBrains Mono for technical metadata; and a three-colour palette given by the
+owner — **oat** (PANTONE P 15-2 C) is the page, **plum purple** (P 95-16 C) is all the writing, **tangerine**
+(P 30-8 C) is everything else (buttons, links, highlights, the focus and replay controls, and "done"). One
+light scheme; there is no dark theme. Status is shown as a colored dot plus its own label (`Badge`), never a
+filled pill; whitespace and typographic hierarchy do the work generic cards used to do.
+
+The colours live in one place, `src/app/globals.css`, and `globals.contrast.test.ts` measures every text pair the
+interface uses (WCAG AA, 4.5:1; the focus ring 3:1). **The three hex values are third-party-published sRGB
+values** (`#E7D2A9`, `#3F1E46`, `#DD6E2D`): Pantone's own are behind a Pantone Connect login and could not be
+read, and other sites disagree (some convert the CMYK recipe naively and get far darker, more saturated
+values). If you hold the official ones, change them in that file and the test will say whether text is still
+readable. Tangerine is a mid-tone, so text *on* it is a deep plum, and where the accent is itself text the
+darker `accent-strong` is used (tangerine on oat reads about 2.2:1). Done (`success`) is the tangerine family,
+in progress (`info`) is plum; only `error` (crimson) and `warning` (amber) keep a colour of their own, so
+that a failure is never mistaken for a finished step — and every state also carries a word or a glyph.
 
 The mission cockpit's layout follows what trace-viewer and observability tools for agent runs converge on — a
 canvas or tree beside a details panel, a replay strip you can scrub or play, aggregated views with the detail

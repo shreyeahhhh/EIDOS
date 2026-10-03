@@ -44,7 +44,7 @@ export function Filmstrip({ moments, cursor, onScrub, playing, onTogglePlay, liv
           type="button"
           onClick={onTogglePlay}
           aria-label={playing ? "Pause the replay" : "Play the replay"}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-on-accent transition-colors hover:bg-accent-strong"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-on-accent transition-colors hover:bg-accent-hover"
         >
           {playing ? (
             <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor"><path d="M7 5h4v14H7zM13 5h4v14h-4z" /></svg>
