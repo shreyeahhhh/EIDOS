@@ -5,256 +5,111 @@
 
 *(Description taken verbatim from the project handoff, §1.)*
 
-## Status
+EIDOS works at the level of **execution strategy**. Its question is not "can an AI do this task?" but
+*given an objective, the available agents, models, tools and constraints, how should the work be done —
+and can the result be checked?* Its governing idea: **the LLM proposes; the runtime validates; the agents
+execute; the verifier checks; the whole run is recorded and replayable.**
 
-**Current: V1.6 (Docker + production deployment) is in progress — the backend Dockerfile, `render.yaml`
-(Render) and `docs/14_deployment.md` are built; Groq is a second, production model provider alongside
-Ollama (D-235); actual deployment to Render/Vercel is the next step. V1.5 (the product frontend,
-`frontend/`) is built and hardened.** See [progress.md](progress.md) for the current, authoritative
-account — the paragraph below is the V1.4 record and has not been kept current since.
+## Contents
 
-**V1.4 — Product Backend: accepted (D-229 to D-234, [docs/13_product_backend.md](docs/13_product_backend.md)) and implemented as the V1.4-B backend MVP (2026-09-27; committed locally, not pushed).** FastAPI with exactly eight endpoints over an application service over the unchanged EIDOS runtime, Supabase PostgreSQL as durable storage with the event log staying the authoritative mission history (the state and every answer are derived by replay), Supabase-JWT authentication and explicit lightweight tenancy (application-enforced isolation plus deny-all row level security), a bounded in-process runner with an API-level `run_status` that never enters `MissionState`, and one additive optional `tracker` parameter on `run_with_replanning` so the full replanning path records its facts (D-204 item 1). The default tests need no database and no credential; the PostgreSQL tests are opt-in (`-m postgres`, `EIDOS_TEST_DATABASE_URL`) and ran on a disposable local PostgreSQL, not on a Supabase project. No frontend, Qdrant, Docker, deployment, Kubernetes or knowledge-base management was built. The handoff's Frontend and Deployment labels (V1.3 and V1.4 there) are unassigned, and nothing is renumbered. **V1.3 — RAG / Knowledge Intelligence (the knowledge/evidence layer only): closed as scoped (D-208 to D-228; the Step 8 close-out audit, 2026-09-26). All of V1.3 is pushed to `origin/master` (`b972fe5..e6bcb1a`).** After two read-only readiness passes the owner ruled D-208 to D-220 (2026-09-25): a measured lexical-versus-semantic retrieval comparison behind one `KnowledgePort`, with no Qdrant and no cross-encoder in the first slice; a typed `EvidenceLedger` in place of the supplied-artifact set; independence by declared source identity (D-209); the `eidos.knowledge` package; and additive recorded facts and citation edges, so a mission replays without the knowledge store. It was built in eight steps: the pure structures (identity, chunking, the snapshot and the independent-source count); the evidence ledger and the D-210 resolver, which maps existing V1.2 documents into the knowledge identity without touching what was recorded; the retrieval contracts with a deterministic `query_id`, retrieval and citation facts with replay from the log alone and an evidence audit, the exact in-process lexical retriever (standard library only) and the frozen benchmark with its measured lexical baseline; `SemanticKnowledgePort` (pure, in the main Python 3.12 runtime) over an `IsolatedEmbedder`, a client of a worker program that runs the pinned Sentence Transformer (`paraphrase-multilingual-MiniLM-L12-v2`, pinned by revision and digests) in the isolated Python 3.13.1 interpreter (bounded, offline, its 128-piece window enforced without truncation, never imported by replay, and no model dependency in `pyproject.toml`), measured once on the same frozen fixture; the owner's decision (D-227) that semantic retrieval is the selected capability, with the lexical retriever kept implemented and tested behind the same port and no hybrid policy; and, at Step 7 (D-228), the knowledge gate (`eidos.agents.knowledge_gate`) and an optional `KnowledgeAccess` in the Research agent, so that retrieved evidence enters the `EvidenceLedger` and becomes citable supplied artifacts, `NODE_SETTLED` carries the retrieval and the citations, and one bounded mission (Research, Analysis, the existing verification) is recorded, audited and replayed with no worker, no model and no retrieval, over the semantic retriever behind the real process boundary, over the lexical one and, opt-in, over the real pinned model. No retriever is called better in general. The close-out audit found no boundary defect and changed no source file. The four issues Step 7 raised are decided as known limitations or deferred (D-228, 2026-09-26), and nothing was changed for them: the existing verification counts stored chunks and not independent sources, and the D-209 resolver stays unwired until a later verifier/evidence milestone; `citation_coverage` is not transitive, and `audit_evidence` is the traceability check; a port that raises records no retrieval fact (supported ports return typed failures); and a query ceiling waits until a second distinct query can exist. D-222 (partly), D-223 to D-226 and the readings of D-228 stay Open, and none blocks anything. **V1.2 — MCP / Tool Intelligence: closed and pushed to `origin/master` on 2026-09-25 (D-203 to D-207); scope frozen (D-203); Step 2 (the pure tool contracts and deterministic admission, `eidos.policy`, no MCP yet) and Step 3 (additive tool-call facts on `NODE_SETTLED` and their recording seam); Steps 4 and 5, taken together (the Research → tool gate → `ToolPort` integration and the real MCP stdio client in `eidos.mcp`, revision `2026-07-28`, one local `search_documents` server), implemented and committed as one commit. A mission with no supplied documents now completes verified on documents a tool retrieved; the same path runs over a scripted port and a real MCP server.** The V1.2 close-out audit is accepted, and one documentation/governance close-out commit records its findings; V1.2 is pushed to `origin/master` (`e3968c7` to `b972fe5`). One pinned, read-only tool behind a deterministic admission gate, used by the Research agent through a `ToolPort` and reached by a minimal hand-rolled stdlib MCP client kept in `eidos.mcp`; no new plan step, no new capability, no fourth agent, no SDK, no cumulative budget enforcement. The handoff's own V1.2 governance items (a general policy engine, autonomy levels 2 to 4, human approval, execution-budget enforcement) are deferred and unassigned. **V1.1 — Within-Mission Replanning: closed (D-199 to D-202), pushed** — closing the adaptive loop inside one mission's own lifecycle (a failed or unverified strategy automatically tries the next already-generated candidate, bounded by the mission's own configured `max_replans`); Step 2 gave `execution_record`/`project` an additive `plan_id` scoping parameter; Step 3 gives `ReplanTriggeredPayload` and its one reducer case, which increments `replans_used` and deliberately never touches `MissionState.status` — no new terminal-state escape hatch needed; Step 4 is `eidos.replanning.run_with_replanning`, the orchestration itself, over one continuous event log with an `ExecutionExperience` per attempt, plus D-200 (a replanned plan's work steps get fresh version-namespaced ids so the artifact store's write-once rule never refuses a replan; version-1 ids unchanged); D-201 (accepted) settles the cause recorded for a replan after an unverified completion and makes a mission with no selectable first strategy a typed `ReplanRejection` rather than an exception. D-202 (accepted) records three close-out rulings: exhausting `max_replans` does not itself require `PAUSED` (the mission ends on the final attempted plan's own outcome); cumulative mission-wide budget enforcement across replan attempts is not part of V1.1 (per-plan limits hold for each attempt and `max_replans` bounds the attempt count; the wider question stays deferred with D-043/D-127/D-156); and the handoff's own V1.1 label, Adaptive Learning (exploration, empirical estimation, prediction-error tracking), is not what V1.1 implemented, so those items remain deferred and unassigned. Everything through `b972fe5` (V1.2) is on `origin/master`. V1.0 — Execution Experience / Strategy Memory: closed as scoped (D-198), all 7 steps implemented (`eidos.memory.experience` — `ExecutionExperience`, `evaluate_experience`; `eidos.memory.relevance` — task/strategy relevance filtering; `eidos.memory.store` — local JSONL persistence; `eidos.selectors.experience_informed` — `ExperienceInformedSelector`; Step 6 — the complete adaptive loop proven end to end across two real missions, zero `src/eidos` changes; Step 7 — Benchmark 2, a controlled, scripted 45-mission demonstration (three capability pairs, five missions each, no statistical validation) that measured experience changes the real selector's choice from mission 2 onward, reported as a plain per-mission table, never a score), pushed to `origin/master`. Benchmark 1 — Execution-Control Comparison: implemented (13 tests, conditions A/B/C/D1/D2, five task classes; deliberately unassigned a milestone number, D-196/D-197), pushed to `origin/master`. V0.9 — Telemetry: Steps 2, 3 and 4 implemented (`eidos.telemetry`, a pure multi-execution projection over already-recorded facts; Step 3 connects the full live chain from a `TaskGenome` through candidate generation, selection, Strategy-to-Plan expansion, validation, execution/recording and telemetry projection, for one real mission; Step 4 closes two evidence gaps an inspection found), pushed to `origin/master`. V0.8 — Strategy Selection: architecture accepted, Steps 2, 3, 5, 6, 7 and 8 implemented (the Selector contracts and orchestration boundary; a boundary-hardening audit; the model-assisted Selector adapter, `eidos.selectors`; a deterministic selection-integration suite; the Strategy-to-Plan expansion design and its implementation, `eidos.expansion`), pushed to `origin/master`. V0.7 — Strategy & Candidate Generation: closed as scoped, pushed to `origin/master`. V0.6 — A2A: Steps 1–6 of 9 implemented and pushed. V0.5 — the event log and the state reducer: complete as scoped. V0.4 — real local agents: complete as scoped.
+- [What you can do with it](#what-you-can-do-with-it)
+- [How a mission runs](#how-a-mission-runs)
+- [Repository layout](#repository-layout)
+- [Getting started](#getting-started)
+- [Documentation](#documentation)
+- [Project rules](#project-rules)
+- [Status](#status)
+- [What EIDOS is not](#what-eidos-is-not)
 
-This repository contains the project rules, the architecture knowledge base, the decision record,
-the V0.1 typed contracts (`eidos.contracts`), the V0.2 plan validator (`eidos.validation`), the V0.3
-compiler and runtime (`eidos.compiler`, `eidos.runtime` and the LangGraph backend
-`eidos.backends.langgraph`), and the V0.4 capability registry, three read-only agents (Research,
-Analysis and a deterministic Verification rule set), a single-pass baseline runner and one
-local-model adapter. The baseline works end to end with a scripted model. With a real local model (`qwen3:4b`) the committed opt-in test, run once, finished — Research, Analysis and
-verification — with a verifier PASS at 4,096 output tokens and a 240 s timeout; smaller budgets had failed, as recorded in [progress.md](progress.md) (D-149, D-150). The PASS covers three
-deterministic rules and measures no quality, and the committed test asserts structure only. One question is deliberately left open (D-151). At V0.4 there was no
-planner, no A2A, no MCP, no RAG, no persistence, no API and no frontend; the paragraphs below record what later milestones added (events and state, the A2A boundary, strategy generation, selection and expansion, telemetry, experience memory, within-mission replanning). Still absent: RAG, an API, a frontend, and any LLM-driven planner that emits Plan DSL; MCP exists only as V1.2's single local read-only stdio tool, `search_documents`; persistence is limited to the local JSONL experience store and the event log's JSONL text round trip, with no database.
+## What you can do with it
 
-V0.5 adds the typed event records, a pure state reducer, an in-memory event log with a JSONL round trip, checkpoint and replay (`eidos.state`), recording adapters around the baseline
-(`eidos.recording`) and a derived, read-only `ExecutionRecord`. A recorded baseline replays to the same `MissionState` and the same record with no agent run, and the intake refuses a repeated node event for a step (D-162). One question stays open (D-164), and a
-real-model recording has not been run.
+Sign in to the web app, give EIDOS a goal (optionally with your own text files, or a public web page to
+read), and get back an answer that **names its sources**, with the plan, every step and every source open
+to inspection and replay. The final check is that the answer is well-formed and cites sources that really
+exist — it does **not** judge whether the answer is correct, and the app says so.
 
-V0.6 moves the Research Agent behind one A2A boundary (D-175). The protocol/contract design is decided (`decisions.md` D-165 to D-177), researched directly against the published A2A Protocol
-Specification rather than assumed: a non-blocking `SUBMITTED`/`AWAITING` execution shape, `AgentTask`'s real lifecycle, one continuous event log across the pause, a hand-rolled `httpx` client (no
-`a2a-sdk`), and no fifth `MissionStatus`. Steps 1–5 of 9 are implemented — the `AgentTask`/state contract changes, the `eidos.runtime` non-blocking extension, the `eidos.state`
-event/reducer integration, and `eidos.a2a` itself (the client, the Research Agent's remote `WorkAgent`, the webhook-to-event converter) — pushed to `origin/master`. Re-verifying the wire format against the
-live spec while building the client corrected two Step 1 assumptions (`TaskState` casing, the JSON-RPC method names). Step 5 also found a real gap — nothing un-paused a mission once its one
-exempted completion event was accepted, so a resumed mission could not record further events on the same log — reported, not silently patched, and resolved by **D-177**: an explicit, never-
-automatic `EventLog.accept_resumed`/`reducer.reduce_resumed` pair that reads the log's own history rather than adding a `MissionState` field. Step 6 built the one hop D-177 made possible —
-`eidos.recording.a2a.record_a2a_notification`, the recording adapter that bridges one externally received webhook delivery into a caller-owned `EventLog`, composing the unchanged webhook converter with the
-unchanged `EventLog.accept` and nothing else. All six steps are committed and pushed to `origin/master`. See [progress.md](progress.md), "V0.6 One A2A Boundary".
-
-V0.7 introduces the representation of an execution strategy and the bounded candidate-generation boundary — the
-model chooses from a runtime-bounded set of feasible strategies rather than inventing an unrestricted workflow.
-Step 1 (architecture only) resolved the long-open **D-020** ("Strategy" and "Plan" used interchangeably) as
-**D-178**: a `Strategy` is a distinct object from `Plan`, an execution shape that never carries a `StepId`, a
-dependency edge or an agent binding. **D-179** fixes the three dimensions it may express — topology/parallelism,
-a two-member verification posture, and capability allocation — with agent/model/tool selection and retry/replan
-posture explicitly excluded. **D-180**–**D-182** fix that feasibility filtering will reuse the existing
-`SystemLimits`/`ReliabilityContract` (no new ceiling), that `max_candidates` is an explicit parameter (CLAUDE.md's
-own "two or three" stays the bound), and that `StrategyId` is plain identity (no version, no signature — **D-021**
-stays Open). Step 2 built the data contracts — `eidos.planning` (`Strategy`, `StrategyStage`,
-`VerificationPosture`). Step 3 built the bounded candidate-generation boundary itself: `CandidateGenerator` (a
-`Protocol`, pure function of `TaskGenome.required_capabilities` only), the deterministic reference
-`RuleBasedCandidateGenerator` (linear/parallel/staged shapes, gated so a guaranteed duplicate is never even
-constructed; verification posture derived, not permuted as an independent axis), and `generate_candidate_strategies`
-(structural dedup and identity injection via a new `StrategyIdSource` — no uuid-drawing implementation lives in
-`eidos.planning` itself). Step 4 built the feasibility gate: `check_feasibility` runs three narrower,
-strategy-level analogues of V0.2's CAPABILITY/COMPLEXITY/RESOURCE stages, reusing the existing `SystemLimits`/
-`ReliabilityContract` — no new numeric limit anywhere, and the actual Plan validator (`eidos.validation.stages`/
-`.pipeline`) is never imported or called. `generate_candidate_strategies` now stamps identity, filters through
-this gate, and caps only the feasible pool. Step 5 resolved the three questions Step 1 left open, by owner ruling,
-with no code change: **D-183** (candidates are feasibility-filtered before selection; full Plan validation runs
-once, only on the selected strategy's expanded `Plan`), **D-184** (MCP and RAG are deferred, unassigned extensions
-outside the V0.7–V1.0 sequence — not renumbered into it), **D-185** (candidate generation and feasibility are not
-`MissionEvent`s in V0.7). **V0.7 is closed as scoped** (the owner's own confirmation, 2026-09-22). See
-[progress.md](progress.md), "V0.7 Strategy & Candidate Generation".
-
-V0.8 is the next link the fundamental loop names: feasible Strategy candidates → **[V0.8 Strategy Selection]** →
-selected Strategy → Strategy-to-Plan expansion (future) → the existing Plan Validation → compilation/execution.
-The central problem: choose one strategy from a bounded, already-feasible candidate set without turning the
-selector into an uncontrolled LLM planner. Step 1 (architecture only) found that `ModelPort` (D-135) is text-in,
-text-out only — a model can never return a `Strategy` directly, only name one — the mechanical reason a selector
-structurally cannot invent a strategy. Recorded **D-186** (a selector returns only a `StrategyId`, never a
-`Strategy` value or Plan DSL), **D-187** (the `Selector` contract — `select(candidates, task_genome) ->
-SelectorChoice` — paired with a deterministic orchestration boundary, `select_strategy`, that performs the
-zero/one-candidate short-circuit and the actual membership check no untrusted selector can bypass), **D-188**
-(the reference `DeterministicSelector`'s tie-break is a structural tuple, never a scalar quality score), and
-**D-189** (`SelectionResult` is a typed, replay-ready value only — no `SelectionId`, no `MissionEvent`, no
-Strategy Memory yet). Step 2 implemented exactly that: `eidos.planning.selector` and `.selection`, still a core
-layer, still no `eidos.agents`/`ModelPort` dependency. Step 3 audited the boundary against eleven stated
-semantics and found it already sufficient (no contract change). Step 4 (design only) proposed, and Step 5
-implemented, a model-assisted `Selector`: **D-190** (the model sees only the goal and each candidate's
-stages/verification/rationale), **D-191** (candidates are labelled `CANDIDATE_1..N` by tuple position, never the
-raw `StrategyId`), **D-192** (the model's answer is exactly one bracketed label, parsed by the same closed-token
-convention agents already use to cite sources), **D-193** (no automatic fallback to `DeterministicSelector`).
-`ModelAssistedSelector` lives in a new sibling adapter package, `eidos.selectors`, outside the core `eidos.planning`
-layer — the same shape `eidos.providers` and `eidos.backends` already use for a dependency the core cannot have.
-Step 6 proved the boundary end to end: `CandidateGenerationResult.candidates` was already exactly the
-`tuple[Strategy, ...]` `select_strategy` takes, so no new wiring was built — only `tests/integration/planning/`,
-33 tests exercising both selectors over the same deterministically-generated, feasibility-filtered candidate sets
-(bounded candidates, rejected strategies never reaching the selector, a factual — never ranked — comparison
-between the two selectors, and JSON round-trip/replay safety with no model call). See
-[progress.md](progress.md), "V0.8 Strategy Selection".
-
-Steps 7 and 8 continue the same milestone: selected Strategy → **[Strategy-to-Plan expansion]** → concrete `Plan`
-→ the existing, unmodified V0.2/V0.3 pipeline. `eidos.expansion.expand_strategy` — a new sibling core layer to
-`eidos.planning` (whose own existing guard forbids it from ever importing `StepId`, D-179) — maps one capability
-occurrence to one `AgentStep`, never deduplicated; a stage's steps depend on the whole of the preceding stage,
-D-179's own definition applied literally; `FINAL` verification appends exactly one `VERIFY` step depending on the
-final stage's own step ids alone, matching the real V0.4 baseline precedent (D-194, D-195). `step_id` is a pure,
-deterministic derivation; `plan_id` is drawn only from an injected `PlanIdSource`, mirroring `StrategyIdSource`
-one layer down. The produced `Plan` is an ordinary value — no shortcut around the existing, unmodified V0.2
-validation or V0.3 compiler pipeline exists (D-178). **Note (D-196):** this work was first logged as "V0.9 Step
-1/2"; V0.9 itself remains **Telemetry**, unchanged (the older, far more established meaning), and a future
-controlled benchmark stays unassigned a number, exactly like MCP/RAG under D-184 — this work is filed as V0.8
-Steps 7–8 instead, matching D-183's own pre-existing "Strategy-to-Plan expansion (V0.8+, not built)" phrasing.
-See [progress.md](progress.md), "V0.8 Strategy Selection".
-
-**V0.9 is Telemetry** — the correct, D-196-resolved meaning of the number. `eidos.telemetry.project(records)` is
-a pure, deterministic projection over already-recorded facts, generalized across many executions: it composes
-the existing `execution_record` (D-159) rather than re-folding events, and adds only what's already derivable —
-per-status node counts, a remote-task count, and a mission wall-clock span. No model identifier, no
-`strategy_id`, no quality/confidence/ranking field, no durable store, no benchmark logic — each is a separate,
-flagged, unbuilt extension point.
-
-**Step 3 connects the full chain, for one real mission.** The only missing piece was a real id source: neither
-`StrategyIdSource` nor `PlanIdSource` had one, only fixed test doubles. `eidos.recording.ports.UuidStrategyIds`/
-`UuidPlanIds` (mirroring `UuidEventIds` exactly) close that gap; everything downstream already composed. One
-integration test now exercises the complete, real path — `TaskGenome` → candidate generation → deterministic
-selection → `expand_strategy` → `validate_plan` → `record_baseline` → `project` — for one mission, with real
-UUIDs throughout and no mission driver, no automatic loop (D-170 unchanged).
-
-**Step 4 closes two evidence gaps an inspection found.** `TelemetryRecord` was missing `execution_time_used_ms`
-entirely — one of `MissionState`'s own six counters, present on `ExecutionRecord` since D-159, dropped by an
-implementation gap at Step 2 — and carried no plan-rejection information at all. Both are now pure copies from
-`ExecutionRecord`: `execution_time_used_ms` (never combined with `mission_wall_clock_ms`, D-158 item 4 — a
-parallel two-step topology now proves the two numbers can genuinely diverge) and `plan_rejected_at` (the gate a
-rejected plan was refused at, not the full reasons — `TelemetryRecord` stays flat). Persistent `Strategy`→`Plan`
-lineage was determined **not** required for the benchmark: the same caller that selects a `Strategy` already
-holds it when it later expands and projects one, so external correlation suffices; no `strategy_id` was added.
-See [progress.md](progress.md), "V0.9 Telemetry".
-
-**Benchmark 1 — Execution-Control Comparison** (deliberately unassigned a milestone number, D-196/D-197): the
-first controlled engineering/reproducibility evaluation, not a statistically significant study and not a claim
-that EIDOS is superior. Four conditions on the same scripted tasks — A (direct agent, bypassing Plan/validation/
-runtime/telemetry entirely), B (a hand-authored Plan through the existing execution chain), C (a model's Plan-DSL
-JSON through the existing untrusted-JSON ingress), D (the full validated Strategy pipeline, with D1 the
-deterministic selector and D2 the model-assisted one, a selector *comparison*, never adaptive) — across five task
-classes (sequential reasoning, parallel subtasks, verification-heavy, constrained/failure-prone, invalid-plan
-interception), reporting a metric vector per condition/case, never a combined score. Reproducibility is checked
-by hashing serialized results across repeated identical runs, mirroring V0.3's own determinism precedent. Lives
-under `tests/` (`eidos_benchmark_harness.py` + `test_benchmark_execution_control.py`), not `src/eidos` — no core
-contract, `MissionEvent`, or package changed. Strategy Memory and adaptive/historical selection were explicitly
-deferred at the time; "Benchmark 2" has since been implemented as V1.0 Step 7, below. See
-[progress.md](progress.md), "Benchmark 1 — Execution-Control Comparison".
-
-**V1.0 — Execution Experience / Strategy Memory** (architecture accepted, D-198): the research question is
-whether measured execution experience from previous missions can improve future strategy selection — never
-whether EIDOS can be made to *appear* adaptive. **Step 1**: `eidos.memory.experience` —
-`ExecutionExperience`, an immutable, purely factual record of one completed mission (strategy shape, task
-characteristics, and every cost/outcome fact `TelemetryRecord` already carries, copied verbatim — no quality or
-confidence score, no strategy signature, no embeddings), and the pure function that builds one,
-`evaluate_experience`. The Strategy↔execution linkage lives only inside this new type; no `strategy_id` was
-added to `Plan`, `MissionState`, `TelemetryRecord`, `ExecutionRecord`, or any `MissionEvent`. **Step 2**:
-`eidos.memory.relevance` — two separate, pure relevance questions. Task relevance (`task_relevance`,
-`relevant_experience`) is a closed, three-tier structural comparison (`SAME`/`SIMILAR`/`IRRELEVANT`) over
-required capabilities, risk level and autonomy level only — any risk/autonomy mismatch is irrelevant regardless
-of capability overlap, no embeddings, no scalar similarity score, no staleness. Strategy relevance
-(`experience_for`) matches a candidate to historical records by exact structural shape, never by `StrategyId`
-(fresh every generation round, D-182). **Step 3**: `eidos.memory.store` — `ExperienceStore` (an
-injected Protocol) and `JsonlExperienceStore`, the one module in `eidos.memory` ever permitted filesystem I/O:
-local, append-only JSONL, loaded once and cached as an immutable tuple, never re-reading the file on `append`. A
-malformed persisted line is a typed rejection naming its exact line number — the whole load fails explicitly,
-never a silently filtered history, mirroring the event log's own established JSONL convention (D-157). **Step 4**
-(this commit): `eidos.selectors.experience_informed` — `ExperienceInformedSelector`, a fourth `Selector`
-implementation, no change to the `Selector` Protocol or `select_strategy`. Prefers candidates with directly
-observed, verified-successful historical experience over untested or historically non-successful ones — a
-lexicographic tiered comparison (never a scalar score), deferring entirely to an injected `fallback` selector
-whenever no candidate has any relevant experience at all. **Step 6**: the complete loop proven end
-to end across two real, separate missions — cold start, a real non-success recorded, a fresh mission with fresh
-`StrategyId`s recognizing that history by structure and switching away from the deterministic selector's own
-structural-cost bias, and the resulting success recorded in turn — with **zero changes anywhere in `src/eidos`**,
-confirmed by `git status`. Every stage is the real, already-shipped implementation; nothing is duplicated.
-**Step 7** (this commit, the final step — **V1.0 is now closed as scoped**): Benchmark 2, a controlled evaluation
-of the research question itself. Three fixed capability pairs (research+cost, research+security, cost+security),
-three conditions (D1 `DeterministicSelector`; D2 `ModelAssistedSelector` scripted to a fixed choice; E1 the real
-`ExperienceInformedSelector` over a real, per-pair `ExperienceStore`), five missions each — 45 executions. D1 and
-D2 select the same topology every time and never touch a store; E1 matches them exactly on mission 1 (the
-cold-start equivalence) but switches to the untested topology from mission 2 onward in every pair, despite
-`DeterministicSelector`'s own bias, recomputed fresh each mission, still favoring the other one throughout —
-measured, not asserted, and never framed as a "best strategy," a score, or a superiority claim. Reported as a
-plain per-mission table; reproducibility checked by running the full 45-mission benchmark in two independent
-subprocesses under two different `PYTHONHASHSEED` values and comparing digest vectors byte-for-byte. See
-[progress.md](progress.md), "V1.0 Execution Experience / Strategy Memory".
-
-Current status and the milestone ladder: [progress.md](progress.md).
-Decisions and unresolved questions: [decisions.md](decisions.md).
-Rules every contributor (human or agent) follows: [CLAUDE.md](CLAUDE.md).
-
-No quality metric appears anywhere in this repository. One real-model run is recorded in
-[progress.md](progress.md) as a record of what happened, not as a benchmark. Per the project rules,
-every metric published must come from an actual recorded run.
-
-## What EIDOS is
-
-EIDOS operates at the level of **execution strategy**. Its question is not "can an AI perform this
-task?" but:
-
-> Given a human objective and a set of available AI agents, models, tools, knowledge sources and
-> constraints, how should the system decide the most appropriate way to execute that objective?
-
-Its governing philosophy: **the LLM proposes; the runtime validates; the agents execute; the
-evaluator measures; the system learns.**
+## How a mission runs
 
 ```text
-Human Objective -> Task Genome -> Capability Discovery -> Candidate Strategy Generation
-  -> Plan Validation -> Strategy Selection -> Execution -> Verification -> Evaluation
-  -> Execution Memory -> better future strategy selection
+Goal -> Task Genome -> Candidate strategies -> Plan (validated before it runs)
+     -> Execution under hard limits -> Verification -> Answer + sources
+     (a failed step -> a new plan, or an honest stop; every event is recorded, so a run replays without re-running agents)
 ```
 
-## What EIDOS is not
+Three logical agents (Research, Analysis, Verification), one optional tool (a safe web-page reader), two
+model providers behind one interface (Ollama for local development, Groq for hosted use).
 
-Not a chatbot, not a coding assistant, not a website builder, not a fixed multi-agent workflow, not
-an agent marketplace, not an MCP or A2A gateway, and not a simple RAG application. It is also
-explicitly not an "AI software development factory" — EIDOS may *execute* a software workflow, but
-the runtime itself stays domain-agnostic.
+## Repository layout
 
-## Documentation
-
-The canonical specification is [`EIDOS_CLAUDE_CODE_HANDOFF.md`](EIDOS_CLAUDE_CODE_HANDOFF.md).
-Everything in `docs/` is derived from it and subordinate to it.
-
-| Document | Scope |
+| Path | What is there |
 |---|---|
-| [docs/01_problem.md](docs/01_problem.md) | The problem EIDOS addresses and why it exists |
-| [docs/02_prd.md](docs/02_prd.md) | Product requirements, personas, user experience |
-| [docs/03_architecture.md](docs/03_architecture.md) | System architecture and component boundaries |
-| [docs/04_task_genome.md](docs/04_task_genome.md) | The Task Genome contract |
-| [docs/05_plan_dsl.md](docs/05_plan_dsl.md) | The bounded Plan DSL and its validation pipeline |
-| [docs/06_mission_state.md](docs/06_mission_state.md) | MissionState ownership, events, reducer |
-| [docs/07_a2a_contract.md](docs/07_a2a_contract.md) | A2A boundary contract (V0.6, Steps 1–6 implemented and pushed) |
-| [docs/08_mcp_contract.md](docs/08_mcp_contract.md) | MCP tool boundary contract (implemented in V1.2 for one revision, one transport and one tool — D-203, D-207) |
-| [docs/09_rag_architecture.md](docs/09_rag_architecture.md) | Agentic RAG architecture: the handoff-derived design, plus the V1.3 knowledge/evidence layer as ruled (D-208 to D-226; the pure structures, the evidence ledger, the retrieval contracts, replay and the lexical and semantic retrievers are implemented) |
-| [docs/10_reliability.md](docs/10_reliability.md) | Reliability contract, verification, recovery, governance |
-| [docs/11_evaluation.md](docs/11_evaluation.md) | Telemetry, evaluation framework, experiments |
-| [docs/12_architecture_invariants.md](docs/12_architecture_invariants.md) | The hard invariants, normatively stated |
-| [docs/13_product_backend.md](docs/13_product_backend.md) | The V1.4 product backend: the boundary, the schema, the write-through model, the tracker change, the `MissionSpec` mapping, authentication and tenancy, `run_status` and the API contracts, and what V1.4-B built and verified |
+| `src/eidos/` | The Python package: typed contracts, plan validator, compiler and runtime, event log and state reducer, agents, strategy generation / selection / expansion, replanning, telemetry and experience memory, model providers, the web-fetch tool, and the product backend (`api`, `service`, `persistence`) |
+| `frontend/` | The Next.js web app — landing page, sign-up and sign-in, the mission workspace. See [frontend/README.md](frontend/README.md) |
+| `tests/` | `unit`, `integration`, `protocol`, `scenarios` |
+| `docs/` | The engineering knowledge base, derived from the handoff |
+| `Dockerfile`, `render.yaml` | Backend container and Render deployment |
 
-## Intended local stack
+## Getting started
 
-The prototype is designed to run entirely locally at zero software cost (compute is the laptop's).
-The full intended stack is recorded in the handoff §51 and §76; it is **not** installed yet.
-Only the dependencies required by the current milestone are declared in `pyproject.toml`.
-
-Currently declared: `pydantic>=2` (contracts); the optional extras `langgraph` (the LangGraph backend, V0.3 — D-116), `a2a` (`httpx`, V0.6 — D-171), `api` (FastAPI, uvicorn and PyJWT, V1.4 — D-234) and `postgres` (psycopg 3 and its pool, V1.4 — D-230);
-`dev` (`pytest`, plus all four extras). The core never imports any of them, and each is imported by exactly one boundary.
-
-## Development
+**Tests** (the default run needs no database and no credential):
 
 ```bash
 python -m pytest
 ```
 
-The default run needs no database and no credential. The PostgreSQL tests are opt-in and never skipped: `-m postgres` with `EIDOS_TEST_DATABASE_URL` pointing at a disposable database (the fixture drops and recreates the `eidos` schema, so never a real project).
-Running the backend is described in [docs/13_product_backend.md](docs/13_product_backend.md) section 12.3.
+Opt-in suites are never skipped silently: `-m postgres` (needs `EIDOS_TEST_DATABASE_URL` pointing at a
+*disposable* database — the fixture drops and recreates the `eidos` schema) and `-m real_model` (needs a
+local model runtime). Current test counts live in [progress.md](progress.md).
 
-Runs every test root. The current test state and counts are recorded in [progress.md](progress.md).
-The two real-model tests are excluded from that run and never skipped; they are selected explicitly
-with `-m real_model` and need a local model runtime the owner has installed
-(see `tests/integration/providers/test_ollama_real.py`).
+**Backend:** how to run it, with its environment variables, is in
+[docs/13_product_backend.md](docs/13_product_backend.md) (section 12.3) and
+[docs/14_deployment.md](docs/14_deployment.md).
+
+**Frontend:**
+
+```bash
+cd frontend
+npm install
+npm run dev          # http://localhost:3000 (copy .env.local.example to .env.local first)
+npm test             # also: npm run typecheck, npm run lint, npm run build
+```
+
+## Documentation
+
+The canonical specification is [`EIDOS_CLAUDE_CODE_HANDOFF.md`](EIDOS_CLAUDE_CODE_HANDOFF.md); everything in
+`docs/` is derived from it and subordinate to it.
+
+| Document | Scope |
+|---|---|
+| [docs/01_problem.md](docs/01_problem.md) · [02_prd.md](docs/02_prd.md) | The problem, and the product requirements |
+| [docs/03_architecture.md](docs/03_architecture.md) | System architecture and component boundaries |
+| [docs/04_task_genome.md](docs/04_task_genome.md) · [05_plan_dsl.md](docs/05_plan_dsl.md) · [06_mission_state.md](docs/06_mission_state.md) | The Task Genome, the bounded Plan DSL and its validation, MissionState / events / reducer |
+| [docs/07_a2a_contract.md](docs/07_a2a_contract.md) · [08_mcp_contract.md](docs/08_mcp_contract.md) · [09_rag_architecture.md](docs/09_rag_architecture.md) | The A2A boundary, the tool boundary, the knowledge / evidence layer |
+| [docs/10_reliability.md](docs/10_reliability.md) · [11_evaluation.md](docs/11_evaluation.md) · [12_architecture_invariants.md](docs/12_architecture_invariants.md) | Reliability and governance, telemetry and evaluation, the hard invariants |
+| [docs/13_product_backend.md](docs/13_product_backend.md) · [14_deployment.md](docs/14_deployment.md) | The product backend (API, schema, tenancy), and deployment |
+
+## Project rules
+
+[CLAUDE.md](CLAUDE.md) holds the rules every contributor, human or agent, follows: the architecture
+invariants, the explore → plan → implement → test → verify → commit workflow, and the honesty rules (no
+fabricated numbers; never weaken or skip a failing test). [decisions.md](decisions.md) records every
+decision and open question; [progress.md](progress.md) is the authoritative, current build log.
+
+## Status
+
+Built and tested: the typed contracts, validator, compiler and runtime; the event log, replay and state
+reducer; the three agents with verification; strategy generation, selection and expansion; within-mission
+replanning; telemetry and experience memory; the product backend (FastAPI over Supabase PostgreSQL, JWT
+auth, per-user workspaces); the web app; the web-fetch tool. Docker and Render configuration exist, but
+**actual deployment has not been verified.**
+
+Deliberately deferred, not built: adaptive learning across missions, a general policy engine and
+human-approval flow, an MCP server in the deployed service, knowledge-base management, and per-user rate
+limits. No quality metric is published anywhere in this repository: every metric in a document comes from
+a recorded run, and the one real-model run is logged in [progress.md](progress.md) as a record, not a
+benchmark.
+
+## What EIDOS is not
+
+Not a chatbot, a coding assistant, a website builder, a fixed multi-agent workflow, an agent marketplace,
+an MCP or A2A gateway, or a simple RAG application. The runtime stays domain-agnostic.
