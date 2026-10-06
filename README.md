@@ -3,7 +3,6 @@
 > EIDOS is a model-independent adaptive AI runtime that dynamically plans, orchestrates, evaluates,
 > and optimizes multi-agent workflows using A2A, MCP, LangGraph, and Agentic RAG.
 
-*(Description taken verbatim from the project handoff, §1.)*
 
 EIDOS works at the level of **execution strategy**. Its question is not "can an AI do this task?" but
 *given an objective, the available agents, models, tools and constraints, how should the work be done —
