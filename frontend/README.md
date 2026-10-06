@@ -151,6 +151,10 @@ src/
   dashboard reads a client-side index of ids this browser has created (`lib/mission-index.ts`) and
   fetches each one live — the index is never a second source of truth, only a pointer; a stale id (a
   real `404`) is pruned silently.
+- **The workspace id is remembered per browser** (`lib/tenant.ts`), only once the backend has asked for
+  one (`tenant_required`), and **forgotten on sign-out** (`components/site/sign-out-button.tsx`, D-249).
+  A session that ends any other way leaves it behind, and the next account's requests then get
+  `not_found` (D-249, open). The mission index is not cleared on sign-out.
 - **`required_capabilities`' four values** (`research`, `architecture`, `security`, `cost`) are fixed
   by which agents this backend build wires up (`KNOWN_CAPABILITIES` in `lib/api/types.ts`), not a
   platform-wide, discoverable vocabulary. Update that constant by hand if the backend's agents change.

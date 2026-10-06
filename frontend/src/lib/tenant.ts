@@ -28,3 +28,18 @@ export function setStoredTenantId(tenantId: string): void {
     // Storage may be unavailable (private browsing, quota); the app still works, it just re-asks.
   }
 }
+
+/**
+ * Forgets the remembered id. Called on sign-out (`components/site/sign-out-button.tsx`): the id belongs
+ * to the account that entered it, and the browser may be shared — left behind, it would be sent as the
+ * next account's `X-Tenant-Id`, and the backend answers a tenant that account is not a member of with
+ * `404 not_found` on every request.
+ */
+export function clearStoredTenantId(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Storage unavailable means nothing was remembered either.
+  }
+}
