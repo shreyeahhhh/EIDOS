@@ -55,11 +55,12 @@ def keys_of(document):
 # --- the surface: eight endpoints and no others -----------------------------------------------------------------------------------------
 
 
-def test_the_surface_is_exactly_the_eight_endpoints():
+def test_the_surface_is_exactly_the_eight_mission_endpoints_and_the_one_added_for_asking_models_directly():
+    """Eight endpoints from V1.4, plus `POST /v1/ask` added on the owner's direction (D-248): the set is still pinned exactly, so any other addition fails here."""
     api = make_api()
     routes = {(method, route.path) for route in api.client.app.routes for method in getattr(route, "methods", ()) if method != "HEAD" and route.path.startswith("/v1/")}
     assert routes - {("GET", "/v1/openapi.json")} == {
-        ("POST", "/v1/missions"), ("POST", "/v1/missions/{mission_id}/start"), ("GET", "/v1/missions/{mission_id}"), ("GET", "/v1/missions/{mission_id}/execution"),
+        ("POST", "/v1/ask"), ("POST", "/v1/missions"), ("POST", "/v1/missions/{mission_id}/start"), ("GET", "/v1/missions/{mission_id}"), ("GET", "/v1/missions/{mission_id}/execution"),
         ("GET", "/v1/missions/{mission_id}/events"), ("GET", "/v1/missions/{mission_id}/result"), ("GET", "/v1/missions/{mission_id}/evidence"), ("GET", "/v1/healthz"),
     }
 

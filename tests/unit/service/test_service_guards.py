@@ -174,7 +174,7 @@ def test_route_handlers_are_plain_functions_because_the_runtime_is_synchronous()
         if isinstance(node, ast.AsyncFunctionDef):
             assert node.name in {"lifespan", "raw_body", "_service_error", "_unauthenticated", "_auth_unavailable", "_bad_request", "_framework_error", "_unexpected"}, node.name
         if isinstance(node, ast.FunctionDef) and any(isinstance(d, ast.Call) and isinstance(d.func, ast.Attribute) and d.func.attr in {"get", "post"} for d in node.decorator_list):
-            assert node.name in {"healthz", "create_mission", "start_mission", "get_mission", "get_execution", "get_events", "get_result", "get_evidence"}, node.name
+            assert node.name in {"healthz", "ask_models", "create_mission", "start_mission", "get_mission", "get_execution", "get_events", "get_result", "get_evidence"}, node.name
 
 
 # --- no ORM, no new service, no deferred build -------------------------------------------------------------------------------------------------

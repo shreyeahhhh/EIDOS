@@ -2,6 +2,7 @@
 
 The whole surface, and nothing else (list, cancel, replay and strategy-view endpoints are deferred):
 
+    POST /v1/ask                        put one question to several models directly (D-248): not a mission, nothing stored, nothing verified
     POST /v1/missions                   create (no event is written)         GET /v1/missions/{id}/execution   the existing ExecutionRecord
     POST /v1/missions/{id}/start        queue one run                        GET /v1/missions/{id}/events      the recorded events, paged by sequence
     GET  /v1/missions/{id}              run_status and, once events exist,   GET /v1/missions/{id}/result      the verdict, the sink artifacts, the failure
@@ -25,7 +26,7 @@ from pydantic import ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from eidos.contracts import MissionId
-from eidos.service import InvalidRequest, InvalidSpec, MissionService, MissionSpec, NotFound, PayloadTooLarge, RequestContext, ServiceError, StartRequest
+from eidos.service import AskRequest, InvalidRequest, InvalidSpec, MissionService, MissionSpec, NotFound, PayloadTooLarge, RequestContext, ServiceError, StartRequest
 
 from .auth import AuthUnavailable, JwtVerifier, Unauthenticated
 from .errors import error_response
@@ -116,6 +117,15 @@ def create_app(*, service: MissionService, verifier: JwtVerifier, max_body_bytes
     @app.get("/v1/healthz")
     def healthz() -> dict:
         return {"status": "ok"}
+
+    @app.post("/v1/ask")
+    def ask_models(ctx: RequestContext = Depends(context), body: bytes = Depends(raw_body)) -> Response:
+        """The same question to each model the user names, with their own keys (D-248). Not a mission: nothing is stored and every answer is marked unverified."""
+        try:
+            request = AskRequest.model_validate_json(body)
+        except ValidationError as error:
+            raise InvalidRequest("the question is not acceptable", details=_details(error)) from None  # `from None`: the chained error would carry the request's own text, a key included
+        return _json(service.ask_models(ctx, request))
 
     @app.post("/v1/missions")
     def create_mission(ctx: RequestContext = Depends(context), body: bytes = Depends(raw_body), idempotency_key: str | None = Header(default=None)) -> Response:

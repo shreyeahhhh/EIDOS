@@ -3,6 +3,8 @@
 import { toApiError } from "./errors";
 import { getStoredTenantId } from "../tenant";
 import type {
+  AskRequestBody,
+  AskResult,
   CreatedMission,
   EvidenceView,
   EventsPage,
@@ -63,6 +65,11 @@ export function createMission(spec: MissionSpec, options: RequestOptions = {}): 
 }
 
 /** Starts a run. With `model` the run uses the user's own provider, model and key (D-246): the key travels in the request body only, never in the address. */
+/** Puts one question to each model named, with the user's own keys (D-248). The keys travel in the request body only. */
+export function askModels(body: AskRequestBody, options: RequestOptions = {}): Promise<AskResult> {
+  return request<AskResult>("/ask", { method: "POST", body: JSON.stringify(body) }, options);
+}
+
 export function startMission(missionId: string, options: RequestOptions & { model?: UserModelChoice } = {}): Promise<StartedMission> {
   const { model, ...requestOptions } = options;
   return request<StartedMission>(`/missions/${missionId}/start`, { method: "POST", ...(model ? { body: JSON.stringify({ model }) } : {}) }, requestOptions);

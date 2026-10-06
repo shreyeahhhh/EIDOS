@@ -200,7 +200,8 @@ that a failure is never mistaken for a finished step — and every state also ca
 *Your own models, and comparing them* (D-246): the new-mission form has an optional "Use my own models" panel — OpenAI, Google Gemini, Groq, each with a model id and the person's own API key
 (password fields, held in component state only, never in browser storage, emptied once the runs hold them). One model starts that mission on it; two or three start one mission per model and open
 `/missions/compare`, a column per model with the same answer view, its sources and its own checks (`components/compare/`, `lib/compare.ts`). The page learns which missions belong together from its own
-address, which holds mission ids, provider and model names and never a key, and it ranks nothing. Not verified with a live key, and not seen in a browser (see D-246).
+address, which holds mission ids, provider and model names and never a key, and it ranks nothing. `/missions/ask` (`components/ask/`) is the other way in: one question straight to the chosen models with no
+sources, answers side by side under a standing "Unverified" notice, not a mission and not saved (D-248). Not verified with a live key, and not seen in a browser (see D-246).
 
 *How it works* on the landing page is a short video (`HowItWorksVideo`, about 40 seconds, six parts) in a Gen Z
 editorial style — big serif headlines with a highlighter swipe, tilted stickers, cut-out cards with hard plum

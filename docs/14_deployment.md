@@ -149,6 +149,12 @@ What is promised, and what is not:
   OpenAI-compatible ones; OpenAI is sent `max_completion_tokens` and a seed, Gemini `max_tokens` and no seed, Groq as before. A provider that refuses a request says why in its own words (D-242), shown on that run.
   OpenAI's reasoning models are known to restrict some sampling parameters, so one may refuse the temperature this service sends.
 
+### Asking models directly (D-248)
+
+The same switch (`EIDOS_USER_MODEL_PROVIDERS`) turns on `POST /v1/ask`: one question to one to three models with the user's own keys, answered side by side at `/missions/ask`. **It is not a mission**: nothing is stored,
+no event is recorded and the answers are the models' own words with no sources, marked unverified in the response and on the page. The user's key is held for the length of the call only, as in the section above. Up to
+six model calls may be in flight across the process at once (provisional); past that the request is refused as `busy`. The same caveats as above apply: no provider's acceptance of the request is confirmed with a live key.
+
 ## 14.7 Known deployment limitations (stated, not hidden)
 
 - **One process only.** See 14.2. A second Render instance pointed at the same database is not safe.

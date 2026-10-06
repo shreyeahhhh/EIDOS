@@ -76,7 +76,11 @@ export function AnswerPaper({ mission, result, loading, numbers, activeRef, onCi
           {result.failure.reason ? <p className="break-words">{result.failure.reason}</p> : <p>No further reason was recorded.</p>}
           {readingHint(result.failure.reason) && (
             <p className="mt-3">
-              <span className="font-medium text-ink">What to do:</span> {readingHint(result.failure.reason)}
+              <span className="font-medium text-ink">What to do:</span> {readingHint(result.failure.reason)}{" "}
+              <Link href="/missions/ask" className="font-medium underline underline-offset-4">
+                Or ask the models directly
+              </Link>{" "}
+              (their own words, with no sources, labelled unverified).
             </p>
           )}
           <p className="mt-3">

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { startMission } from "./client";
+import { askModels, startMission } from "./client";
 
 const ID = "11111111-1111-1111-1111-111111111111";
 const KEY = "sk-test-0123456789ABCDEF";
@@ -38,5 +38,22 @@ describe("startMission", () => {
     await startMission(ID, { tenantId: "tenant-1", model: { provider: "groq", model: "m", api_key: KEY } });
     expect(new Headers(fetchMock.mock.calls[0][1].headers).get("x-tenant-id")).toBe("tenant-1");
     expect(fetchMock.mock.calls[0][1].body).not.toContain("tenant-1"); // the option is a header, not part of the model body
+  });
+});
+
+describe("askModels", () => {
+  it("posts the question and each model with its own key in the request body only — never in the address or a header", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ answers: [], verified: false, note: "n" }), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const body = { question: "Which is best?", models: [{ provider: "gemini", model: "gemini-test", api_key: KEY }, { provider: "groq", model: "groq-test", api_key: "key-groq-0123456789" }] };
+    const answered = await askModels(body);
+    expect(answered.verified).toBe(false);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/eidos/ask");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body)).toEqual(body);
+    expect(url).not.toContain(KEY);
+    expect(JSON.stringify([...new Headers(init.headers).entries()])).not.toContain(KEY);
+    expect(new Headers(init.headers).get("content-type")).toBe("application/json");
   });
 });

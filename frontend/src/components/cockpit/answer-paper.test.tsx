@@ -152,6 +152,7 @@ describe("AnswerPaper — a mission that was given nothing to read", () => {
     expect(within(card).getByText(/no documents were supplied, so there is nothing to research/)).toBeInTheDocument();
     expect(within(card).getByText("What to do:")).toBeInTheDocument();
     expect(card.textContent).toContain("Attach a text file");
+    expect(within(card).getByRole("link", { name: "Or ask the models directly" })).toHaveAttribute("href", "/missions/ask");
     expect(card.textContent).toContain("Nothing was made up to fill the gap");
   });
 

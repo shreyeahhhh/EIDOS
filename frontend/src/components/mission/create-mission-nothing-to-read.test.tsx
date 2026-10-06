@@ -26,6 +26,7 @@ describe("CreateMissionForm — saying so before a mission with nothing to read 
     typeGoal("Which is the best time for a beginner to buy and sell stocks?"); // the owner's own mission
     expect(screen.getByText(TITLE)).toBeInTheDocument();
     expect(screen.getByText(/does not answer from its own memory/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Ask them directly" })).toHaveAttribute("href", "/missions/ask"); // the way to get the models' own answers instead
   });
 
   it("goes away when a document is attached, and comes back when it is removed", async () => {

@@ -29,7 +29,8 @@ to inspection and replay. The final check is that the answer is well-formed and 
 exist — it does **not** judge whether the answer is correct, and the app says so.
 
 Optionally, run the goal on **your own** OpenAI, Google Gemini or Groq account with your own API key, and tick two or three to **compare** their answers side by side (the key is held in the
-server's memory for that one run and never stored; nothing ranks the answers — you choose).
+server's memory for that one run and never stored; nothing ranks the answers — you choose). Or put one question straight to the models with no sources at all (`/missions/ask`): their own words,
+side by side, clearly marked unverified and not saved.
 
 ## How a mission runs
 

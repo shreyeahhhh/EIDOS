@@ -140,6 +140,32 @@ export interface UserModelChoice {
   api_key: string;
 }
 
+// --- POST /v1/ask ----------------------------------------------------------------------------------
+// One question put straight to several models with the user's own keys (D-248). Not a mission: nothing is stored, nothing is verified.
+
+export interface AskRequestBody {
+  question: string;
+  models: UserModelChoice[];
+}
+
+export interface AskedAnswer {
+  provider: string;
+  model: string;
+  ok: boolean;
+  text: string | null;
+  failure: string | null;
+  elapsed_seconds: number | null;
+  prompt_tokens: number | null;
+  output_tokens: number | null;
+}
+
+export interface AskResult {
+  answers: AskedAnswer[];
+  /** Always false: these are the models' own words, with no sources and no checks. */
+  verified: false;
+  note: string;
+}
+
 export interface StartedMission {
   mission_id: Uuid;
   run_status: RunStatus;

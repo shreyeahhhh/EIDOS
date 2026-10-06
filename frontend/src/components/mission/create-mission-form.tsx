@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 
@@ -485,6 +486,13 @@ export function CreateMissionForm() {
           <p>
             EIDOS answers only from sources you give it, and none is attached. Attach a text file above, or tick “Let EIDOS read the web pages named in my goal” and write the page&apos;s full https:// address in your goal.
             Without either, this mission will end with “nothing to research” — EIDOS does not answer from its own memory.
+          </p>
+          <p className="mt-2">
+            Want the models&apos; own answers instead, with no sources?{" "}
+            <Link href="/missions/ask" className="font-medium underline underline-offset-4">
+              Ask them directly
+            </Link>{" "}
+            — the answers are labelled unverified.
           </p>
         </Callout>
       )}

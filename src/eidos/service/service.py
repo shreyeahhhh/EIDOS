@@ -5,19 +5,24 @@ takes a ``RequestContext`` (the authenticated user, the resolved tenant and the 
 one that does not exist (D-233). A storage fault becomes ``StorageUnavailable`` and a stored log that does not replay becomes ``IntegrityFailure``; neither is ever a mission outcome.
 """
 
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from uuid import UUID, uuid4
 
 from pydantic import ValidationError
 
-from eidos.agents import ModelSettings
+from eidos.agents import ModelFailure, ModelRequest, ModelResponse, ModelSettings
 from eidos.contracts import ExecutionId, MissionId, ReliabilityContractId, TenantId
 from eidos.recording import Clock, SystemClock
 from eidos.state import ExecutionRecord
 
+from .ask import ASK_MAX_IN_FLIGHT, ASK_SYSTEM_PROMPT, AskedAnswer, AskRequest, AskResult
 from .composition import Composition
 from .config import ServiceConfig
 from .errors import (
+    Busy,
     IdempotencyConflict,
     InvalidRequest,
     InvalidSpec,
@@ -62,6 +67,7 @@ class MissionService:
     ) -> None:
         self._repositories, self._runner, self._composition, self._config = repositories, runner, composition, config
         self._user_models = user_models  # D-246: None means a user may not bring a model of their own
+        self._ask_slots = threading.BoundedSemaphore(ASK_MAX_IN_FLIGHT)  # D-248: model calls in flight for direct questions, across every request
         self._clock = clock if clock is not None else SystemClock()
 
     def startup(self) -> int:
@@ -168,6 +174,46 @@ class MissionService:
             raise InvalidRequest("a model could not be set up from what was given") from None
         base = self._config.model_settings
         return RunModel(port=port, settings=ModelSettings(model=choice.model, parameters=base.parameters, timeout_seconds=base.timeout_seconds))
+
+    # --- ask models directly (D-248) ---------------------------------------------------------------------------------------------
+
+    def ask_models(self, context: RequestContext, request: AskRequest) -> AskResult:
+        """Put one question to each model the user named, with their own keys, and return what each said. **Not a mission**: nothing is stored, no event is recorded, nothing is verified.
+
+        Every model is built (and every provider and name checked) before any is called, so a bad choice refuses the whole request and spends nothing. The calls run concurrently and one model's
+        failure is that model's answer, never the others'. A bounded number of calls may be in flight across the process; past it the request is refused as ``busy``.
+        """
+        ceiling = self._config.ceilings.max_goal_chars
+        if len(request.question) > ceiling:
+            raise InvalidRequest(f"the question is over {ceiling} characters")
+        runs = [(choice, self._run_model(choice)) for choice in request.models]
+        taken = 0
+        try:
+            for _ in runs:
+                if not self._ask_slots.acquire(blocking=False):
+                    raise Busy("too many questions are being answered right now: try again in a moment")
+                taken += 1
+            with ThreadPoolExecutor(max_workers=len(runs), thread_name_prefix="eidos-ask") as pool:
+                futures = [pool.submit(self._ask_one, request.question, choice, run_model) for choice, run_model in runs]
+                return AskResult(answers=[future.result() for future in futures])
+        finally:
+            for _ in range(taken):
+                self._ask_slots.release()
+
+    @staticmethod
+    def _ask_one(question: str, choice: ModelChoice, run_model: RunModel) -> AskedAnswer:
+        started = time.monotonic()
+        try:
+            result = run_model.port.complete(ModelRequest(settings=run_model.settings, prompt=question, system=ASK_SYSTEM_PROMPT))
+        except Exception as error:  # noqa: BLE001 - a model's fault is that model's answer; its message could carry anything, so only its type is told
+            return AskedAnswer(provider=choice.provider, model=choice.model, ok=False, failure=f"the call failed unexpectedly ({type(error).__name__})", elapsed_seconds=time.monotonic() - started)
+        if isinstance(result, ModelResponse):
+            return AskedAnswer(
+                provider=choice.provider, model=choice.model, ok=True, text=result.text, elapsed_seconds=result.measured.elapsed_seconds if result.measured.elapsed_seconds is not None else time.monotonic() - started,
+                prompt_tokens=result.measured.prompt_tokens, output_tokens=result.measured.output_tokens,
+            )
+        assert isinstance(result, ModelFailure)
+        return AskedAnswer(provider=choice.provider, model=choice.model, ok=False, failure=result.message, elapsed_seconds=time.monotonic() - started)
 
     # --- reads ---------------------------------------------------------------------------------------------------------------------
 

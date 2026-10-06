@@ -8,6 +8,7 @@ The layer between the HTTP boundary and the unchanged EIDOS runtime: it validate
 ``eidos.api`` is the only HTTP boundary. Nothing in the core imports this package.
 """
 
+from .ask import ASK_MAX_MODELS, AskedAnswer, AskRequest, AskResult
 from .composition import AlwaysAdmit, Composition, InMemoryExperienceStore, KnowledgeProvision, PreparedRun, ToolProvision
 from .config import ANALYSIS_AGENT_ID, RESEARCH_AGENT_ID, ApiCeilings, RunnerConfig, ServiceConfig, provisional_system_limits
 from .durable import DurableEventLog, RunPersistence, WriteThroughArtifactStore
@@ -63,7 +64,7 @@ from .views import (
 )
 
 __all__ = [
-    "ANALYSIS_AGENT_ID", "INTERRUPTED_REASON", "RESEARCH_AGENT_ID", "AlwaysAdmit", "ApiCeilings", "ArtifactWrite", "Busy", "Composition", "Counters", "CreatedMission",
+    "ANALYSIS_AGENT_ID", "ASK_MAX_MODELS", "INTERRUPTED_REASON", "RESEARCH_AGENT_ID", "AlwaysAdmit", "ApiCeilings", "ArtifactWrite", "AskRequest", "AskResult", "AskedAnswer", "Busy", "Composition", "Counters", "CreatedMission",
     "DuplicateIdempotencyKey", "DurableEventLog", "EventStore", "EventsPage", "EvidenceItem", "EvidenceView", "IdempotencyConflict", "InMemoryExperienceStore", "InMemoryStorage",
     "IntegrityFailure", "InvalidRequest", "InvalidSpec", "KnowledgeProvision", "Membership", "MissionFailure", "MissionRecord", "MissionRepository", "MissionResult", "MissionService",
     "MissionSpec", "MissionSummary", "ModelChoice", "ModelFactory", "NoEvents", "NoTenantMembership", "NotFinished", "NotFound", "NotStartable", "PayloadTooLarge", "PreparedRun", "ReliabilitySpec", "Repositories",
