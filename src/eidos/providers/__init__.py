@@ -11,8 +11,8 @@ Standard library only (D-136) — for both adapters. Installing the runtime, cho
 the Groq API key are the owner's actions, never Claude Code's.
 """
 
-from .factory import KNOWN_PROVIDERS, model_port
+from .factory import HOSTED_PROFILES, KNOWN_PROVIDERS, USER_KEY_PROVIDERS, HostedProfile, hosted_model_port, model_port
 from .groq import GroqModel
 from .ollama import OllamaModel
 
-__all__ = ["KNOWN_PROVIDERS", "GroqModel", "OllamaModel", "model_port"]
+__all__ = ["HOSTED_PROFILES", "KNOWN_PROVIDERS", "USER_KEY_PROVIDERS", "GroqModel", "HostedProfile", "OllamaModel", "hosted_model_port", "model_port"]

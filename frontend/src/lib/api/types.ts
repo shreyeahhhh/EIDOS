@@ -133,6 +133,13 @@ export interface CreatedMission {
 
 // --- POST /v1/missions/{id}/start -----------------------------------------------------------------
 
+/** A user's own model for one run (D-246). The key is sent once, in this request's body, and the server holds it in memory for that run only. */
+export interface UserModelChoice {
+  provider: string;
+  model: string;
+  api_key: string;
+}
+
 export interface StartedMission {
   mission_id: Uuid;
   run_status: RunStatus;

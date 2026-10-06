@@ -6,13 +6,15 @@ import { useState, type ChangeEvent, type FormEvent } from "react";
 import { ApiError } from "@/lib/api/errors";
 import { ACCEPTED_EXTENSIONS, addDocument, MAX_DOCUMENTS, toSuppliedDocuments, type PickedDocument } from "@/lib/documents";
 import { MAX_WEB_ADDRESSES, WEB_FETCH_ACTION, WEB_FETCH_MAX_TOOL_CALLS, webAccessNote } from "@/lib/web-access";
-import { createMission } from "@/lib/api/client";
+import { createMission, startMission } from "@/lib/api/client";
+import { apiKeyProblem, encodeRuns, modelNameProblem, PROVIDERS, providerLabel, type ProviderId, type Run } from "@/lib/compare";
 import type { MissionSpec, RiskLevel } from "@/lib/api/types";
 import { KNOWN_CAPABILITIES } from "@/lib/api/types";
 import { rememberMission } from "@/lib/mission-index";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { Field, fieldInputClassName } from "@/components/ui/field";
+import { EMPTY_CHOICES, ModelChoices, type ChoiceErrors, type Choices, type ChoiceState } from "./model-choices";
 import { NoWorkspaceAccess } from "./no-workspace-access";
 import { TenantRequiredForm } from "./tenant-required-form";
 
@@ -48,6 +50,9 @@ export function CreateMissionForm() {
   const [readWeb, setReadWeb] = useState(false);
   const [documents, setDocuments] = useState<PickedDocument[]>([]);
   const [uploadErrors, setUploadErrors] = useState<string[]>([]);
+  // A user's own models and keys (D-246): held in this state only, never in browser storage, and emptied the moment any run holds them.
+  const [choices, setChoices] = useState<Choices>(EMPTY_CHOICES);
+  const [choiceErrors, setChoiceErrors] = useState<ChoiceErrors>({});
 
   const [stage, setStage] = useState<Stage>({ name: "form" });
   const [submitting, setSubmitting] = useState(false);
@@ -99,6 +104,11 @@ export function CreateMissionForm() {
     setUploadErrors(problems);
   }
 
+  function changeChoice(provider: ProviderId, patch: Partial<ChoiceState>) {
+    setChoices((current) => ({ ...current, [provider]: { ...current[provider], ...patch } }));
+    setChoiceErrors((current) => ({ ...current, [provider]: undefined }));
+  }
+
   function removeDocument(ref: string) {
     setDocuments((current) => current.filter((document) => document.ref !== ref));
     setUploadErrors([]);
@@ -117,6 +127,22 @@ export function CreateMissionForm() {
       return;
     }
 
+    const picked = PROVIDERS.filter((provider) => choices[provider.id].on);
+    if (picked.length > 0) {
+      const problems: ChoiceErrors = {};
+      for (const provider of picked) {
+        const model = modelNameProblem(choices[provider.id].model);
+        const key = apiKeyProblem(choices[provider.id].key);
+        if (model || key) problems[provider.id] = { model: model ?? undefined, key: key ?? undefined };
+      }
+      if (Object.keys(problems).length > 0) {
+        setChoiceErrors(problems);
+        return;
+      }
+      await submitOnOwnModels(picked.map((provider) => provider.id));
+      return;
+    }
+
     setSubmitting(true);
     try {
       const mission = await createMission(buildSpec());
@@ -126,6 +152,32 @@ export function CreateMissionForm() {
       handleError(error);
       setSubmitting(false);
     }
+  }
+
+  /** One mission per chosen model, each started on its own model and key. One model goes to that mission's page; two or more go to the side-by-side page (D-246). */
+  async function submitOnOwnModels(providers: ProviderId[]) {
+    setSubmitting(true);
+    const started: Run[] = [];
+    try {
+      for (const provider of providers) {
+        const { model, key } = choices[provider];
+        const mission = await createMission(buildSpec());
+        rememberMission({ id: mission.mission_id, goal, createdAt: mission.created_at });
+        await startMission(mission.mission_id, { model: { provider, model: model.trim(), api_key: key } });
+        started.push({ id: mission.mission_id, provider, model: model.trim() });
+      }
+    } catch (error) {
+      if (started.length > 0) setChoices(EMPTY_CHOICES); // the server holds those keys now; this page need not
+      handleError(error);
+      if (started.length > 0) {
+        const names = started.map((run) => providerLabel(run.provider)).join(", ");
+        setGeneralErrors((current) => [...current, `${started.length === 1 ? "A run" : "Some runs"} already started (${names}): find ${started.length === 1 ? "it" : "them"} under Missions.`]);
+      }
+      setSubmitting(false);
+      return;
+    }
+    setChoices(EMPTY_CHOICES); // the keys leave this page as soon as every run has them
+    router.push(started.length === 1 ? `/missions/${started[0].id}` : `/missions/compare?${encodeRuns(started)}`);
   }
 
   function handleError(error: unknown) {
@@ -162,6 +214,7 @@ export function CreateMissionForm() {
   }
 
   const webNote = readWeb ? webAccessNote(goal) : null;
+  const ownModels = PROVIDERS.filter((provider) => choices[provider.id].on).length;
 
   if (stage.name === "no_membership") return <NoWorkspaceAccess />;
 
@@ -291,6 +344,8 @@ export function CreateMissionForm() {
         )}
       </fieldset>
 
+      <ModelChoices choices={choices} errors={choiceErrors} onChange={changeChoice} />
+
       {/* A quiet reminder of the shape every mission takes, not a preview of this one's actual plan —
           EIDOS decides the real plan only once this mission is created. */}
       <div className="flex items-center gap-2 rounded-md border border-border bg-surface-sunken px-4 py-3 font-mono text-xs text-ink-faint">
@@ -392,7 +447,7 @@ export function CreateMissionForm() {
       </details>
 
       <Button type="submit" disabled={submitting} size="md" className="self-start px-6">
-        {submitting ? "Creating…" : "Create mission"}
+        {submitting ? (ownModels > 1 ? "Starting the runs…" : "Creating…") : ownModels > 1 ? `Compare ${ownModels} models` : "Create mission"}
       </Button>
     </form>
   );

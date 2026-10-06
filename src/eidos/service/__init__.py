@@ -48,6 +48,7 @@ from .ports import (
 from .runner import INTERRUPTED_REASON, RunManager
 from .service import MissionService, RequestContext
 from .spec import MissionSpec, ReliabilitySpec, SuppliedDocument
+from .user_models import ModelChoice, ModelFactory, RunModel, StartRequest, UserModels
 from .views import (
     Counters,
     CreatedMission,
@@ -65,7 +66,7 @@ __all__ = [
     "ANALYSIS_AGENT_ID", "INTERRUPTED_REASON", "RESEARCH_AGENT_ID", "AlwaysAdmit", "ApiCeilings", "ArtifactWrite", "Busy", "Composition", "Counters", "CreatedMission",
     "DuplicateIdempotencyKey", "DurableEventLog", "EventStore", "EventsPage", "EvidenceItem", "EvidenceView", "IdempotencyConflict", "InMemoryExperienceStore", "InMemoryStorage",
     "IntegrityFailure", "InvalidRequest", "InvalidSpec", "KnowledgeProvision", "Membership", "MissionFailure", "MissionRecord", "MissionRepository", "MissionResult", "MissionService",
-    "MissionSpec", "MissionSummary", "NoEvents", "NoTenantMembership", "NotFinished", "NotFound", "NotStartable", "PayloadTooLarge", "PreparedRun", "ReliabilitySpec", "Repositories",
-    "RequestContext", "ResultArtifact", "Role", "RunManager", "RunPersistence", "RunStatus", "RunnerConfig", "SequenceConflict", "ServiceConfig", "ServiceError", "StartedMission",
-    "StorageError", "StorageUnavailable", "SuppliedDocument", "TenancyRepository", "TenantRequired", "TenantRunLimit", "ToolProvision", "UserId", "WriteThroughArtifactStore", "personal_workspace_id", "provisional_system_limits",
+    "MissionSpec", "MissionSummary", "ModelChoice", "ModelFactory", "NoEvents", "NoTenantMembership", "NotFinished", "NotFound", "NotStartable", "PayloadTooLarge", "PreparedRun", "ReliabilitySpec", "Repositories",
+    "RequestContext", "ResultArtifact", "Role", "RunManager", "RunModel", "RunPersistence", "RunStatus", "RunnerConfig", "SequenceConflict", "ServiceConfig", "ServiceError", "StartedMission",
+    "StartRequest", "StorageError", "StorageUnavailable", "SuppliedDocument", "TenancyRepository", "TenantRequired", "TenantRunLimit", "ToolProvision", "UserId", "UserModels", "WriteThroughArtifactStore", "personal_workspace_id", "provisional_system_limits",
 ]

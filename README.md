@@ -28,6 +28,9 @@ read), and get back an answer that **names its sources**, with the plan, every s
 to inspection and replay. The final check is that the answer is well-formed and cites sources that really
 exist — it does **not** judge whether the answer is correct, and the app says so.
 
+Optionally, run the goal on **your own** OpenAI, Google Gemini or Groq account with your own API key, and tick two or three to **compare** their answers side by side (the key is held in the
+server's memory for that one run and never stored; nothing ranks the answers — you choose).
+
 ## How a mission runs
 
 ```text

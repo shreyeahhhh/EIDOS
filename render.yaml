@@ -40,6 +40,16 @@ services:
       - key: EIDOS_ALLOWED_ACTIONS
         value: web_fetch
 
+      # --- bring-your-own-key and compare mode (D-246): the hosted providers a user may bring their own API key for. Remove it to turn the feature off.
+      # A user supplies a key and a model name, never an address; each provider's address is fixed in the code. The key is held in memory for that run only.
+      - key: EIDOS_USER_MODEL_PROVIDERS
+        value: openai,gemini,groq
+      # A comparison starts one run per model at once (up to three), so a workspace may have three runs active and the pool has three workers. Provisional numbers (docs/13 section 9).
+      - key: EIDOS_MAX_ACTIVE_RUNS_PER_TENANT
+        value: "3"
+      - key: EIDOS_WORKER_POOL_SIZE
+        value: "3"
+
       # --- model provider: Groq for production (Ollama has nothing to run on here) ---
       - key: EIDOS_MODEL_PROVIDER
         value: groq

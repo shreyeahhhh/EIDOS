@@ -6,7 +6,7 @@ Nothing here needs a database: every case that must fail fails before the connec
 import pytest
 
 import eidos.api.main as main
-from eidos.api.main import ConfigurationError, build_verifier, create_app_from_environment
+from eidos.api.main import ConfigurationError, build_user_models, build_verifier, create_app_from_environment
 from eidos.service import InMemoryStorage
 
 SECRET_VALUE = "value-that-must-never-be-echoed-0123456789abcdef"
@@ -219,3 +219,28 @@ def test_a_shared_secret_shorter_than_an_hs256_key_may_be_is_refused_at_startup_
     assert build_verifier({"EIDOS_JWT_SECRET": "x" * 32})._algorithms == ("HS256",)  # exactly the least is enough
     with pytest.raises(ConfigurationError):
         build_verifier({"EIDOS_JWT_SECRET": "x" * 31})
+
+
+# --- bring-your-own-key: which providers a user may bring a key for (D-246) --------------------------------------------------------------
+
+
+def test_a_user_may_bring_no_key_unless_the_deployer_turned_it_on():
+    assert build_user_models({}) is None
+    assert build_user_models({"EIDOS_USER_MODEL_PROVIDERS": "  , "}) is None
+
+
+def test_the_allowed_providers_are_read_case_insensitively_and_trimmed():
+    policy = build_user_models({"EIDOS_USER_MODEL_PROVIDERS": " OpenAI, gemini ,groq"})
+    assert policy is not None and policy.providers == frozenset({"openai", "gemini", "groq"})
+
+
+def test_an_unknown_provider_stops_startup_naming_the_variable_and_the_provider_but_never_an_address():
+    with pytest.raises(ConfigurationError) as raised:
+        build_user_models({"EIDOS_USER_MODEL_PROVIDERS": "openai,ollama"})
+    assert "EIDOS_USER_MODEL_PROVIDERS" in str(raised.value) and "ollama" in str(raised.value)
+
+
+def test_the_factory_it_wires_builds_a_port_at_the_providers_own_fixed_address():
+    policy = build_user_models({"EIDOS_USER_MODEL_PROVIDERS": "openai"})
+    port = policy.factory("openai", "sk-test-0123456789ABCDEF")
+    assert port.base_url == "https://api.openai.com/v1" and "sk-test" not in repr(port)

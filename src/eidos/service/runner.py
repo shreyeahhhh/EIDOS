@@ -27,6 +27,7 @@ from .composition import Composition, PreparedRun
 from .config import RunnerConfig
 from .errors import Busy, NotStartable, StorageUnavailable, TenantRunLimit
 from .ports import ACTIVE, Repositories, RunStatus, StorageError
+from .user_models import RunModel
 
 _log = logging.getLogger("eidos.service.runner")
 
@@ -51,6 +52,9 @@ class RunManager:
         self._lock = threading.Lock()
         self._idle = threading.Condition(self._lock)
         self._live: set[MissionId] = set()  # queued or running in this process
+        # A user's own model for a run (D-246), held here and nowhere else: in memory, for exactly as long as the run is queued or running, and dropped in `_run`'s `finally`. It is never stored, so a
+        # restart loses it, and the run it belonged to is then marked `interrupted` like any other.
+        self._private: dict[MissionId, RunModel] = {}
         self._closed = False
 
     # --- startup ---------------------------------------------------------------------------------------------------------------------
@@ -64,7 +68,7 @@ class RunManager:
 
     # --- start -----------------------------------------------------------------------------------------------------------------------
 
-    def start(self, tenant_id: TenantId, mission_id: MissionId) -> None:
+    def start(self, tenant_id: TenantId, mission_id: MissionId, model: RunModel | None = None) -> None:
         """Queue one run. Raises ``NotStartable``, ``TenantRunLimit`` or ``Busy``, in that order (``docs/13`` section 5); on success the run is ``queued`` and submitted.
 
         A mission that is not ``created`` never becomes startable, so that answer comes first and is not hidden behind a capacity answer that could change. The compare-and-set stays the authority.
@@ -88,10 +92,13 @@ class RunManager:
             if not moved:
                 raise not_startable
             self._live.add(mission_id)
+            if model is not None:
+                self._private[mission_id] = model
             try:
                 self._pool.submit(self._run, tenant_id, mission_id)
             except RuntimeError as error:  # the pool refused: it is shut down
                 self._live.discard(mission_id)
+                self._private.pop(mission_id, None)
                 self._finish(tenant_id, mission_id, (RunStatus.QUEUED,), RunStatus.ERROR, f"submission failed: {_reason(error)}")
                 raise Busy("the runner could not take the run") from error
 
@@ -140,6 +147,7 @@ class RunManager:
         finally:
             with self._idle:
                 self._live.discard(mission_id)
+                self._private.pop(mission_id, None)  # the user's key goes with the run, whatever its end
                 self._idle.notify_all()
 
     def _execute(self, tenant_id: TenantId, mission_id: MissionId) -> tuple[RunStatus, str | None]:
@@ -147,7 +155,9 @@ class RunManager:
         if mission is None:
             return RunStatus.ERROR, "the mission disappeared before it ran"
         documents = self._repositories.artifacts(tenant_id).supplied(mission.execution_id)
-        prepared: PreparedRun = self._composition.prepare(mission, documents)
+        with self._lock:
+            model = self._private.get(mission_id)
+        prepared: PreparedRun = self._composition.prepare(mission, documents, model)
         try:
             outcome = run_with_replanning(**prepared.run_arguments)
         except BaseException as error:  # noqa: BLE001 - keep what was recorded, then report the fault

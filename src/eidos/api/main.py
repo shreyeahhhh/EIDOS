@@ -21,8 +21,8 @@ from fastapi import FastAPI
 
 from eidos.agents import GenerationParameters, ModelSettings
 from eidos.persistence import PostgresStorage
-from eidos.providers import model_port
-from eidos.service import Composition, MissionService, RunManager, RunnerConfig, ServiceConfig, ToolProvision, provisional_system_limits
+from eidos.providers import USER_KEY_PROVIDERS, hosted_model_port, model_port
+from eidos.service import Composition, MissionService, RunManager, RunnerConfig, ServiceConfig, ToolProvision, UserModels, provisional_system_limits
 from eidos.tools import WEB_FETCH_ACTION, WEB_FETCH_TOOL_ID, WebFetchTool, web_fetch_registry
 
 from .app import create_app
@@ -68,6 +68,15 @@ def build_verifier(environ: Mapping[str, str]) -> JwtVerifier:
         raise ConfigurationError(str(error)) from None
 
 
+def build_user_models(environ: Mapping[str, str]) -> UserModels | None:
+    """D-246: which hosted providers a user may bring their own key for. Absent or empty means none (off unless the deployer turns it on). An unknown name stops startup, naming the variable."""
+    wanted = [item.strip().lower() for item in environ.get("EIDOS_USER_MODEL_PROVIDERS", "").split(",") if item.strip()]
+    unknown = sorted(set(wanted) - set(USER_KEY_PROVIDERS))
+    if unknown:
+        raise ConfigurationError(f"EIDOS_USER_MODEL_PROVIDERS names an unknown provider ({', '.join(unknown)}); known: {', '.join(USER_KEY_PROVIDERS)}")
+    return UserModels(providers=frozenset(wanted), factory=hosted_model_port) if wanted else None
+
+
 def create_app_from_environment(environ: Mapping[str, str] | None = None) -> FastAPI:
     environ = os.environ if environ is None else environ
     model_settings = ModelSettings(
@@ -107,5 +116,5 @@ def create_app_from_environment(environ: Mapping[str, str] | None = None) -> Fas
     )
     composition = Composition(config=config, model=model, events=repositories.events, tools=tools)
     runner = RunManager(repositories=repositories, composition=composition, config=config.runner)
-    service = MissionService(repositories=repositories, runner=runner, composition=composition, config=config)
+    service = MissionService(repositories=repositories, runner=runner, composition=composition, config=config, user_models=build_user_models(environ))
     return create_app(service=service, verifier=verifier, max_body_bytes=config.ceilings.max_request_body_bytes, closers=(storage.close,))

@@ -10,6 +10,7 @@ from uuid import UUID, uuid4
 
 from pydantic import ValidationError
 
+from eidos.agents import ModelSettings
 from eidos.contracts import ExecutionId, MissionId, ReliabilityContractId, TenantId
 from eidos.recording import Clock, SystemClock
 from eidos.state import ExecutionRecord
@@ -30,6 +31,7 @@ from .errors import (
 from .ports import DuplicateIdempotencyKey, MissionRecord, Repositories, Role, RunStatus, StorageError, UserId
 from .runner import RunManager
 from .spec import MissionSpec, contract_and_genome, documents_of, spec_digest, validate_spec, without_documents
+from .user_models import ModelChoice, RunModel, UserModels
 from .views import (
     CreatedMission,
     EventsPage,
@@ -55,8 +57,11 @@ class RequestContext:
 
 
 class MissionService:
-    def __init__(self, *, repositories: Repositories, runner: RunManager, composition: Composition, config: ServiceConfig, clock: Clock | None = None) -> None:
+    def __init__(
+        self, *, repositories: Repositories, runner: RunManager, composition: Composition, config: ServiceConfig, clock: Clock | None = None, user_models: UserModels | None = None
+    ) -> None:
         self._repositories, self._runner, self._composition, self._config = repositories, runner, composition, config
+        self._user_models = user_models  # D-246: None means a user may not bring a model of their own
         self._clock = clock if clock is not None else SystemClock()
 
     def startup(self) -> int:
@@ -143,10 +148,26 @@ class MissionService:
 
     # --- start ---------------------------------------------------------------------------------------------------------------------
 
-    def start_mission(self, context: RequestContext, mission_id: MissionId) -> StartedMission:
-        self._mission(context, mission_id)
-        self._runner.start(context.tenant_id, mission_id)
+    def start_mission(self, context: RequestContext, mission_id: MissionId, choice: ModelChoice | None = None) -> StartedMission:
+        """Queue one run. With ``choice`` the run uses the user's own model and key (D-246): the key is handed to the runner, which keeps it in memory for this run only."""
+        self._mission(context, mission_id)  # the mission is found, for this tenant, before any key is touched
+        self._runner.start(context.tenant_id, mission_id, self._run_model(choice))
         return StartedMission(mission_id=mission_id, run_status=RunStatus.QUEUED)
+
+    def _run_model(self, choice: ModelChoice | None) -> RunModel | None:
+        if choice is None:
+            return None
+        policy = self._user_models
+        if policy is None or not policy.providers:
+            raise InvalidRequest("this service runs missions on its own model and does not accept one of your own")
+        if choice.provider not in policy.providers:
+            raise InvalidRequest(f"provider must be one of: {', '.join(sorted(policy.providers))}")
+        try:
+            port = policy.factory(choice.provider, choice.api_key.get_secret_value())
+        except ValueError:  # never `from error`, never the message: either could carry the key
+            raise InvalidRequest("a model could not be set up from what was given") from None
+        base = self._config.model_settings
+        return RunModel(port=port, settings=ModelSettings(model=choice.model, parameters=base.parameters, timeout_seconds=base.timeout_seconds))
 
     # --- reads ---------------------------------------------------------------------------------------------------------------------
 

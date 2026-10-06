@@ -25,7 +25,7 @@ from pydantic import ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from eidos.contracts import MissionId
-from eidos.service import InvalidSpec, MissionService, MissionSpec, NotFound, PayloadTooLarge, RequestContext, ServiceError
+from eidos.service import InvalidRequest, InvalidSpec, MissionService, MissionSpec, NotFound, PayloadTooLarge, RequestContext, ServiceError, StartRequest
 
 from .auth import AuthUnavailable, JwtVerifier, Unauthenticated
 from .errors import error_response
@@ -127,8 +127,15 @@ def create_app(*, service: MissionService, verifier: JwtVerifier, max_body_bytes
         return _json(created, 201 if is_new else 200)
 
     @app.post("/v1/missions/{mission_id}/start")
-    def start_mission(mission_id: str, ctx: RequestContext = Depends(context)) -> Response:
-        return _json(service.start_mission(ctx, _mission_id(mission_id)), 202)
+    def start_mission(mission_id: str, ctx: RequestContext = Depends(context), body: bytes = Depends(raw_body)) -> Response:
+        """Queue one run. An empty body runs it on the service's own model; ``{"model": {"provider", "model", "api_key"}}`` runs it on the user's own (D-246; the key is never stored or echoed)."""
+        choice = None
+        if body.strip():
+            try:
+                choice = StartRequest.model_validate_json(body).model
+            except ValidationError as error:
+                raise InvalidRequest("the start request is not acceptable", details=_details(error)) from None  # `from None`: the chained error would carry the request's own text, the key included
+        return _json(service.start_mission(ctx, _mission_id(mission_id), choice), 202)
 
     @app.get("/v1/missions/{mission_id}")
     def get_mission(mission_id: str, ctx: RequestContext = Depends(context)) -> Response:

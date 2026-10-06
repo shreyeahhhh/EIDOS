@@ -19,6 +19,8 @@ interface AnswerPaperProps {
   numbers: ReadonlyMap<string, number>;
   activeRef: string | null;
   onCite: (ref: string) => void;
+  /** Set when two answers share a page (a comparison), so their element ids stay unique. */
+  idPrefix?: string;
 }
 
 const OUTLINE_LABEL_CHARS = 38;
@@ -33,7 +35,7 @@ function clip(text: string): string {
  * checks are. The text exactly as written is one fold away. A failed mission says plainly that it failed and why, in the recorded words, and never
  * shows a made-up answer.
  */
-export function AnswerPaper({ mission, result, loading, numbers, activeRef, onCite }: AnswerPaperProps) {
+export function AnswerPaper({ mission, result, loading, numbers, activeRef, onCite, idPrefix = "" }: AnswerPaperProps) {
   const running = mission.run_status === "queued" || mission.run_status === "running";
   const body = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState<"idle" | "done" | "failed">("idle");
@@ -60,9 +62,9 @@ export function AnswerPaper({ mission, result, loading, numbers, activeRef, onCi
   }
 
   return (
-    <article aria-labelledby="answer-title" className="flex flex-col gap-5 rounded-2xl border border-border bg-surface-raised p-5 shadow-[var(--shadow-raised)] sm:p-7">
+    <article aria-labelledby={`${idPrefix}answer-title`} className="flex flex-col gap-5 rounded-2xl border border-border bg-surface-raised p-5 shadow-[var(--shadow-raised)] sm:p-7">
       <header className="flex items-center justify-between gap-3">
-        <h2 id="answer-title" className="font-display text-2xl text-ink">
+        <h2 id={`${idPrefix}answer-title`} className="font-display text-2xl text-ink">
           The answer
         </h2>
         {result && !result.failure && result.verdict && <Badge tone={VERDICT_TONE[result.verdict.verdict]}>{VERDICT_LABEL[result.verdict.verdict]}</Badge>}
@@ -90,7 +92,7 @@ export function AnswerPaper({ mission, result, loading, numbers, activeRef, onCi
                   <nav aria-label="In this answer" className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
                     <span className="text-ink-muted">In this answer:</span>
                     {outline.map((heading) => (
-                      <a key={heading.id} href={`#${heading.id}`} title={heading.text} className="rounded-full border border-border px-2.5 py-1 text-ink-muted transition-colors hover:border-accent hover:text-accent-strong">
+                      <a key={heading.id} href={`#${idPrefix}${heading.id}`} title={heading.text} className="rounded-full border border-border px-2.5 py-1 text-ink-muted transition-colors hover:border-accent hover:text-accent-strong">
                         {clip(heading.text)}
                       </a>
                     ))}
@@ -115,7 +117,7 @@ export function AnswerPaper({ mission, result, loading, numbers, activeRef, onCi
 
               <div ref={body} data-testid="answer-body" className="flex flex-col gap-6">
                 {parsed.map(({ artifact, blocks }) => (
-                  <AnswerBlocks key={artifact.ref} blocks={blocks} numbers={numbers} activeRef={activeRef} onCite={onCite} />
+                  <AnswerBlocks key={artifact.ref} blocks={blocks} idPrefix={idPrefix} numbers={numbers} activeRef={activeRef} onCite={onCite} />
                 ))}
               </div>
             </>

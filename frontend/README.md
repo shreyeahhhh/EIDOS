@@ -197,6 +197,11 @@ darker `accent-strong` is used (tangerine on oat reads about 2.2:1). Done (`succ
 in progress (`info`) is plum; only `error` (crimson) and `warning` (amber) keep a colour of their own, so
 that a failure is never mistaken for a finished step — and every state also carries a word or a glyph.
 
+*Your own models, and comparing them* (D-246): the new-mission form has an optional "Use my own models" panel — OpenAI, Google Gemini, Groq, each with a model id and the person's own API key
+(password fields, held in component state only, never in browser storage, emptied once the runs hold them). One model starts that mission on it; two or three start one mission per model and open
+`/missions/compare`, a column per model with the same answer view, its sources and its own checks (`components/compare/`, `lib/compare.ts`). The page learns which missions belong together from its own
+address, which holds mission ids, provider and model names and never a key, and it ranks nothing. Not verified with a live key, and not seen in a browser (see D-246).
+
 *How it works* on the landing page is a short video (`HowItWorksVideo`, about 40 seconds, six parts) in a Gen Z
 editorial style — big serif headlines with a highlighter swipe, tilted stickers, cut-out cards with hard plum
 shadows, a ticker band, paper grain — in the same three colours. It is a motion piece made of real text and

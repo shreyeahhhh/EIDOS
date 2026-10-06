@@ -223,11 +223,11 @@ const HEADING_STYLE = {
   4: "text-xs font-semibold tracking-wide text-ink-muted uppercase",
 } as const;
 
-function BlockView({ block, cite, first }: { block: Block; cite: CiteProps; first: boolean }) {
+function BlockView({ block, cite, first, idPrefix }: { block: Block; cite: CiteProps; first: boolean; idPrefix: string }) {
   switch (block.t) {
     case "heading":
       return (
-        <p id={block.id} role="heading" aria-level={block.level + 2} className={cn("scroll-mt-24", HEADING_STYLE[block.level], !first && "mt-2")}>
+        <p id={`${idPrefix}${block.id}`} role="heading" aria-level={block.level + 2} className={cn("scroll-mt-24", HEADING_STYLE[block.level], !first && "mt-2")}>
           <Inlines nodes={block.inline} cite={cite} />
         </p>
       );
@@ -240,7 +240,7 @@ function BlockView({ block, cite, first }: { block: Block; cite: CiteProps; firs
     case "quote":
       return (
         <blockquote className="flex flex-col gap-3 border-l-2 border-border-strong pl-4 text-ink-muted">
-          {block.blocks.map((inner, index) => <BlockView key={index} block={inner} cite={cite} first={false} />)}
+          {block.blocks.map((inner, index) => <BlockView key={index} block={inner} cite={cite} first={false} idPrefix={idPrefix} />)}
         </blockquote>
       );
     case "rule":
@@ -250,11 +250,12 @@ function BlockView({ block, cite, first }: { block: Block; cite: CiteProps; firs
   }
 }
 
-export function AnswerBlocks({ blocks, ...cite }: { blocks: Block[] } & CiteProps) {
+/** `idPrefix` keeps the heading ids of two answers shown on one page (a comparison) from colliding; it is empty everywhere else. */
+export function AnswerBlocks({ blocks, idPrefix = "", ...cite }: { blocks: Block[]; idPrefix?: string } & CiteProps) {
   return (
     <div className="@container flex flex-col gap-4 text-[0.95rem]">
       {blocks.map((block, index) => (
-        <BlockView key={index} block={block} cite={cite} first={index === 0} />
+        <BlockView key={index} block={block} cite={cite} first={index === 0} idPrefix={idPrefix} />
       ))}
     </div>
   );

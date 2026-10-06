@@ -14,6 +14,10 @@ already means ("the provider could not be reached, or answered with an error"). 
 was added for this provider.
 
 Only ``http`` and ``https`` URLs are accepted, matching ``OllamaModel``.
+
+The class speaks the OpenAI chat-completions protocol, which Groq, OpenAI and Gemini's compatibility endpoint all accept, so ``eidos.providers.factory`` builds it for each of them from a fixed profile
+(decisions.md D-246). Two things differ between them and are explicit fields: the name of the output-limit parameter, and whether a ``seed`` is sent. ``api_key`` is excluded from ``repr``, so a
+key can never be printed by a traceback, a log line or a failed assertion.
 """
 
 import http.client
@@ -23,7 +27,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable
 
 from eidos.agents import MeasuredFacts, ModelFailure, ModelFailureKind, ModelRequest, ModelResponse, ModelResult
@@ -43,7 +47,9 @@ MAX_RATE_LIMIT_WAIT_SECONDS = 30.0
 @dataclass(frozen=True, slots=True, kw_only=True)
 class GroqModel:
     base_url: str  # required, no default: e.g. https://api.groq.com/openai/v1
-    api_key: str  # required, no default: the caller's own GROQ_API_KEY, read once at the composition root
+    api_key: str = field(repr=False)  # required, no default, and never in repr: the caller's own key (the operator's GROQ_API_KEY, or a user's own, D-246)
+    token_parameter: str = "max_tokens"  # OpenAI's current models name the output limit "max_completion_tokens"; Groq and Gemini's compatibility endpoint take "max_tokens"
+    send_seed: bool = True  # whether the generation seed is sent; a provider that does not take one is configured not to be sent it
     sleep: Callable[[float], None] = time.sleep  # how a rate-limit wait is made; a test hands in one that does not really wait
 
     def __post_init__(self) -> None:
@@ -52,6 +58,8 @@ class GroqModel:
             raise ValueError(f"base_url must be an http or https URL with a host, not {self.base_url!r}")
         if not self.api_key.strip():
             raise ValueError("api_key must not be blank")
+        if self.token_parameter not in ("max_tokens", "max_completion_tokens"):
+            raise ValueError("token_parameter must be 'max_tokens' or 'max_completion_tokens'")
 
     def complete(self, request: ModelRequest) -> ModelResult:
         messages: list[dict[str, str]] = []
@@ -62,9 +70,10 @@ class GroqModel:
             "model": request.settings.model,
             "messages": messages,
             "temperature": request.settings.parameters.temperature,
-            "seed": request.settings.parameters.seed,
-            "max_tokens": request.settings.parameters.max_output_tokens,
+            self.token_parameter: request.settings.parameters.max_output_tokens,
         }
+        if self.send_seed:
+            body["seed"] = request.settings.parameters.seed
         http_request = urllib.request.Request(
             self.base_url.rstrip("/") + _PATH,
             data=json.dumps(body).encode("utf-8"),

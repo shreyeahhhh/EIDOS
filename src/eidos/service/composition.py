@@ -58,6 +58,7 @@ from .config import ANALYSIS_AGENT_ID, RESEARCH_AGENT_ID, ServiceConfig
 from .durable import DurableEventLog, RunPersistence, WriteThroughArtifactStore
 from .ports import EventStore, MissionRecord
 from .spec import UNSTORABLE, contract_and_genome, initial_state
+from .user_models import RunModel
 
 
 def storable(text: str) -> str:
@@ -165,8 +166,10 @@ class Composition:
         """The capabilities some agent here serves: what a mission may require."""
         return tuple(sorted({str(name) for agent in self.registry.agents for name in agent.capabilities}))
 
-    def prepare(self, mission: MissionRecord, documents: Sequence[Artifact]) -> PreparedRun:
+    def prepare(self, mission: MissionRecord, documents: Sequence[Artifact], model: RunModel | None = None) -> PreparedRun:
+        """Everything one run needs. ``model`` is a user's own model for this run (D-246); without one the service's own model and settings are used, exactly as before."""
         config, clock = self._config, self._clock
+        model_port, settings = (self._model, config.model_settings) if model is None else (model.port, model.settings)
         contract, genome = contract_and_genome(mission.spec, tenant_id=mission.tenant_id, contract_id=mission.contract_id)
         ids = UuidEventIds()
         carrier = initial_state(
@@ -187,11 +190,11 @@ class Composition:
         if self._tools is not None:
             gate = ToolGate(registry=self._tools.registry, port=self._tools.port, store=store)
             tool_arguments = {"tools": RecordingToolAccess(gate, tracker, clock), "search_tool_id": self._tools.tool_id}
-        model = RecordingModel(StorableModel(self._model), tracker)
+        recording = RecordingModel(StorableModel(model_port), tracker)
         research = ResearchAgent(
-            model=model, settings=config.model_settings, store=store, **tool_arguments, **({} if knowledge is None else {"knowledge": knowledge})
+            model=recording, settings=settings, store=store, **tool_arguments, **({} if knowledge is None else {"knowledge": knowledge})
         )
-        analysis = AnalysisAgent(model=model, settings=config.model_settings, store=store)
+        analysis = AnalysisAgent(model=recording, settings=settings, store=store)
         agents = {
             RESEARCH_AGENT_ID: RecordingCitations(research, tracker, store),
             ANALYSIS_AGENT_ID: RecordingCitations(analysis, tracker, store),

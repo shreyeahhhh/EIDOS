@@ -70,6 +70,8 @@ a Render-specific field wrong; verify it in the dashboard after the first deploy
 | `EIDOS_DATABASE_URL` | secret (embeds the Postgres password) | Render |
 | `EIDOS_JWKS_URL` | not secret (a public discovery URL) but real per-project | Render |
 | `EIDOS_AUTO_PROVISION_WORKSPACES` | config (`true` in `render.yaml`; D-237) | Render |
+| `EIDOS_USER_MODEL_PROVIDERS` | config (`openai,gemini,groq` in `render.yaml` lets a user bring their own key for those; absent turns it off; D-246) | Render |
+| `EIDOS_MAX_ACTIVE_RUNS_PER_TENANT`, `EIDOS_WORKER_POOL_SIZE` | config (`3` and `3` in `render.yaml`, so a three-model comparison can run at once; provisional) | Render |
 | `EIDOS_ALLOWED_ACTIONS` | config (`web_fetch` in `render.yaml` turns the web-reading tool on; D-238, `docs/15`) | Render |
 | `EIDOS_MODEL_PROVIDER` | config (`groq` in production) | Render |
 | `EIDOS_MODEL_BASE_URL` | config (`https://api.groq.com/openai/v1` in production) | Render |
@@ -126,6 +128,26 @@ was: the local-development adapter, unused and untouched in production.
 **Rate limits (D-244).** A `429 … tokens per minute (TPM): Limit 8000, Used …, Requested …` means the account's tier allows only that many tokens a minute (a free `on_demand` account: 8,000 for `openai/gpt-oss-120b` at the time of writing). The adapter waits as long as Groq says (up to 30 s a time, at most 3 retries, always inside the call's timeout) and asks again, so a mission slows down instead of failing; if the limit does not lift, the failure carries Groq's own numbers. Groq counts the *maximum output tokens* you allow toward "Requested", so a large `EIDOS_MODEL_MAX_OUTPUT_TOKENS` spends the minute faster than the answers need — keep it as small as the model can still answer in (a reasoning model needs room to think). A free tier will always be slow for a multi-call mission; production wants a paid tier.
 
 Other refusals read the same way: `401 Invalid API Key` is the key; `404 Unknown request URL: POST /chat/completions` is a base URL missing `/openai/v1`. A reasoning model (`openai/gpt-oss-*`) spends output tokens thinking before it answers, so leave `EIDOS_MODEL_MAX_OUTPUT_TOKENS` generous (4096 or more) if a call ends at the output limit with no answer; and Groq's per-minute token allowances differ by account tier, so a fetched page that is large for the tier may be refused as too large — the message will say. **Not verified:** a successful completion from any Groq model with this adapter (no key was used here); the opt-in `python -m pytest -m groq tests/integration/providers/test_groq_real.py` (with `GROQ_API_KEY` and `EIDOS_REAL_GROQ_MODEL` set) is the check.
+
+### Bring your own key, and comparing models (D-246)
+
+A signed-in user can run a mission on **their own** account at OpenAI, Google Gemini or Groq, and can tick two or three to run the same goal on each and read the answers side by side. It needs no new endpoint:
+`POST /v1/missions/{id}/start` takes an optional body, `{"model": {"provider": "openai", "model": "<a model id>", "api_key": "<their key>"}}`; an empty body starts the run on the service's own model, as before.
+It is **off unless `EIDOS_USER_MODEL_PROVIDERS` lists providers** (`render.yaml` turns on all three).
+
+What is promised, and what is not:
+
+- **The key is held in the server's memory for that one run and nowhere else.** It is never written to the database, an event, the stored mission specification, a log line or an error message, and it is dropped
+  when the run ends, however it ends. A restart (or the free tier's idle spin-down) loses it, and the run it belonged to is then marked `interrupted` like any other.
+- **A user never supplies an address.** Each provider's address is fixed in `eidos.providers.factory` (`https://api.openai.com/v1`, `https://generativelanguage.googleapis.com/v1beta/openai`,
+  `https://api.groq.com/openai/v1`); a user supplies a key and a model name, validated as a credential's shape and a model name's shape. So a user cannot make the server call a host of their choosing.
+- **The key does pass through two servers you operate or rent:** the frontend's own server-side proxy (Vercel) and the backend (Render). Neither logs a request body in this repository's code; both must be trusted.
+- **It is the user's own account that is billed**, and a comparison makes two or three times the calls of one run.
+- **A comparison is not a new record.** It is one ordinary mission per model; the side-by-side page (`/missions/compare`) learns which belong together from its own address (mission ids, provider and model names,
+  never a key). Nothing ranks the answers: EIDOS checks each answer's sources, not which answer is right.
+- **Not verified with a live key.** No OpenAI, Gemini or user-supplied Groq key was available, so every provider's acceptance of the request is unconfirmed. The addresses are the providers' published
+  OpenAI-compatible ones; OpenAI is sent `max_completion_tokens` and a seed, Gemini `max_tokens` and no seed, Groq as before. A provider that refuses a request says why in its own words (D-242), shown on that run.
+  OpenAI's reasoning models are known to restrict some sampling parameters, so one may refuse the temperature this service sends.
 
 ## 14.7 Known deployment limitations (stated, not hidden)
 

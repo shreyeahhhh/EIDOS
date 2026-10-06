@@ -11,6 +11,7 @@ import type {
   MissionSpec,
   MissionSummary,
   StartedMission,
+  UserModelChoice,
 } from "./types";
 
 /**
@@ -61,8 +62,10 @@ export function createMission(spec: MissionSpec, options: RequestOptions = {}): 
   return request<CreatedMission>("/missions", { method: "POST", body: JSON.stringify(spec) }, options);
 }
 
-export function startMission(missionId: string, options: RequestOptions = {}): Promise<StartedMission> {
-  return request<StartedMission>(`/missions/${missionId}/start`, { method: "POST" }, options);
+/** Starts a run. With `model` the run uses the user's own provider, model and key (D-246): the key travels in the request body only, never in the address. */
+export function startMission(missionId: string, options: RequestOptions & { model?: UserModelChoice } = {}): Promise<StartedMission> {
+  const { model, ...requestOptions } = options;
+  return request<StartedMission>(`/missions/${missionId}/start`, { method: "POST", ...(model ? { body: JSON.stringify({ model }) } : {}) }, requestOptions);
 }
 
 export function getMission(missionId: string, options: RequestOptions = {}): Promise<MissionSummary> {
