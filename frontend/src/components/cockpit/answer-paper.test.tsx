@@ -139,6 +139,28 @@ describe("AnswerPaper — copying", () => {
   });
 });
 
+describe("AnswerPaper — a mission that was given nothing to read", () => {
+  function failed(reason: string): MissionResult {
+    return { mission_status: "failed", verified: null, verdict: null, artifacts: [], failure: { cause: "no_result", reason } };
+  }
+  const render_ = (result: MissionResult) =>
+    render(<AnswerPaper mission={EXAMPLE_MISSION} result={result} loading={false} numbers={new Map()} activeRef={null} onCite={vi.fn()} />);
+
+  it("says what happened in the recorded words, then what to do about it", () => {
+    render_(failed("no documents were supplied, so there is nothing to research"));
+    const card = screen.getByRole("alert");
+    expect(within(card).getByText(/no documents were supplied, so there is nothing to research/)).toBeInTheDocument();
+    expect(within(card).getByText("What to do:")).toBeInTheDocument();
+    expect(card.textContent).toContain("Attach a text file");
+    expect(card.textContent).toContain("Nothing was made up to fill the gap");
+  });
+
+  it("adds no advice to a failure that was not about having nothing to read", () => {
+    render_(failed("the model call failed (unavailable): the provider answered HTTP status 429"));
+    expect(screen.queryByText("What to do:")).toBeNull();
+  });
+});
+
 describe("AnswerPaper — simpler answers", () => {
   it("shows a plain answer without an outline or an evidence control it has no use for", () => {
     paper("Just one paragraph with a **bold** word and a source [[doc:a.txt]].");

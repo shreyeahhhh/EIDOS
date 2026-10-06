@@ -88,6 +88,33 @@ def test_a_mission_that_does_not_name_the_action_fetches_nothing_and_says_there_
     assert summary.mission_status is not MissionStatus.COMPLETED  # no evidence, so no answer: it is not made up
 
 
+def test_a_mission_that_gave_nothing_to_read_and_never_asked_for_the_web_is_told_exactly_that_and_no_tool_is_tried():
+    """The owner's own mission (D-247): a general question, no documents, web reading not ticked. It used to end "...and the tool call was denied (budget_unresolved)", a true refusal about a
+    budget the mission never needed. It now says only what is so, and no tool call is made, so none is recorded."""
+    network = Network(page())
+    rig = make_rig(allowed_actions=frozenset({WEB_FETCH_ACTION}), tools=provision(network))
+    unticked = ReliabilitySpec(min_quality=0.0, max_risk_level=RiskLevel.MEDIUM, min_independent_evidence=1)  # no tool budget, as the form sends when the box is unticked
+    context, mission_id = run(rig, web_spec(goal="Which is the best time for a beginner to buy and sell stocks?", allowed_actions=(), reliability=unticked))
+    assert network.requests == []
+    failure = rig.service.result(context, mission_id).failure
+    assert failure is not None
+    assert "no documents were supplied, so there is nothing to research" in failure.reason
+    assert "budget" not in failure.reason and "denied" not in failure.reason and "tool" not in failure.reason
+    recorded = " ".join(record.model_dump_json() for record in rig.storage.read(TENANT_A, mission_id))
+    assert "budget_unresolved" not in recorded and WEB_FETCH_TOOL_ID not in recorded  # no call was made, so no refusal was recorded either
+
+
+def test_a_mission_that_names_the_action_but_has_no_budget_is_still_refused_by_the_gate_and_the_refusal_is_recorded():
+    """The gate is unchanged: a mission that did ask for the tool still gets every check, and a refusal is still said in its own words."""
+    network = Network(page())
+    rig = make_rig(allowed_actions=frozenset({WEB_FETCH_ACTION}), tools=provision(network))
+    no_budget = ReliabilitySpec(min_quality=0.0, max_risk_level=RiskLevel.MEDIUM, min_independent_evidence=1)
+    context, mission_id = run(rig, web_spec(reliability=no_budget))
+    assert network.requests == []
+    failure = rig.service.result(context, mission_id).failure
+    assert failure is not None and "budget_unresolved" in failure.reason
+
+
 def test_a_mission_with_no_tool_budget_fetches_nothing():
     network = Network(page())
     rig = make_rig(allowed_actions=frozenset({WEB_FETCH_ACTION}), tools=provision(network))

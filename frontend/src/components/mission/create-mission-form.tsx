@@ -5,7 +5,7 @@ import { useState, type ChangeEvent, type FormEvent } from "react";
 
 import { ApiError } from "@/lib/api/errors";
 import { ACCEPTED_EXTENSIONS, addDocument, MAX_DOCUMENTS, toSuppliedDocuments, type PickedDocument } from "@/lib/documents";
-import { MAX_WEB_ADDRESSES, WEB_FETCH_ACTION, WEB_FETCH_MAX_TOOL_CALLS, webAccessNote } from "@/lib/web-access";
+import { MAX_WEB_ADDRESSES, WEB_FETCH_ACTION, WEB_FETCH_MAX_TOOL_CALLS, webAccessNote, webAddressesIn } from "@/lib/web-access";
 import { createMission, startMission } from "@/lib/api/client";
 import { apiKeyProblem, encodeRuns, modelNameProblem, PROVIDERS, providerLabel, type ProviderId, type Run } from "@/lib/compare";
 import type { MissionSpec, RiskLevel } from "@/lib/api/types";
@@ -215,6 +215,8 @@ export function CreateMissionForm() {
 
   const webNote = readWeb ? webAccessNote(goal) : null;
   const ownModels = PROVIDERS.filter((provider) => choices[provider.id].on).length;
+  // EIDOS answers only from what it is given. A goal with no document and no web page named for reading would end with "nothing to research", so say so before it is sent rather than after.
+  const nothingToRead = goal.trim() !== "" && documents.length === 0 && !(readWeb && webAddressesIn(goal).length > 0);
 
   if (stage.name === "no_membership") return <NoWorkspaceAccess />;
 
@@ -445,6 +447,15 @@ export function CreateMissionForm() {
 
         </div>
       </details>
+
+      {nothingToRead && (
+        <Callout tone="warning" title="Nothing for EIDOS to read yet">
+          <p>
+            EIDOS answers only from sources you give it, and none is attached. Attach a text file above, or tick “Let EIDOS read the web pages named in my goal” and write the page&apos;s full https:// address in your goal.
+            Without either, this mission will end with “nothing to research” — EIDOS does not answer from its own memory.
+          </p>
+        </Callout>
+      )}
 
       <Button type="submit" disabled={submitting} size="md" className="self-start px-6">
         {submitting ? (ownModels > 1 ? "Starting the runs…" : "Creating…") : ownModels > 1 ? `Compare ${ownModels} models` : "Create mission"}

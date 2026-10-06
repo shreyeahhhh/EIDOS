@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Callout } from "@/components/ui/callout";
 import { headingsOf, parseAnswer, plainText } from "@/lib/answer-markdown";
 import type { MissionResult, MissionSummary } from "@/lib/api/types";
+import { readingHint } from "@/lib/run-model";
 import { failureCauseLabel, VERDICT_LABEL, VERDICT_TONE } from "@/lib/status";
 import { AnswerBlocks } from "./answer-text";
 
@@ -73,6 +74,11 @@ export function AnswerPaper({ mission, result, loading, numbers, activeRef, onCi
       {result?.failure ? (
         <Callout tone="error" title={failureCauseLabel(result.failure.cause)}>
           {result.failure.reason ? <p className="break-words">{result.failure.reason}</p> : <p>No further reason was recorded.</p>}
+          {readingHint(result.failure.reason) && (
+            <p className="mt-3">
+              <span className="font-medium text-ink">What to do:</span> {readingHint(result.failure.reason)}
+            </p>
+          )}
           <p className="mt-3">
             Nothing was made up to fill the gap. Open a step in the plan to see where it stopped, or{" "}
             <Link href="/missions/new" className="font-medium underline underline-offset-4">

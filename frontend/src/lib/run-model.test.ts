@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { describeSource, isRecognisedReference, numberCitations, splitCitations } from "./citations";
 import { EXAMPLE_EVENTS, EXAMPLE_MISSION, EXAMPLE_PAGE_REF, EXAMPLE_RESULT } from "./__fixtures__/example-run";
-import { buildRunModel, formatDuration, formatOffset, plainReason, plansAt, snapshotAt, storyOf } from "./run-model";
+import { buildRunModel, formatDuration, formatOffset, plainReason, plansAt, readingHint, snapshotAt, storyOf } from "./run-model";
 
 const model = buildRunModel(EXAMPLE_EVENTS);
 const at = (predicate: (moment: (typeof model.moments)[number]) => boolean) => model.moments.findIndex(predicate);
@@ -212,5 +212,27 @@ describe("citations", () => {
 
   it("numbers the example answer's one source", () => {
     expect([...numberCitations(EXAMPLE_RESULT.artifacts.map((a) => a.content))]).toEqual([[EXAMPLE_PAGE_REF, 1]]);
+  });
+});
+
+describe("readingHint — what to do when a mission was given nothing to read", () => {
+  it("explains it for the Research agent's own wording, with or without a tool in the reason", () => {
+    for (const reason of [
+      "no documents were supplied, so there is nothing to research",
+      "no documents were supplied and the tool found no documents",
+      "no_result: no documents were supplied and the tool call was denied (budget_unresolved): no tool-call budget is configured",
+    ]) {
+      const hint = readingHint(reason);
+      expect(hint, reason).toContain("answers only from sources you give it");
+      expect(hint).toContain("Attach a text file");
+      expect(hint).toContain("https://");
+      expect(hint).toContain("own memory");
+    }
+  });
+
+  it("says nothing for any other failure, and nothing when there is no reason", () => {
+    expect(readingHint("the model call failed (unavailable): the provider answered HTTP status 429")).toBeNull();
+    expect(readingHint("citation_coverage failed")).toBeNull();
+    expect(readingHint(null)).toBeNull();
   });
 });

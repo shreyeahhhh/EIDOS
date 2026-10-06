@@ -107,6 +107,15 @@ export function plainReason(reason: string | null): string | null {
   return reason.replace(/^(plan_rejected|run_rejected|execution_failed|no_result|verification_failed|verification_inconclusive):\s*/, "").trim() || null;
 }
 
+/**
+ * What to do when a mission failed because it was given nothing to read; otherwise `null`. It matches the Research agent's own fixed wording ("no documents were supplied …"), which is the whole
+ * of what the backend says, and adds the part a person needs: EIDOS answers only from sources it is given, and does not answer from its own memory (an answer with no sources cannot be checked).
+ */
+export function readingHint(reason: string | null): string | null {
+  if (reason === null || !/no documents were supplied/i.test(reason)) return null;
+  return "EIDOS answers only from sources you give it, and this mission had none. Attach a text file, or tick “Let EIDOS read the web pages named in my goal” and write the page's full https:// address in the goal. A general question can't be answered from EIDOS's own memory: an answer with no sources is one that cannot be checked.";
+}
+
 function titleCase(screamingSnake: string): string {
   return screamingSnake
     .toLowerCase()

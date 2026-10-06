@@ -166,6 +166,17 @@ class Composition:
         """The capabilities some agent here serves: what a mission may require."""
         return tuple(sorted({str(name) for agent in self.registry.agents for name in agent.capabilities}))
 
+    def _mission_names_the_tools_action(self, mission: MissionRecord) -> bool:
+        """Whether this mission asked for the tool's action. The tool is wired into a run only if it did (D-247).
+
+        Research always tries the tool it is given. Handed it for a mission that never asked, it made a call the gate was bound to refuse, and the mission's reason for having nothing to work from then read as
+        a refusal about a tool-call budget, which is true and beside the point: the mission had simply been given nothing to read. Not wiring it says only what is so. **The gate is unchanged** and still
+        decides every call a mission that did name the action makes (its budget, its autonomy level, its arguments), and a refusal there is still recorded.
+        """
+        assert self._tools is not None
+        descriptor = self._tools.registry.resolve(self._tools.tool_id)
+        return descriptor is not None and descriptor.action_id in mission.spec.allowed_actions
+
     def prepare(self, mission: MissionRecord, documents: Sequence[Artifact], model: RunModel | None = None) -> PreparedRun:
         """Everything one run needs. ``model`` is a user's own model for this run (D-246); without one the service's own model and settings are used, exactly as before."""
         config, clock = self._config, self._clock
@@ -187,7 +198,7 @@ class Composition:
             port = RecordingKnowledgePort(self._knowledge.port, tracker, clock)
             knowledge = KnowledgeGate(descriptor=self._knowledge.descriptor, port=port, ledger=EvidenceLedger(), store=store)
         tool_arguments: dict = {}
-        if self._tools is not None:
+        if self._tools is not None and self._mission_names_the_tools_action(mission):
             gate = ToolGate(registry=self._tools.registry, port=self._tools.port, store=store)
             tool_arguments = {"tools": RecordingToolAccess(gate, tracker, clock), "search_tool_id": self._tools.tool_id}
         recording = RecordingModel(StorableModel(model_port), tracker)
