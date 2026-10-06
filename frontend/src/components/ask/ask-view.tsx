@@ -16,6 +16,7 @@ import type { AskedAnswer, AskResult } from "@/lib/api/types";
 import { parseAnswer } from "@/lib/answer-markdown";
 import { apiKeyProblem, modelNameProblem, PROVIDERS, providerLabel, type ProviderId } from "@/lib/compare";
 import { formatDuration } from "@/lib/run-model";
+import { useSignedInUserId } from "@/lib/signed-in-user";
 
 /** The server refuses a longer question (its ceiling for a goal); saying so here saves a round trip. */
 const MAX_QUESTION_CHARS = 2000;
@@ -29,6 +30,7 @@ const NO_CITATIONS: ReadonlyMap<string, number> = new Map();
  */
 export function AskView() {
   const router = useRouter();
+  const userId = useSignedInUserId();
   const [question, setQuestion] = useState("");
   const [choices, setChoices] = useState<Choices>(EMPTY_CHOICES);
   const [choiceErrors, setChoiceErrors] = useState<ChoiceErrors>({});
@@ -93,7 +95,7 @@ export function AskView() {
     setResult(null);
     setAsked(picked.map((provider) => ({ provider: provider.id, model: choices[provider.id].model.trim() })));
     try {
-      setResult(await askModels({ question: text, models: picked.map((provider) => ({ provider: provider.id, model: choices[provider.id].model.trim(), api_key: choices[provider.id].key })) }));
+      setResult(await askModels({ question: text, models: picked.map((provider) => ({ provider: provider.id, model: choices[provider.id].model.trim(), api_key: choices[provider.id].key })) }, { userId }));
     } catch (error) {
       if (error instanceof ApiError && error.code === "unauthenticated") {
         router.push("/login?next=/missions/ask");

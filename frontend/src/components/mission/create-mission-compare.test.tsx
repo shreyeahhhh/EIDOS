@@ -6,6 +6,7 @@ const createMission = vi.fn();
 const startMission = vi.fn();
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+vi.mock("@/lib/signed-in-user", () => ({ useSignedInUserId: () => "user-a" }));
 vi.mock("@/lib/api/client", () => ({
   createMission: (spec: unknown) => createMission(spec),
   startMission: (id: string, options: unknown) => startMission(id, options),
@@ -66,7 +67,7 @@ describe("CreateMissionForm — on the person's own models", () => {
     choose("OpenAI", " gpt-4o-mini ", KEY_A);
     fireEvent.click(screen.getByRole("button", { name: "Create mission" }));
     await waitFor(() => expect(push).toHaveBeenCalledWith("/missions/0b0d6e4c-5a39-4b0e-8e6e-1d3c6d8f9a01"));
-    expect(startMission).toHaveBeenCalledWith("0b0d6e4c-5a39-4b0e-8e6e-1d3c6d8f9a01", { model: { provider: "openai", model: "gpt-4o-mini", api_key: KEY_A } });
+    expect(startMission).toHaveBeenCalledWith("0b0d6e4c-5a39-4b0e-8e6e-1d3c6d8f9a01", { userId: "user-a", model: { provider: "openai", model: "gpt-4o-mini", api_key: KEY_A } });
   });
 
   it("with two ticked, creates and starts one mission per model and opens the side-by-side page, whose address holds no key", async () => {
@@ -80,8 +81,8 @@ describe("CreateMissionForm — on the person's own models", () => {
     await waitFor(() => expect(push).toHaveBeenCalledTimes(1));
     expect(createMission).toHaveBeenCalledTimes(2);
     expect(createMission.mock.calls[0][0]).toEqual(createMission.mock.calls[1][0]); // the very same goal, spec and documents on each
-    expect(startMission).toHaveBeenNthCalledWith(1, "0b0d6e4c-5a39-4b0e-8e6e-1d3c6d8f9a01", { model: { provider: "openai", model: "gpt-4o-mini", api_key: KEY_A } });
-    expect(startMission).toHaveBeenNthCalledWith(2, "0b0d6e4c-5a39-4b0e-8e6e-1d3c6d8f9a02", { model: { provider: "gemini", model: "gemini-test", api_key: KEY_B } });
+    expect(startMission).toHaveBeenNthCalledWith(1, "0b0d6e4c-5a39-4b0e-8e6e-1d3c6d8f9a01", { userId: "user-a", model: { provider: "openai", model: "gpt-4o-mini", api_key: KEY_A } });
+    expect(startMission).toHaveBeenNthCalledWith(2, "0b0d6e4c-5a39-4b0e-8e6e-1d3c6d8f9a02", { userId: "user-a", model: { provider: "gemini", model: "gemini-test", api_key: KEY_B } });
     const address = push.mock.calls[0][0] as string;
     expect(address.startsWith("/missions/compare?")).toBe(true);
     expect(decodeURIComponent(address)).toContain("0b0d6e4c-5a39-4b0e-8e6e-1d3c6d8f9a01~openai~gpt-4o-mini");

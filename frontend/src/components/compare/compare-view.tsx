@@ -14,6 +14,7 @@ import { ApiError } from "@/lib/api/errors";
 import { numberCitations } from "@/lib/citations";
 import { decodeRuns, providerLabel, type Run } from "@/lib/compare";
 import { formatDuration } from "@/lib/run-model";
+import { useSignedInUserId } from "@/lib/signed-in-user";
 import { RUN_STATUS_LABEL, RUN_STATUS_TONE } from "@/lib/status";
 import { useApiResource } from "@/lib/use-api-resource";
 import { useMissionStatus } from "@/lib/use-mission-status";
@@ -57,11 +58,12 @@ export function CompareView() {
 
 function RunColumn({ run }: { run: Run }) {
   const router = useRouter();
+  const userId = useSignedInUserId();
   const status = useMissionStatus(run.id);
   const mission = status.status === "ready" ? status.mission : null;
   const hasEvents = (mission?.last_sequence ?? 0) > 0;
   const active = mission !== null && (mission.run_status === "queued" || mission.run_status === "running");
-  const result = useApiResource(() => getResult(run.id), {
+  const result = useApiResource(() => getResult(run.id, { userId }), {
     enabled: hasEvents && !active,
     key: mission ? `${mission.last_sequence}-${mission.run_status}` : undefined,
     notReadyCodes: ["not_finished", "no_events"],

@@ -23,6 +23,8 @@ import type {
  */
 
 interface RequestOptions {
+  /** The signed-in user (`useSignedInUserId`): the workspace id sent is the one remembered for this account, never another's (D-249). */
+  userId: string;
   /** Overrides the remembered tenant id for this one call (used by the tenant-selection retry). */
   tenantId?: string;
   idempotencyKey?: string;
@@ -33,9 +35,9 @@ interface RequestOptions {
  * into a clean, retryable error instead of a spinner that never resolves. */
 const REQUEST_TIMEOUT_MS = 30_000;
 
-async function request<T>(path: string, init: RequestInit, options: RequestOptions = {}): Promise<T> {
+async function request<T>(path: string, init: RequestInit, options: RequestOptions): Promise<T> {
   const headers = new Headers(init.headers);
-  const tenantId = options.tenantId ?? getStoredTenantId();
+  const tenantId = options.tenantId ?? getStoredTenantId(options.userId);
   if (tenantId) headers.set("X-Tenant-Id", tenantId);
   if (options.idempotencyKey) headers.set("Idempotency-Key", options.idempotencyKey);
   if (init.body !== undefined) headers.set("Content-Type", "application/json");
@@ -60,33 +62,33 @@ async function request<T>(path: string, init: RequestInit, options: RequestOptio
   return (await response.json()) as T;
 }
 
-export function createMission(spec: MissionSpec, options: RequestOptions = {}): Promise<CreatedMission> {
+export function createMission(spec: MissionSpec, options: RequestOptions): Promise<CreatedMission> {
   return request<CreatedMission>("/missions", { method: "POST", body: JSON.stringify(spec) }, options);
 }
 
-/** Starts a run. With `model` the run uses the user's own provider, model and key (D-246): the key travels in the request body only, never in the address. */
 /** Puts one question to each model named, with the user's own keys (D-248). The keys travel in the request body only. */
-export function askModels(body: AskRequestBody, options: RequestOptions = {}): Promise<AskResult> {
+export function askModels(body: AskRequestBody, options: RequestOptions): Promise<AskResult> {
   return request<AskResult>("/ask", { method: "POST", body: JSON.stringify(body) }, options);
 }
 
-export function startMission(missionId: string, options: RequestOptions & { model?: UserModelChoice } = {}): Promise<StartedMission> {
+/** Starts a run. With `model` the run uses the user's own provider, model and key (D-246): the key travels in the request body only, never in the address. */
+export function startMission(missionId: string, options: RequestOptions & { model?: UserModelChoice }): Promise<StartedMission> {
   const { model, ...requestOptions } = options;
   return request<StartedMission>(`/missions/${missionId}/start`, { method: "POST", ...(model ? { body: JSON.stringify({ model }) } : {}) }, requestOptions);
 }
 
-export function getMission(missionId: string, options: RequestOptions = {}): Promise<MissionSummary> {
+export function getMission(missionId: string, options: RequestOptions): Promise<MissionSummary> {
   return request<MissionSummary>(`/missions/${missionId}`, { method: "GET" }, options);
 }
 
-export function getExecution(missionId: string, options: RequestOptions = {}): Promise<ExecutionRecord> {
+export function getExecution(missionId: string, options: RequestOptions): Promise<ExecutionRecord> {
   return request<ExecutionRecord>(`/missions/${missionId}/execution`, { method: "GET" }, options);
 }
 
 export function getEvents(
   missionId: string,
-  page: { after?: number; limit?: number } = {},
-  options: RequestOptions = {},
+  page: { after?: number; limit?: number },
+  options: RequestOptions,
 ): Promise<EventsPage> {
   const params = new URLSearchParams();
   if (page.after !== undefined) params.set("after", String(page.after));
@@ -95,10 +97,10 @@ export function getEvents(
   return request<EventsPage>(`/missions/${missionId}/events${query ? `?${query}` : ""}`, { method: "GET" }, options);
 }
 
-export function getResult(missionId: string, options: RequestOptions = {}): Promise<MissionResult> {
+export function getResult(missionId: string, options: RequestOptions): Promise<MissionResult> {
   return request<MissionResult>(`/missions/${missionId}/result`, { method: "GET" }, options);
 }
 
-export function getEvidence(missionId: string, options: RequestOptions = {}): Promise<EvidenceView> {
+export function getEvidence(missionId: string, options: RequestOptions): Promise<EvidenceView> {
   return request<EvidenceView>(`/missions/${missionId}/evidence`, { method: "GET" }, options);
 }

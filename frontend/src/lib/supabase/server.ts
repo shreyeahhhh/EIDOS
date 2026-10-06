@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { cache } from "react";
 
 /**
  * The server-side Supabase client, for Server Components, Route Handlers and Server
@@ -41,6 +42,18 @@ export async function createClient() {
     },
   });
 }
+
+/**
+ * The signed-in user, checked with Supabase Auth (`getUser`, not the unverified cookie), or `null`. Cached for one request, so the
+ * header and the `/missions` layout ask Supabase once between them.
+ */
+export const getSignedInUser = cache(async () => {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return user;
+});
 
 /** The signed-in user's access token (a Supabase-issued JWT), or `null` if there is no session. */
 export async function getAccessToken(): Promise<string | null> {

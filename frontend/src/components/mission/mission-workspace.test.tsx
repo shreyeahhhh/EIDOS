@@ -11,6 +11,7 @@ const getResult = vi.fn();
 const getEvidence = vi.fn();
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock("@/lib/signed-in-user", () => ({ useSignedInUserId: () => "user-a" }));
 vi.mock("@/lib/api/client", () => ({
   getMission: (...args: unknown[]) => getMission(...args),
   getExecution: (...args: unknown[]) => getExecution(...args),

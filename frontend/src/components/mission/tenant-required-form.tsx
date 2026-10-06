@@ -5,6 +5,7 @@ import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { Field, fieldInputClassName } from "@/components/ui/field";
+import { useSignedInUserId } from "@/lib/signed-in-user";
 import { setStoredTenantId } from "@/lib/tenant";
 
 /**
@@ -13,12 +14,13 @@ import { setStoredTenantId } from "@/lib/tenant";
  * id entry, never a picker — the backend still validates it; entering the wrong one simply fails again.
  */
 export function TenantRequiredForm({ onSubmitted }: { onSubmitted: () => void }) {
+  const userId = useSignedInUserId();
   const [tenantId, setTenantId] = useState("");
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!tenantId.trim()) return;
-    setStoredTenantId(tenantId.trim());
+    setStoredTenantId(userId, tenantId.trim());
     onSubmitted();
   }
 

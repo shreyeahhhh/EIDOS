@@ -12,6 +12,7 @@ import { apiKeyProblem, encodeRuns, modelNameProblem, PROVIDERS, providerLabel, 
 import type { MissionSpec, RiskLevel } from "@/lib/api/types";
 import { KNOWN_CAPABILITIES } from "@/lib/api/types";
 import { rememberMission } from "@/lib/mission-index";
+import { useSignedInUserId } from "@/lib/signed-in-user";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { Field, fieldInputClassName } from "@/components/ui/field";
@@ -40,6 +41,7 @@ interface FieldErrors {
  * its results ever live. This form never shows a mission's state itself. */
 export function CreateMissionForm() {
   const router = useRouter();
+  const userId = useSignedInUserId();
 
   const [goal, setGoal] = useState("");
   const [capabilities, setCapabilities] = useState<string[]>([]);
@@ -168,8 +170,8 @@ export function CreateMissionForm() {
 
     setSubmitting(true);
     try {
-      const mission = await createMission(buildSpec());
-      rememberMission({ id: mission.mission_id, goal, createdAt: mission.created_at });
+      const mission = await createMission(buildSpec(), { userId });
+      rememberMission(userId, { id: mission.mission_id, goal, createdAt: mission.created_at });
       router.push(`/missions/${mission.mission_id}`);
     } catch (error) {
       handleError(error);
@@ -184,9 +186,9 @@ export function CreateMissionForm() {
     try {
       for (const provider of providers) {
         const { model, key } = choices[provider];
-        const mission = await createMission(buildSpec());
-        rememberMission({ id: mission.mission_id, goal, createdAt: mission.created_at });
-        await startMission(mission.mission_id, { model: { provider, model: model.trim(), api_key: key } });
+        const mission = await createMission(buildSpec(), { userId });
+        rememberMission(userId, { id: mission.mission_id, goal, createdAt: mission.created_at });
+        await startMission(mission.mission_id, { userId, model: { provider, model: model.trim(), api_key: key } });
         started.push({ id: mission.mission_id, provider, model: model.trim() });
       }
     } catch (error) {

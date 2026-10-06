@@ -8,6 +8,7 @@ import { getMission } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/errors";
 import type { MissionSummary, RunStatus } from "@/lib/api/types";
 import { forgetMission, listIndexedMissions } from "@/lib/mission-index";
+import { useSignedInUserId } from "@/lib/signed-in-user";
 import { RUN_STATUS_LABEL } from "@/lib/status";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -29,12 +30,13 @@ const FILTER_THRESHOLD = 6;
 const RUN_STATUS_OPTIONS: RunStatus[] = ["created", "queued", "running", "finished", "rejected", "interrupted", "error"];
 
 /**
- * Lists this browser's remembered missions (`lib/mission-index`), fetching each live from the
+ * Lists the missions the signed-in account remembers in this browser (`lib/mission-index`), fetching each live from the
  * backend — the index only says *which ids to ask about*, never a mission's actual state. An id the
  * backend genuinely no longer has (a real 404) is pruned silently, not shown as an error.
  */
 export function MissionDashboard() {
   const router = useRouter();
+  const userId = useSignedInUserId();
   const [state, setState] = useState<LoadState>({ name: "loading" });
   const [reloadToken, setReloadToken] = useState(0);
   const [query, setQuery] = useState("");
@@ -45,13 +47,13 @@ export function MissionDashboard() {
 
     async function load() {
       setState({ name: "loading" });
-      const index = listIndexedMissions();
+      const index = listIndexedMissions(userId);
       if (index.length === 0) {
         if (!cancelled) setState({ name: "ready", missions: [] });
         return;
       }
 
-      const results = await Promise.allSettled(index.map((entry) => getMission(entry.id)));
+      const results = await Promise.allSettled(index.map((entry) => getMission(entry.id, { userId })));
       if (cancelled) return;
 
       const missions: MissionSummary[] = [];
@@ -67,7 +69,7 @@ export function MissionDashboard() {
         const error = result.reason;
         if (error instanceof ApiError) {
           if (error.code === "not_found") {
-            forgetMission(index[position].id);
+            forgetMission(userId, index[position].id);
             return;
           }
           if (error.code === "unauthenticated") unauthenticated = true;
@@ -100,7 +102,7 @@ export function MissionDashboard() {
     return () => {
       cancelled = true;
     };
-  }, [reloadToken, router]);
+  }, [reloadToken, router, userId]);
 
   const filtered = useMemo(() => {
     if (state.name !== "ready") return [];

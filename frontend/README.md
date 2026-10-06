@@ -114,6 +114,7 @@ src/
     login/page.tsx                  Supabase email+password sign-in
     signup/page.tsx                 Supabase email sign-up
     auth/callback/route.ts          exchanges the confirmation code for a session
+    missions/layout.tsx             tells every /missions page which account is signed in (D-249)
     missions/page.tsx               the dashboard (a local navigation index)
     missions/new/page.tsx           mission creation (protected)
     missions/[id]/page.tsx          the mission workspace (protected)
@@ -133,7 +134,8 @@ src/
   lib/
     supabase/                      browser and server Supabase clients
     api/                           typed client, hand-written types mirroring the backend, ApiError
-    mission-index.ts               the dashboard's client-side navigation index (never a source of truth)
+    mission-index.ts               the dashboard's client-side navigation index, per account (never a source of truth)
+    signed-in-user.tsx             the signed-in user's id, from the server, that per-account browser storage is kept under
     use-api-resource.ts            a small fetch-state hook (loading/not_ready/error/ready)
     use-mission-status.ts          polls a mission's summary only while its run is genuinely active
     status.ts, tenant.ts, cn.ts
@@ -148,13 +150,15 @@ src/
   (`/api/eidos/...`); the server-side proxy is what talks to FastAPI, so `EIDOS_API_BASE_URL` and the
   access token never reach client-side code.
 - **There is no list-missions endpoint on the backend** (deliberately out of scope for V1.4). The
-  dashboard reads a client-side index of ids this browser has created (`lib/mission-index.ts`) and
-  fetches each one live — the index is never a second source of truth, only a pointer; a stale id (a
-  real `404`) is pruned silently.
-- **The workspace id is remembered per browser** (`lib/tenant.ts`), only once the backend has asked for
-  one (`tenant_required`), and **forgotten on sign-out** (`components/site/sign-out-button.tsx`, D-249).
-  A session that ends any other way leaves it behind, and the next account's requests then get
-  `not_found` (D-249, open). The mission index is not cleared on sign-out.
+  dashboard reads a client-side index of ids the signed-in account has created in this browser
+  (`lib/mission-index.ts`) and fetches each one live — the index is never a second source of truth,
+  only a pointer; a stale id (a real `404`) is pruned silently.
+- **What the browser remembers is kept per account** (D-249): the mission index and the workspace id
+  (`lib/tenant.ts`, remembered only once the backend has asked for one with `tenant_required`) are stored
+  under the signed-in user's id, which `app/missions/layout.tsx` reads on the server and hands to the page
+  (`lib/signed-in-user.tsx`). Another account on the same browser never sends this one's workspace id and
+  never lists or prunes its missions; signing back in finds both again. Nothing is cleared on sign-out, so
+  the goals of an account's missions stay in that browser's storage after it signs out.
 - **`required_capabilities`' four values** (`research`, `architecture`, `security`, `cost`) are fixed
   by which agents this backend build wires up (`KNOWN_CAPABILITIES` in `lib/api/types.ts`), not a
   platform-wide, discoverable vocabulary. Update that constant by hand if the backend's agents change.

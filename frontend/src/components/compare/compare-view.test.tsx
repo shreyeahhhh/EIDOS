@@ -14,6 +14,7 @@ const getMission = vi.fn();
 const getResult = vi.fn();
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }), useSearchParams: () => new URLSearchParams(search) }));
+vi.mock("@/lib/signed-in-user", () => ({ useSignedInUserId: () => "user-a" }));
 vi.mock("@/lib/api/client", () => ({ getMission: (id: string) => getMission(id), getResult: (id: string) => getResult(id) }));
 
 import { CompareView } from "./compare-view";

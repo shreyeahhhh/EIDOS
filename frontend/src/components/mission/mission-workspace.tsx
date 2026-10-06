@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { getEvents, getEvidence, getExecution, getResult, startMission } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/errors";
 import { forgetMission } from "@/lib/mission-index";
+import { useSignedInUserId } from "@/lib/signed-in-user";
 import { useApiResource } from "@/lib/use-api-resource";
 import { useMissionStatus } from "@/lib/use-mission-status";
 import { MissionCockpit } from "@/components/cockpit/mission-cockpit";
@@ -23,6 +24,7 @@ import { TenantRequiredForm } from "./tenant-required-form";
  */
 export function MissionWorkspace({ missionId }: { missionId: string }) {
   const router = useRouter();
+  const userId = useSignedInUserId();
   const missionState = useMissionStatus(missionId);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
@@ -34,15 +36,15 @@ export function MissionWorkspace({ missionId }: { missionId: string }) {
   // While the run is in flight there is no result to ask for: the backend would answer 409 `not_finished` every time, so the page says so itself and asks only once the run has ended.
   const runIsActive = mission !== null && (mission.run_status === "queued" || mission.run_status === "running");
 
-  const execution = useApiResource(() => getExecution(missionId), { enabled: hasEvents, key: runKey, notReadyCodes: ["no_events"] });
-  const events = useApiResource(() => getEvents(missionId, { limit: 500 }), { enabled: hasEvents, key: runKey });
-  const result = useApiResource(() => getResult(missionId), { enabled: hasEvents && !runIsActive, key: runKey, notReadyCodes: ["not_finished"] });
-  const evidence = useApiResource(() => getEvidence(missionId), { enabled: hasEvents, key: runKey, notReadyCodes: ["no_events"] });
+  const execution = useApiResource(() => getExecution(missionId, { userId }), { enabled: hasEvents, key: runKey, notReadyCodes: ["no_events"] });
+  const events = useApiResource(() => getEvents(missionId, { limit: 500 }, { userId }), { enabled: hasEvents, key: runKey });
+  const result = useApiResource(() => getResult(missionId, { userId }), { enabled: hasEvents && !runIsActive, key: runKey, notReadyCodes: ["not_finished"] });
+  const evidence = useApiResource(() => getEvidence(missionId, { userId }), { enabled: hasEvents, key: runKey, notReadyCodes: ["no_events"] });
 
   useEffect(() => {
     if (missionState.status === "error" && missionState.error instanceof ApiError) {
       if (missionState.error.code === "unauthenticated") router.push(`/login?next=/missions/${missionId}`);
-      if (missionState.error.code === "not_found") forgetMission(missionId);
+      if (missionState.error.code === "not_found") forgetMission(userId, missionId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [missionState.status]);
@@ -51,7 +53,7 @@ export function MissionWorkspace({ missionId }: { missionId: string }) {
     setStarting(true);
     setStartError(null);
     try {
-      await startMission(missionId);
+      await startMission(missionId, { userId });
       missionState.reload();
     } catch (error) {
       if (error instanceof ApiError) {

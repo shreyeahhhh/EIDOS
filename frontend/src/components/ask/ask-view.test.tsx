@@ -5,6 +5,7 @@ const push = vi.fn();
 const askModels = vi.fn();
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+vi.mock("@/lib/signed-in-user", () => ({ useSignedInUserId: () => "user-a" }));
 vi.mock("@/lib/api/client", () => ({ askModels: (body: unknown) => askModels(body) }));
 
 import { ApiError } from "@/lib/api/errors";

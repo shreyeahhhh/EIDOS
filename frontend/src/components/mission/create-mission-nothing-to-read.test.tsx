@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock("@/lib/signed-in-user", () => ({ useSignedInUserId: () => "user-a" }));
 vi.mock("@/lib/api/client", () => ({ createMission: vi.fn(), startMission: vi.fn() }));
 vi.mock("@/lib/mission-index", () => ({ rememberMission: vi.fn() }));
 

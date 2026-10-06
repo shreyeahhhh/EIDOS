@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { getMission } from "./api/client";
 import { ApiError } from "./api/errors";
 import type { MissionSummary } from "./api/types";
+import { useSignedInUserId } from "./signed-in-user";
 
 const POLL_INTERVAL_MS = 1500;
 /** A safety bound, not a real timeout: 5 minutes of polling is generously past how long this bounded
@@ -19,6 +20,7 @@ export type MissionStatusState =
 
 /** Fetches a mission's summary, and keeps polling only while its run is genuinely in flight (`queued`/`running`). Stops the moment it reaches a terminal `run_status`, or after the safety bound. */
 export function useMissionStatus(missionId: string): MissionStatusState & { reload: () => void } {
+  const userId = useSignedInUserId();
   const [state, setState] = useState<MissionStatusState>({ status: "loading" });
   const [reloadToken, setReloadToken] = useState(0);
 
@@ -40,7 +42,7 @@ export function useMissionStatus(missionId: string): MissionStatusState & { relo
 
     async function tick() {
       try {
-        const mission = await getMission(missionId);
+        const mission = await getMission(missionId, { userId });
         if (cancelled) return;
         setState({ status: "ready", mission });
         pollCount.current += 1;
@@ -59,7 +61,7 @@ export function useMissionStatus(missionId: string): MissionStatusState & { relo
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [missionId, reloadToken]);
+  }, [missionId, reloadToken, userId]);
 
   return { ...state, reload: () => setReloadToken((token) => token + 1) };
 }

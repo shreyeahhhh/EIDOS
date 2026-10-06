@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { createClient } from "@/lib/supabase/server";
+import { getSignedInUser } from "@/lib/supabase/server";
 import { buttonClassName } from "@/components/ui/button";
 import { SignOutButton } from "./sign-out-button";
 
@@ -11,10 +11,7 @@ const MARKETING_LINKS = [
 ];
 
 export async function SiteHeader() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getSignedInUser();
 
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-[var(--color-surface-elevated)] backdrop-blur-sm">

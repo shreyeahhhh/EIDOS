@@ -5,6 +5,7 @@ const push = vi.fn();
 const createMission = vi.fn();
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+vi.mock("@/lib/signed-in-user", () => ({ useSignedInUserId: () => "user-a" }));
 vi.mock("@/lib/api/client", () => ({ createMission: (spec: unknown) => createMission(spec) }));
 vi.mock("@/lib/mission-index", () => ({ rememberMission: vi.fn() }));
 
