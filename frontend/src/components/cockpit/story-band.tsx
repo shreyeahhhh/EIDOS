@@ -3,6 +3,7 @@ import { Callout } from "@/components/ui/callout";
 import { ExecutionMetrics } from "@/components/mission/execution-metrics";
 import { MissionStatusPair } from "@/components/mission/mission-status-pair";
 import { cn } from "@/lib/cn";
+import { GoalText } from "./goal-text";
 import type { MissionSummary } from "@/lib/api/types";
 import { formatDateTime, type Tone } from "@/lib/status";
 import { formatDuration, STEP_STATE_LABEL, type PlanVersion, type Snapshot, type Story, type StepState } from "@/lib/run-model";
@@ -71,7 +72,7 @@ export function StoryBand({ mission, story, snapshot, planCount, webPagesRead, s
     <header className="flex flex-col gap-5 rounded-2xl border border-border bg-surface-raised p-5 shadow-[var(--shadow-card)] sm:p-7">
       <div className="flex flex-col gap-1">
         <p className="text-xs font-medium tracking-[0.18em] text-ink-faint uppercase">Your mission</p>
-        <h1 className="font-display text-2xl leading-snug text-ink sm:text-3xl">{mission.goal}</h1>
+        <GoalText key={mission.mission_id} goal={mission.goal} />
       </div>
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
