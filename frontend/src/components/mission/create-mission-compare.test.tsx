@@ -94,8 +94,8 @@ describe("CreateMissionForm — on the person's own models", () => {
     fillGoal();
     choose("OpenAI", "has space", "bad key 12345678");
     fireEvent.click(screen.getByRole("button", { name: "Create mission" }));
-    expect(await screen.findByText(/only letters, digits/)).toBeInTheDocument();
-    expect(screen.getByText(/no spaces or line breaks/)).toBeInTheDocument();
+    expect((await screen.findAllByText(/only letters, digits/)).length).toBe(2); // under its field, and in the summary beside the button
+    expect(screen.getAllByText(/no spaces or line breaks/).length).toBe(2);
     expect(document.body.textContent).not.toContain("bad key 12345678");
     expect(createMission).not.toHaveBeenCalled();
     expect(startMission).not.toHaveBeenCalled();
@@ -124,5 +124,52 @@ describe("CreateMissionForm — on the person's own models", () => {
     expect(screen.getByText(/A run already started \(OpenAI\)/)).toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
     expect(document.body.innerHTML).not.toContain(KEY_A); // the started run holds its key on the server: this page let go of it
+  });
+
+  it("when the button refuses to send, says why right beside it — not only up beside the field — and takes the person to the first problem", async () => {
+    render(<CreateMissionForm />);
+    // the exact situation: two models ticked and keys typed, but no goal and no capability chosen
+    choose("OpenAI", "gpt-4o-mini", KEY_A);
+    choose("Google Gemini", "gemini-test", KEY_B);
+    const button = screen.getByRole("button", { name: "Compare 2 models" });
+    fireEvent.click(button);
+
+    const summary = (await screen.findByText("Not sent yet — a few things need fixing")).closest("div")!;
+    expect(summary).toHaveTextContent("Write what you want EIDOS to accomplish.");
+    expect(summary).toHaveTextContent("Choose at least one capability.");
+    // it sits after the model panel and directly before the button the person just pressed
+    expect(button.compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+    expect(screen.getByRole("group", { name: /Use my own models/ }).compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(createMission).not.toHaveBeenCalled();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText(/what do you want eidos/i))); // focus goes to the first thing to fix
+    expect(document.body.textContent).not.toContain(KEY_A);
+  });
+
+  it("reports every problem at once — the goal, the capability and each model and key — not one per click", async () => {
+    render(<CreateMissionForm />);
+    fireEvent.click(screen.getByRole("checkbox", { name: /OpenAI/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Groq/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Compare 2 models" }));
+    const summary = (await screen.findByText("Not sent yet — a few things need fixing")).closest("div")!;
+    for (const expected of ["Write what you want EIDOS", "Choose at least one capability", "OpenAI model:", "OpenAI API key:", "Groq model:", "Groq API key:"]) {
+      expect(summary.textContent, expected).toContain(expected);
+    }
+  });
+
+  it("clears the summary on the next try, and a refusal from the server is shown beside the button too", async () => {
+    startMission.mockRejectedValueOnce(new ApiError(422, { code: "invalid_request", message: "this service runs missions on its own model and does not accept one of your own" }));
+    render(<CreateMissionForm />);
+    fireEvent.click(screen.getByRole("button", { name: "Create mission" })); // nothing filled: the summary appears
+    expect(await screen.findByText("Not sent yet — a few things need fixing")).toBeInTheDocument();
+
+    fillGoal();
+    choose("OpenAI", "m1", KEY_A);
+    choose("Groq", "m2", KEY_B);
+    const button = screen.getByRole("button", { name: "Compare 2 models" });
+    fireEvent.click(button);
+    const refusal = (await screen.findByText("This request was refused")).closest("div")!;
+    expect(screen.queryByText("Not sent yet — a few things need fixing")).toBeNull();
+    expect(refusal).toHaveTextContent("does not accept one of your own");
+    expect(button.compareDocumentPosition(refusal) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy(); // beside the button, not at the top of a long form
   });
 });

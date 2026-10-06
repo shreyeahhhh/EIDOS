@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 
 import { ApiError } from "@/lib/api/errors";
 import { ACCEPTED_EXTENSIONS, addDocument, MAX_DOCUMENTS, toSuppliedDocuments, type PickedDocument } from "@/lib/documents";
@@ -58,6 +58,17 @@ export function CreateMissionForm() {
   const [submitting, setSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [generalErrors, setGeneralErrors] = useState<string[]>([]);
+  // What stopped the button from sending anything, listed beside the button: the field messages sit wherever their field is, which can be a screen or two away from where the person clicked.
+  const [summary, setSummary] = useState<string[]>([]);
+  const [attempt, setAttempt] = useState(0);
+
+  // After a refused click, take the person to the first field that needs attention.
+  useEffect(() => {
+    if (attempt === 0) return;
+    const first = document.querySelector<HTMLElement>('[aria-invalid="true"], [data-invalid="true"]');
+    first?.scrollIntoView?.({ block: "center" });
+    if (first && first.tagName !== "FIELDSET") first.focus({ preventScroll: true });
+  }, [attempt]);
 
   function toggleCapability(capability: string) {
     setCapabilities((current) =>
@@ -117,28 +128,39 @@ export function CreateMissionForm() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFieldErrors({});
+    setChoiceErrors({});
     setGeneralErrors([]);
+    setSummary([]);
 
+    // Everything that is wrong is found in one pass and said at once, so nothing is left to be discovered one click at a time.
     const errors: FieldErrors = {};
-    if (!goal.trim()) errors.goal = "A goal is required.";
-    if (capabilities.length === 0) errors.required_capabilities = "Choose at least one capability.";
-    if (Object.keys(errors).length > 0) {
+    const problems: string[] = [];
+    if (!goal.trim()) {
+      errors.goal = "A goal is required.";
+      problems.push("Write what you want EIDOS to accomplish.");
+    }
+    if (capabilities.length === 0) {
+      errors.required_capabilities = "Choose at least one capability.";
+      problems.push("Choose at least one capability.");
+    }
+    const picked = PROVIDERS.filter((provider) => choices[provider.id].on);
+    const choiceProblems: ChoiceErrors = {};
+    for (const provider of picked) {
+      const model = modelNameProblem(choices[provider.id].model);
+      const key = apiKeyProblem(choices[provider.id].key);
+      if (model || key) choiceProblems[provider.id] = { model: model ?? undefined, key: key ?? undefined };
+      if (model) problems.push(`${provider.label} model: ${model}`);
+      if (key) problems.push(`${provider.label} API key: ${key}`);
+    }
+    if (problems.length > 0) {
       setFieldErrors(errors);
+      setChoiceErrors(choiceProblems);
+      setSummary(problems);
+      setAttempt((count) => count + 1);
       return;
     }
 
-    const picked = PROVIDERS.filter((provider) => choices[provider.id].on);
     if (picked.length > 0) {
-      const problems: ChoiceErrors = {};
-      for (const provider of picked) {
-        const model = modelNameProblem(choices[provider.id].model);
-        const key = apiKeyProblem(choices[provider.id].key);
-        if (model || key) problems[provider.id] = { model: model ?? undefined, key: key ?? undefined };
-      }
-      if (Object.keys(problems).length > 0) {
-        setChoiceErrors(problems);
-        return;
-      }
       await submitOnOwnModels(picked.map((provider) => provider.id));
       return;
     }
@@ -226,16 +248,6 @@ export function CreateMissionForm() {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-8" noValidate>
-      {generalErrors.length > 0 && (
-        <Callout tone="error" title="This request was refused">
-          <ul className="list-disc space-y-1 pl-4">
-            {generalErrors.map((message) => (
-              <li key={message}>{message}</li>
-            ))}
-          </ul>
-        </Callout>
-      )}
-
       <div className="flex flex-col gap-2">
         <label htmlFor="goal" className="font-display text-lg text-ink">
           What do you want EIDOS to accomplish?
@@ -256,7 +268,7 @@ export function CreateMissionForm() {
         )}
       </div>
 
-      <fieldset className="flex flex-col gap-2">
+      <fieldset className="flex flex-col gap-2" data-invalid={fieldErrors.required_capabilities ? "true" : undefined}>
         <legend className="text-sm font-medium text-ink">Required capabilities</legend>
         <p className="text-xs text-ink-faint">What kind of work does this mission need done?</p>
         <div className="mt-1 flex flex-wrap gap-4">
@@ -447,6 +459,26 @@ export function CreateMissionForm() {
 
         </div>
       </details>
+
+      {summary.length > 0 && (
+        <Callout tone="error" title="Not sent yet — a few things need fixing">
+          <ul className="list-disc space-y-1 pl-4">
+            {summary.map((message) => (
+              <li key={message}>{message}</li>
+            ))}
+          </ul>
+        </Callout>
+      )}
+
+      {generalErrors.length > 0 && (
+        <Callout tone="error" title="This request was refused">
+          <ul className="list-disc space-y-1 pl-4">
+            {generalErrors.map((message) => (
+              <li key={message}>{message}</li>
+            ))}
+          </ul>
+        </Callout>
+      )}
 
       {nothingToRead && (
         <Callout tone="warning" title="Nothing for EIDOS to read yet">
